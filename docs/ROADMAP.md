@@ -15,11 +15,19 @@ Each milestone ends with passing tests, migrations, docs and a recorded list of 
 | **7 — Multi-agent** | LangGraph orchestrator + agents over typed service interfaces, prompt-injection test suite | Planned |
 | **8 — Commercialisation** | Billing provider abstraction, plans/entitlements, usage metering, admin console, production deployment | Planned |
 
-## Open questions (need a human decision)
+## Decisions (2026-11-05)
 
-1. **Search provider(s)** for Phase 3 — which commercial search API(s) and budget? (No provider is assumed.)
-2. **Hosting region** — Algerian data-protection law (Law 18-07) may constrain cross-border transfer of personal data. Needs legal review before choosing a cloud region.
-3. **Billing in Algeria** — which local payment provider (e.g. CIB/Edahabia via SATIM) vs Stripe for international?
-4. **Annotation workforce** for the Darija/Arabizi corpus — in-house or contracted, and target corpus size.
-5. **Agent Reach** — commercial use must be confirmed against its licence and each underlying platform's terms before enabling.
-6. **Product name** — `RepIntel` is a placeholder.
+| Topic | Decision | Consequence for the build |
+|---|---|---|
+| Search provider | **Deferred** | M3 ships the `SearchProvider` interface + RSS/website connectors; no search vendor is wired in until chosen. |
+| Hosting | **EU region** | Requires a legal opinion on cross-border transfer under Law 18-07 (and possibly ANPDP authorisation) **before** real customer data is stored. Pick EU cloud region in M8. |
+| Billing | **Manual invoicing** | M8 builds plans, entitlements, usage metering and invoice records (PDF, bank transfer / purchase order). No payment-gateway integration for now; provider interface kept for later. |
+| NLP annotation | **In-house team** | M4 prioritises the in-app annotation tool (double annotation, adjudication, agreement metrics). Annotators get a dedicated `annotator` role. |
+
+## Open questions (remaining)
+
+1. **Search provider(s)** — still open; needed before source discovery goes beyond RSS/known sites.
+2. **Legal review** of EU hosting under Law 18-07 (transfer conditions, ANPDP formalities).
+3. **Corpus target size** and annotation guidelines owner.
+4. **Agent Reach** — commercial use must be confirmed against its licence and each underlying platform's terms before enabling.
+5. **Product name** — `RepIntel` is a placeholder.
