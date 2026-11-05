@@ -1,0 +1,73 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { useI18n } from "@/components/providers";
+import { Button, Card, ErrorBanner, Spinner } from "@/components/ui";
+import { api, type Capability, type Dashboard } from "@/lib/api";
+import { useCan } from "@/lib/session";
+
+function Stat({ label, value, sub }: { label: string; value: number; sub?: string }) {
+  return (
+    <div className="card p-5">
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-mute">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tabular-nums">{value}</p>
+      {sub && <p className="mt-1 text-xs text-ink-soft">{sub}</p>}
+    </div>
+  );
+}
+
+function Unavailable({ label, cap }: { label: string; cap: Capability }) {
+  const { t } = useI18n();
+  return (
+    <div className="rounded border border-dashed border-line p-5">
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-mute">{label}</p>
+      <p className="mt-2 text-sm font-medium text-ink-soft">{t("dash.notYet")}</p>
+      {cap.reason && <p className="mt-1 text-xs text-ink-mute">{cap.reason}</p>}
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const { t, fmtDate } = useI18n();
+  const canWrite = useCan("brands:write");
+  const q = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get<Dashboard>("/dashboard/summary") });
+  if (q.isLoading) return <Spinner />;
+  if (q.error || !q.data) return <ErrorBanner error={q.error} />;
+  const d = q.data;
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">{t("dash.title")}</h1>
+      {d.brands_total === 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-brand/30 bg-brand-tint px-5 py-4">
+          <p className="text-sm text-brand-strong">{t("dash.getStarted")}</p>
+          {canWrite && <Link href="/brands"><Button>{t("brands.new")}</Button></Link>}
+        </div>
+      )}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Stat label={t("dash.brands")} value={d.brands_total} sub={`${d.brands_active} ${t("dash.active")}`} />
+        <Stat label={t("dash.aliases")} value={d.aliases_total} />
+        <Stat label={t("dash.members")} value={d.members_total} />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Unavailable label={t("dash.mentions")} cap={d.mentions} />
+        <Unavailable label={t("dash.sentiment")} cap={d.sentiment} />
+        <Unavailable label={t("dash.sources")} cap={d.sources} />
+      </div>
+      {d.recent_activity.length > 0 && (
+        <Card title={t("dash.activity")}>
+          <ul className="divide-y divide-line text-sm">
+            {d.recent_activity.map((a, i) => (
+              <li key={i} className="flex justify-between gap-4 py-2">
+                <span><code className="font-mono text-xs">{a.action}</code>
+                  <span className="ms-2 text-ink-soft" dir="ltr">{a.actor_email}</span></span>
+                <span className="shrink-0 text-ink-mute">{fmtDate(a.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+}

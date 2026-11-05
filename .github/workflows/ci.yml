@@ -1,0 +1,62 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+
+permissions: { contents: read }
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 3s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      REPINTEL_ENV: test
+      REPINTEL_JWT_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      REPINTEL_COOKIE_SECURE: "false"
+      REPINTEL_DATABASE_URL: postgresql+psycopg://repintel_app:repintel_app@localhost:5432/repintel
+      REPINTEL_MIGRATION_DATABASE_URL: postgresql+psycopg://repintel_owner:repintel_owner@localhost:5432/repintel
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with: { python-version: "3.12" }
+      - run: uv sync
+      - name: Lint
+        run: uv run ruff check .
+      - name: Create roles and database
+        run: |
+          psql -v ON_ERROR_STOP=1 -f ../infra/postgres/init-roles.sql
+          ../infra/postgres/create-db.sh repintel
+      - name: Migrations are reversible
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+      - name: Database-level tenant isolation (RLS)
+        run: |
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_isolation.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL RLS TESTS PASSED"
+      - name: API tests
+        run: uv run pytest -v
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build

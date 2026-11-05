@@ -1,0 +1,7 @@
+# AI agents — design (Milestone 7, not implemented)
+
+- **Provider abstraction**: `LLMProvider` protocol (structured output, embeddings); OpenAI first; model IDs and parameters from config, recorded on every result with prompt version.
+- **Agents** (Orchestrator, Discovery, Monitoring, Collection, Language, Entity, Sentiment, Trend, Reputation, Crisis, Competitor, Response, Reporting, Compliance) are LangGraph nodes with typed Pydantic inputs/outputs, timeouts, and an explicit tool allowlist. Tools are thin wrappers over service functions that already enforce tenant context and permissions. No agent gets a DB session, shell, or raw HTTP client.
+- **Permissions**: agent actions run as the requesting tenant with a service principal whose permissions are a subset of the user's. Sensitive actions (publishing a response, contacting someone, enabling a connector) create an `approval_requests` row and stop. Approval is a human API call; no model output can approve.
+- **Prompt injection**: fetched content is passed only as quoted data in a separate channel, never concatenated into instructions; tool calls proposed after reading untrusted content are re-validated by the policy engine; an eval suite of injection attempts (in Darija, French and Arabic too) runs in CI.
+- **Honesty**: outputs distinguish collected facts, AI inferences (with confidence) and unverifiable items; reports always include coverage limitations.

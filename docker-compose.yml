@@ -1,0 +1,76 @@
+# Local development stack. Credentials below are DEV-ONLY defaults; never use them elsewhere.
+name: repintel
+
+x-backend-env: &backend-env
+  REPINTEL_ENV: development
+  REPINTEL_DATABASE_URL: postgresql+psycopg://repintel_app:repintel_app@postgres:5432/repintel
+  REPINTEL_MIGRATION_DATABASE_URL: postgresql+psycopg://repintel_owner:repintel_owner@postgres:5432/repintel
+  REPINTEL_REDIS_URL: redis://redis:6379/0
+  REPINTEL_RABBITMQ_URL: amqp://repintel:repintel@rabbitmq:5672/
+  REPINTEL_JWT_SECRET: ${REPINTEL_JWT_SECRET:?set REPINTEL_JWT_SECRET in .env (>=32 chars)}
+  REPINTEL_COOKIE_SECURE: "false"   # dev over http://localhost only
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init-roles.sql:/docker-entrypoint-initdb.d/init-roles.sql:ro
+      - ./infra/postgres/create-db.sh:/docker-entrypoint-initdb.d/create-db.sh:ro
+      - ./infra/postgres/01-init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d repintel"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["127.0.0.1:6379:6379"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 3s, retries: 20 }
+
+  rabbitmq:   # used from Milestone 2 (monitoring scheduler)
+    image: rabbitmq:3.13-management-alpine
+    environment: { RABBITMQ_DEFAULT_USER: repintel, RABBITMQ_DEFAULT_PASS: repintel }
+    ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
+    healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, retries: 10 }
+
+  opensearch:  # used from Milestone 3; start with: docker compose --profile search up
+    image: opensearchproject/opensearch:2.17.1
+    profiles: ["search"]
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"   # dev only
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    ports: ["127.0.0.1:9200:9200"]
+
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    depends_on: { postgres: { condition: service_healthy } }
+
+  api:
+    build: ./backend
+    environment: *backend-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/readyz')"]
+      interval: 5s
+      retries: 20
+
+  web:
+    build: ./frontend
+    environment: { REPINTEL_BACKEND_URL: http://api:8000 }
+    depends_on: { api: { condition: service_healthy } }
+    ports: ["127.0.0.1:3000:3000"]
+
+volumes:
+  pgdata:
