@@ -61,8 +61,8 @@ def test_cross_tenant_access_is_denied_everywhere(make_user):
 
 
 def test_cannot_manage_other_tenant_members_or_invitations(make_user):
-    a = make_user(org="A")
-    b = make_user(org="B")
+    a = make_user(org="Org A")
+    b = make_user(org="Org B")
     b_member = b.get("/api/v1/members").json()[0]["membership_id"]
     assert a.patch(f"/api/v1/members/{b_member}", json={"role": "viewer"}).status_code == 404
     assert a.delete(f"/api/v1/members/{b_member}").status_code == 404
@@ -83,8 +83,8 @@ def test_invitation_token_only_works_for_the_invited_email(make_user):
 
 
 def test_forged_tenant_claim_is_rejected(make_user):
-    a = make_user(org="A")
-    b = make_user(org="B")
+    a = make_user(org="Org A")
+    b = make_user(org="Org B")
     claims = jwt.decode(a.access, options={"verify_signature": False})
     claims["tid"] = b.tenant_id
     forged = jwt.encode(claims, "not-the-server-secret-" + "y" * 30, algorithm="HS256")
@@ -96,21 +96,20 @@ def test_forged_tenant_claim_is_rejected(make_user):
 
 
 def test_multi_tenant_user_sees_only_current_tenant(make_user):
-    a = make_user(org="A")
-    b = make_user(org="B")
+    a = make_user(org="Org A")
+    b = make_user(org="Org B")
     _brand(a, "Brand of A")
     _brand(b, "Brand of B")
     join(b, a, "viewer")  # a now belongs to both, currently switched into B
     assert [x["name"] for x in a.get("/api/v1/brands").json()["items"]] == ["Brand of B"]
     me = a.get("/api/v1/auth/me").json()
-    assert {t["name"] for t in me["tenants"]} == {"A", "B"}
-    assert me["tenant"]["name"] == "B"
+    assert {t["name"] for t in me["tenants"]} == {"Org A", "Org B"}
+    assert me["tenant"]["name"] == "Org B"
     # Members list in B must not include A's other memberships
     assert {m["email"] for m in a.get("/api/v1/members").json()} == {a.email, b.email}
 
-    r = a.post("/api/v1/auth/switch-tenant", json={"tenant_id": me["tenants"][0]["id"]
-                                                  if me["tenants"][0]["name"] == "A"
-                                                  else me["tenants"][1]["id"]})
+    tenant_a = next(t["id"] for t in me["tenants"] if t["name"] == "Org A")
+    r = a.post("/api/v1/auth/switch-tenant", json={"tenant_id": tenant_a})
     assert r.status_code == 200
     a.set_tokens(r.json())
     assert [x["name"] for x in a.get("/api/v1/brands").json()["items"]] == ["Brand of A"]
