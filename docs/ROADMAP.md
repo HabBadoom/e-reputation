@@ -22,12 +22,11 @@ Each milestone ends with passing tests, migrations, docs and a recorded list of 
 | Search provider | **Deferred** | M3 ships the `SearchProvider` interface + RSS/website connectors; no search vendor is wired in until chosen. |
 | Hosting | **EU region** | Requires a legal opinion on cross-border transfer under Law 18-07 (and possibly ANPDP authorisation) **before** real customer data is stored. Pick EU cloud region in M8. |
 | Billing | **Manual invoicing** | M8 builds plans, entitlements, usage metering and invoice records (PDF, bank transfer / purchase order). No payment-gateway integration for now; provider interface kept for later. |
-| NLP annotation | **Automatic by the SaaS** (revised 2026-11-05) | M4 builds an auto-annotation pipeline: several independent LLM "annotators" (different models/prompts) label each text; agreement → accepted label with confidence, disagreement → automatic arbitration or `UNCERTAIN`. Corrections users make on mentions feed back into the corpus. A small human-verified **gold set** is still required to measure accuracy (the benchmark can't be graded by the same models it evaluates); size and who verifies it are open. |
+| NLP annotation | **Automatic by the SaaS** (revised 2026-11-05) | M4 builds an auto-annotation pipeline: several independent LLM "annotators" (different models/prompts) label each text; agreement → accepted label with confidence, disagreement → automatic arbitration or `UNCERTAIN`. Corrections users make on mentions feed back into the corpus. A small human-verified **gold set** is still required to measure accuracy (the benchmark can't be graded by the same models it evaluates); verified by the founder (target 300–500 texts, one-click confirm/correct UI). |
 
 ## Open questions (remaining)
 
 1. **Search provider(s)** — still open; needed before source discovery goes beyond RSS/known sites.
 2. **Legal review** of EU hosting under Law 18-07 (transfer conditions, ANPDP formalities).
-3. **Gold set for the benchmark** — who verifies it (in-house, a few hours of work, or a contractor) and target size (suggested: 300–500 texts).
-4. **Agent Reach** — commercial use must be confirmed against its licence and each underlying platform's terms before enabling.
-5. **Product name** — `RepIntel` is a placeholder.
+3. **Agent Reach** — commercial use must be confirmed against its licence and each underlying platform's terms before enabling.
+4. **Product name** — `RepIntel` is a placeholder.
