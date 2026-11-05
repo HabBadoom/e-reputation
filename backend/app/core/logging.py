@@ -6,8 +6,9 @@ import logging
 import sys
 from datetime import UTC, datetime
 
-request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
-tenant_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_id", default=None)
+ContextStr = contextvars.ContextVar[str | None]
+request_id_var: ContextStr = contextvars.ContextVar("request_id", default=None)
+tenant_id_var: ContextStr = contextvars.ContextVar("tenant_id", default=None)
 
 _RESERVED = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {"message", "asctime"}
 

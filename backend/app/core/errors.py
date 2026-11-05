@@ -1,4 +1,7 @@
-"""Structured API errors. Every error response has the shape {"error": {code, message, request_id}}."""
+"""Structured API errors.
+
+Every error response has the shape {"error": {code, message, request_id}}.
+"""
 
 import logging
 
@@ -49,7 +52,8 @@ class RateLimited(AppError):
 
 
 def _body(request: Request, code: str, message: str, details: object | None = None) -> dict:
-    err: dict = {"code": code, "message": message, "request_id": getattr(request.state, "request_id", None)}
+    rid = getattr(request.state, "request_id", None)
+    err: dict = {"code": code, "message": message, "request_id": rid}
     if details is not None:
         err["details"] = details
     return {"error": err}
@@ -81,4 +85,6 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
         # Logged with traceback; never swallowed, never leaked to the client.
         log.exception("unhandled_error", extra={"path": request.url.path})
-        return JSONResponse(_body(request, "internal_error", "Internal server error"), status_code=500)
+        return JSONResponse(
+            _body(request, "internal_error", "Internal server error"), status_code=500
+        )

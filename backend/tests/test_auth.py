@@ -53,7 +53,8 @@ def test_refresh_rotation_and_reuse_detection(client):
 
 def test_logout_revokes_refresh(client):
     api = register(client)
-    assert client.post("/api/v1/auth/logout", json={"refresh_token": api.refresh}).status_code == 204
+    r = client.post("/api/v1/auth/logout", json={"refresh_token": api.refresh})
+    assert r.status_code == 204
     r = client.post("/api/v1/auth/refresh", headers=TOKEN, json={"refresh_token": api.refresh})
     assert r.status_code == 401
 

@@ -54,7 +54,9 @@ def _extract_token(request: Request) -> tuple[str, bool]:
     raise Unauthorized("Authentication required")
 
 
-def load_membership(db: Session, user_id: uuid.UUID, tenant_id: uuid.UUID) -> tuple[Membership, Role]:
+def load_membership(
+    db: Session, user_id: uuid.UUID, tenant_id: uuid.UUID
+) -> tuple[Membership, Role]:
     row = db.execute(
         select(Membership, Role)
         .join(Role, Role.id == Membership.role_id)
@@ -84,9 +86,9 @@ def get_auth(request: Request, db: Session = Depends(get_db)) -> AuthContext:
     token, via_cookie = _extract_token(request)
     claims = decode_access_token(token)
 
-    if via_cookie and request.method not in SAFE_METHODS:
-        if not constant_time_eq(request.headers.get(CSRF_HEADER), request.cookies.get(CSRF_COOKIE)):
-            raise Forbidden("CSRF token missing or invalid", code="csrf_failed")
+    csrf_ok = constant_time_eq(request.headers.get(CSRF_HEADER), request.cookies.get(CSRF_COOKIE))
+    if via_cookie and request.method not in SAFE_METHODS and not csrf_ok:
+        raise Forbidden("CSRF token missing or invalid", code="csrf_failed")
 
     set_context(db, tenant_id=claims.tenant_id, user_id=claims.user_id)
     membership, role = load_membership(db, claims.user_id, claims.tenant_id)

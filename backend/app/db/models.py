@@ -25,6 +25,10 @@ def _pk() -> Mapped[uuid.UUID]:
     return mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
 
+def _user_fk() -> ForeignKey:
+    return ForeignKey("users.id", ondelete="SET NULL")
+
+
 def _created() -> Mapped[datetime]:
     # Python-side default too, so values are known after flush without a re-select.
     return mapped_column(
@@ -111,7 +115,7 @@ class Invitation(Base):
     email: Mapped[str] = mapped_column(String(320))
     role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
-    invited_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -122,7 +126,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[uuid.UUID] = _pk()
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
-    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
     action: Mapped[str] = mapped_column(String(80))
     target_type: Mapped[str | None] = mapped_column(String(50))
     target_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
@@ -143,7 +147,7 @@ class Brand(Base):
     country: Mapped[str] = mapped_column(String(2), default="DZ")
     primary_language: Mapped[str] = mapped_column(String(10), default="fr")
     status: Mapped[str] = mapped_column(String(20), default="active")
-    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
 

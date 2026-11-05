@@ -62,6 +62,6 @@ class TokenOut(BaseModel):
 
     access_token: str | None = None
     refresh_token: str | None = None
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 — OAuth token type, not a secret
     expires_in: int
     tenant_id: uuid.UUID

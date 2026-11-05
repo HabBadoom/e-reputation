@@ -165,7 +165,8 @@ def change_role(membership_id: uuid.UUID, body: MemberPatch, request: Request,
         raise Forbidden("You cannot modify a member with an equal or higher role")
     new_role = _role(db, body.role)
     _assert_can_assign(ctx, new_role)
-    if current_role.key == "owner" and new_role.key != "owner" and _owner_count(db, ctx.tenant_id) <= 1:
+    demoting_owner = current_role.key == "owner" and new_role.key != "owner"
+    if demoting_owner and _owner_count(db, ctx.tenant_id) <= 1:
         raise Conflict("An organization must keep at least one owner", code="last_owner")
     m.role_id = new_role.id
     record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id, action="member.role_changed",
