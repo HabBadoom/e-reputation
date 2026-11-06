@@ -54,6 +54,9 @@ def run_once(batch: int = 20, *, schedule: bool = True) -> int:
             n = queue.schedule_due_monitoring(db)
             if n:
                 log.info("monitoring_scheduled", extra={"count": n})
+            n = queue.schedule_alert_evaluations(db, get_settings().alert_eval_every_minutes)
+            if n:
+                log.info("alert_evaluations_scheduled", extra={"count": n})
     with session_scope() as db:
         jobs = queue.claim(db, WORKER_ID, batch)
     for job in jobs:

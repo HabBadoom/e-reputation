@@ -85,6 +85,16 @@ class Settings(BaseSettings):
     nlp_min_gold_items: int = 100
     nlp_benchmark_max_items: int = 500
 
+    # Reputation analytics. Days are counted in this timezone (Algeria: UTC+1, no DST).
+    analytics_timezone: str = "Africa/Algiers"
+    reputation_min_sample: int = 10
+    alert_eval_every_minutes: int = 15
+    trend_baseline_days: int = 28        # history used as the "usual" level
+    crisis_quiet_hours: int = 48         # a crisis is resolved after this long undetected
+    alerts_per_rule_per_run: int = 20    # flood guard
+    report_render_timeout_seconds: int = 60
+    report_max_bytes: int = 20_000_000
+
     # Plan given to new organizations; empty = the plan flagged is_default in the DB.
     default_plan: str = ""
     trial_days: int = 14

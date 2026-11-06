@@ -120,3 +120,27 @@ def safe_get(url: str, *, max_bytes: int | None = None,
         except httpx.HTTPError as e:
             raise FetchError("network_error", type(e).__name__) from e
     raise FetchError("too_many_redirects", url)
+
+
+def safe_post(url: str, body: bytes, headers: dict[str, str], *,
+              max_response_bytes: int = 65536) -> FetchResult:
+    """POST to an untrusted, user-configured URL (webhooks). HTTPS only, same address checks
+    as safe_get, redirects are NOT followed (a 3xx is returned as-is and treated as a failure
+    by callers), the response body is capped."""
+    if urlsplit(url).scheme != "https":
+        raise FetchError("bad_url", "https required")
+    check_url(url)
+    try:
+        with http_client().stream("POST", url, content=body, headers=headers) as r:
+            chunks, size = [], 0
+            for chunk in r.iter_bytes():
+                size += len(chunk)
+                if size > max_response_bytes:
+                    break
+                chunks.append(chunk)
+            return FetchResult(str(r.url), r.status_code, r.headers.get("content-type", ""),
+                               b"".join(chunks)[:max_response_bytes])
+    except httpx.TimeoutException as e:
+        raise FetchError("timeout", url) from e
+    except httpx.HTTPError as e:
+        raise FetchError("network_error", type(e).__name__) from e

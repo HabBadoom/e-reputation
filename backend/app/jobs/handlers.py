@@ -61,6 +61,9 @@ def nlp_analyze(db: Session, job: Job) -> None:
         raise PermanentJobError("nlp.analyze needs a tenant")
     stats = analyze_mentions(db, job.tenant_id, ids)
     log.info("nlp_analyzed", extra=stats)
+    # New labels can change trends, spikes and crises: evaluate soon (once while pending).
+    from sqlalchemy import text
+    db.execute(text("SELECT request_alert_evaluation()"))
 
 
 @handler("nlp.benchmark")
@@ -80,3 +83,69 @@ def nlp_benchmark(db: Session, job: Job) -> None:
     if run is None:
         raise PermanentJobError("evaluation run not found")
     run_benchmark(db, run)
+
+
+@handler("alerts.evaluate")
+def alerts_evaluate(db: Session, job: Job) -> None:
+    from app.alerts.engine import evaluate_tenant
+    if job.tenant_id is None:
+        raise PermanentJobError("alerts.evaluate needs a tenant")
+    evaluate_tenant(db, job.tenant_id)
+
+
+@handler("webhook.deliver")
+def webhook_deliver(db: Session, job: Job) -> None:
+    import uuid
+
+    from app.alerts.webhooks import WebhookDeliveryError, alert_payload, post
+    from app.db.models import Alert, Webhook
+    from app.db.session import session_scope, set_context
+    try:
+        hook_id = uuid.UUID(job.payload["webhook_id"])
+        alert_id = uuid.UUID(job.payload["alert_id"])
+    except (KeyError, ValueError, TypeError) as e:
+        raise PermanentJobError("webhook.deliver needs webhook_id and alert_id") from e
+    hook, alert = db.get(Webhook, hook_id), db.get(Alert, alert_id)
+    if hook is None or alert is None:
+        raise PermanentJobError("webhook or alert no longer exists")
+    if not hook.enabled:
+        return   # disabled since: drop silently (the alert stays visible in-app)
+    try:
+        post(hook, alert_payload(alert), alert.id)
+    except WebhookDeliveryError:
+        # This transaction is rolled back on failure: record the outcome separately so the
+        # UI can show why deliveries fail, then raise to retry with backoff.
+        status, error, at = hook.last_status, hook.last_error, hook.last_delivery_at
+        with session_scope() as s2:
+            set_context(s2, tenant_id=job.tenant_id, user_id=None)
+            h2 = s2.get(Webhook, hook_id)
+            if h2 is not None:
+                h2.last_status, h2.last_error, h2.last_delivery_at = status, error, at
+        raise
+
+
+@handler("report.generate")
+def report_generate(db: Session, job: Job) -> None:
+    import uuid
+
+    from app.db.models import Report
+    from app.db.session import session_scope, set_context
+    from app.reports.formats import generate
+    try:
+        report_id = uuid.UUID(job.payload["report_id"])
+    except (KeyError, ValueError, TypeError) as e:
+        raise PermanentJobError("report.generate needs report_id") from e
+    report = db.get(Report, report_id)
+    if report is None:
+        raise PermanentJobError("report not found")
+    try:
+        with db.begin_nested():
+            generate(db, report)
+    except Exception as e:
+        log.exception("report_failed", extra={"report_id": str(report_id)})
+        with session_scope() as s2:
+            set_context(s2, tenant_id=job.tenant_id, user_id=None)
+            r2 = s2.get(Report, report_id)
+            if r2 is not None:
+                r2.status, r2.error = "failed", f"{type(e).__name__}: generation failed"
+        raise PermanentJobError("report generation failed") from e

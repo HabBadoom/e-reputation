@@ -62,6 +62,12 @@ jobs:
                 -v ON_ERROR_STOP=1 -f tests/sql/test_rls_nlp.sql)
           echo "$out"
           echo "$out" | grep -q "ALL NLP RLS TESTS PASSED"
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_intelligence.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL INTELLIGENCE RLS TESTS PASSED"
+      - name: Headless Chromium for PDF reports
+        run: uv run playwright install --with-deps chromium
       - name: API tests
         run: uv run pytest -v
 

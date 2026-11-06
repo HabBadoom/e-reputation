@@ -64,5 +64,10 @@ def schedule_due_monitoring(db: Session) -> int:
     return db.execute(text("SELECT schedule_due_monitoring()")).scalar_one()
 
 
+def schedule_alert_evaluations(db: Session, every_minutes: int) -> int:
+    return db.execute(text("SELECT schedule_alert_evaluations(:m)"),
+                      {"m": every_minutes}).scalar_one()
+
+
 def stats(db: Session) -> dict[str, int]:
     return {r.status: r.count for r in db.execute(text("SELECT * FROM job_stats()"))}

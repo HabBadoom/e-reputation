@@ -4,6 +4,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --no-dev --no-install-project
+# Headless Chromium for PDF reports (worker), with fonts covering Latin and Arabic scripts.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-noto-core \
+    && uv run playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
 COPY . .
 RUN useradd --system --uid 10001 app && chown -R app /app
 USER app

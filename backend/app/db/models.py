@@ -1,14 +1,16 @@
 """ORM models. The authoritative schema (incl. RLS policies and grants) is in migrations/."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -489,3 +491,119 @@ class DialectExpression(Base):
     polarity: Mapped[str] = mapped_column(String(10), default="none")
     status: Mapped[str] = mapped_column(String(20), default="seed_unvalidated")
     created_at: Mapped[datetime] = _created()
+
+
+# ---------------------------------------------------------------- Milestone 5
+def _tenant_fk(table: str, col: str, ondelete: str = "CASCADE") -> ForeignKeyConstraint:
+    return ForeignKeyConstraint(["tenant_id", col], [f"{table}.tenant_id", f"{table}.id"],
+                                ondelete=ondelete)
+
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    url: Mapped[str] = mapped_column(String(1000))
+    secret_enc: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_status: Mapped[int | None] = mapped_column()
+    last_error: Mapped[str | None] = mapped_column(Text)
+    last_delivery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"), _tenant_fk("brands", "brand_id"),
+                      _tenant_fk("webhooks", "webhook_id", "SET NULL"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(30))
+    brand_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    params: Mapped[dict] = mapped_column(JSONB, default=dict)
+    min_severity: Mapped[str] = mapped_column(String(10), default="LOW")
+    channels: Mapped[list[str]] = mapped_column(ARRAY(Text), default=lambda: ["in_app"])
+    notify_roles: Mapped[list[str]] = mapped_column(ARRAY(Text),
+                                                    default=lambda: ["owner", "admin"])
+    webhook_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    __table_args__ = (_tenant_fk("alert_rules", "rule_id", "SET NULL"),
+                      _tenant_fk("brands", "brand_id"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    kind: Mapped[str] = mapped_column(String(30))
+    severity: Mapped[str] = mapped_column(String(10))
+    title: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text, default="")
+    brand_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    dedup_key: Mapped[str] = mapped_column(String(300))
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+
+
+class CrisisEvent(Base):
+    __tablename__ = "crisis_events"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"), _tenant_fk("brands", "brand_id"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    brand_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    severity: Mapped[str] = mapped_column(String(10))
+    started_at: Mapped[datetime] = _created()
+    last_detected_at: Mapped[datetime] = _created()
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    peak_negative: Mapped[int] = mapped_column(default=0)
+    metrics: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = _created()
+
+
+class TrendEvent(Base):
+    __tablename__ = "trend_events"
+    __table_args__ = (_tenant_fk("brands", "brand_id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    brand_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    topic: Mapped[str] = mapped_column(String(120))
+    day: Mapped[date] = mapped_column(Date)
+    count: Mapped[int] = mapped_column()
+    expected: Mapped[float] = mapped_column()
+    z: Mapped[float] = mapped_column()
+    created_at: Mapped[datetime] = _created()
+
+
+class Report(Base):
+    __tablename__ = "reports"
+    __table_args__ = (_tenant_fk("brands", "brand_id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    brand_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    format: Mapped[str] = mapped_column(String(10))
+    locale: Mapped[str] = mapped_column(String(5), default="fr")
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    content: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    filename: Mapped[str | None] = mapped_column(String(200))
+    size_bytes: Mapped[int | None] = mapped_column()
+    error: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    created_at: Mapped[datetime] = _created()
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
