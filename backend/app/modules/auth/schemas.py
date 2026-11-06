@@ -65,6 +65,7 @@ class MeOut(BaseModel):
     locale: str
     email_verified: bool
     mfa_enabled: bool
+    is_platform_admin: bool
     tenant: TenantSummary
     permissions: list[str]
     tenants: list[TenantSummary]

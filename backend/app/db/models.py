@@ -45,6 +45,7 @@ class Tenant(Base):
     slug: Mapped[str] = mapped_column(String(80), unique=True)
     status: Mapped[str] = mapped_column(String(20), default="active")
     default_locale: Mapped[str] = mapped_column(String(5), default="fr")
+    nlp_corpus_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
 
@@ -59,6 +60,7 @@ class User(Base):
     status: Mapped[str] = mapped_column(String(20), default="active")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = _created()
 
 
@@ -399,4 +401,91 @@ class Mention(Base):
     duplicate_of: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("mentions.id", ondelete="SET NULL"))
     raw: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = _created()
+
+
+# ---------------------------------------------------------------- Milestone 4
+class MentionAnalysis(Base):
+    __tablename__ = "mention_analysis"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id", "mention_id"], ["mentions.tenant_id", "mentions.id"],
+                             ondelete="CASCADE"),
+    )
+    mention_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    script: Mapped[str | None] = mapped_column(String(20))
+    heuristic_language: Mapped[str | None] = mapped_column(String(10))
+    code_switching: Mapped[bool | None] = mapped_column(Boolean)
+    normalized_text: Mapped[str | None] = mapped_column(Text)
+    language: Mapped[str | None] = mapped_column(String(10))
+    dialect: Mapped[str | None] = mapped_column(String(30))
+    sentiment: Mapped[str | None] = mapped_column(String(20))
+    sarcasm: Mapped[str | None] = mapped_column(String(10))
+    about_target: Mapped[str | None] = mapped_column(String(10))
+    intents: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    emotions: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    topics: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    translation_fr: Mapped[str | None] = mapped_column(Text)
+    agreement: Mapped[float | None] = mapped_column()
+    arbitration_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    annotators: Mapped[list] = mapped_column(JSONB, default=list)
+    models: Mapped[dict] = mapped_column(JSONB, default=dict)
+    prompt_version: Mapped[str | None] = mapped_column(String(30))
+    analysis_version: Mapped[str | None] = mapped_column(String(30))
+    analysed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    corrected_sentiment: Mapped[str | None] = mapped_column(String(20))
+    corrected_sarcasm: Mapped[str | None] = mapped_column(String(10))
+    corrected_about_target: Mapped[str | None] = mapped_column(String(10))
+    corrected_intents: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    corrected_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    corrected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LanguageAnnotation(Base):
+    __tablename__ = "language_annotations"
+    id: Mapped[uuid.UUID] = _pk()
+    origin_tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"))
+    origin_mention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    text: Mapped[str] = mapped_column(Text)
+    normalized_text: Mapped[str | None] = mapped_column(Text)
+    source_url: Mapped[str | None] = mapped_column(Text)
+    script: Mapped[str | None] = mapped_column(String(20))
+    auto_labels: Mapped[dict] = mapped_column(JSONB, default=dict)
+    auto_status: Mapped[str] = mapped_column(String(20), default="manual")
+    labels: Mapped[dict | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(20), default="auto")
+    split: Mapped[str] = mapped_column(String(20), default="unassigned")
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+
+
+class LanguageEvaluationRun(Base):
+    __tablename__ = "language_evaluation_runs"
+    id: Mapped[uuid.UUID] = _pk()
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    split: Mapped[str] = mapped_column(String(20), default="gold_test")
+    n_items: Mapped[int] = mapped_column(default=0)
+    prompt_version: Mapped[str | None] = mapped_column(String(30))
+    analysis_version: Mapped[str | None] = mapped_column(String(30))
+    models: Mapped[dict] = mapped_column(JSONB, default=dict)
+    metrics: Mapped[dict] = mapped_column(JSONB, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    created_at: Mapped[datetime] = _created()
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DialectExpression(Base):
+    __tablename__ = "dialect_expressions"
+    id: Mapped[uuid.UUID] = _pk()
+    canonical: Mapped[str] = mapped_column(String(100))
+    arabic: Mapped[str | None] = mapped_column(String(100))
+    variants: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    meaning_fr: Mapped[str] = mapped_column(Text, default="")
+    polarity: Mapped[str] = mapped_column(String(10), default="none")
+    status: Mapped[str] = mapped_column(String(20), default="seed_unvalidated")
     created_at: Mapped[datetime] = _created()

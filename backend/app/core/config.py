@@ -72,6 +72,19 @@ class Settings(BaseSettings):
     max_page_fetches_per_run: int = 25
     max_feed_items_per_source: int = 200
 
+    # Language analysis (OpenAI). Empty key or empty model list = AI analysis disabled
+    # (the deterministic linguistic layer still runs). Model ids are never hardcoded.
+    openai_api_key: SecretStr = Field(default=SecretStr(""))
+    openai_base_url: str = "https://api.openai.com/v1"
+    nlp_models: list[str] = []          # e.g. '["<model-a>","<model-b>"]': cycled over annotators
+    nlp_arbiter_model: str = ""         # default: first of nlp_models
+    nlp_annotators: int = Field(default=3, ge=2, le=5)
+    nlp_batch_size: int = 25
+    nlp_min_macro_f1: float = 0.70      # benchmark thresholds before a task is shown as validated
+    nlp_min_coverage: float = 0.60
+    nlp_min_gold_items: int = 100
+    nlp_benchmark_max_items: int = 500
+
     # Plan given to new organizations; empty = the plan flagged is_default in the DB.
     default_plan: str = ""
     trial_days: int = 14

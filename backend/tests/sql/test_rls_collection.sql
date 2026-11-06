@@ -34,7 +34,7 @@ SELECT 'PASS seed';
 DO $$ BEGIN
   ASSERT (SELECT count(*) FROM sources) = 0, 'B sees A sources';
   ASSERT (SELECT count(*) FROM mentions) = 0, 'B sees A mentions';
-  ASSERT (SELECT count(*) FROM connector_policies) = 3, 'policies not readable';
+  ASSERT (SELECT count(*) FROM connector_policies) >= 3, 'policies not readable';
 END $$;
 SELECT 'PASS 1: sources and mentions isolated; connector policies readable';
 

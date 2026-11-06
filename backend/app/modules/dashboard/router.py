@@ -16,6 +16,7 @@ from app.db.models import (
     Competitor,
     Membership,
     Mention,
+    MentionAnalysis,
     MonitoringProject,
     MonitoringRun,
     Product,
@@ -23,6 +24,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import get_db
+from app.nlp.service import validation_status
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -60,6 +62,14 @@ class MentionStats(BaseModel):
     by_method: list[Count]
 
 
+class SentimentStats(BaseModel):
+    analysed: int
+    about_brand: int
+    distribution: list[Count]
+    validated: bool
+    macro_f1: float | None
+
+
 class SourceStats(BaseModel):
     registered: int
     monitored: int
@@ -78,14 +88,15 @@ class DashboardOut(BaseModel):
     last_run: LastRun | None
     mention_stats: MentionStats
     source_stats: SourceStats
+    sentiment_stats: SentimentStats
     recent_activity: list[Activity]
     mentions: Capability
     sentiment: Capability
     sources: Capability
 
 
-NO_SENTIMENT = ("Sentiment analysis arrives with the Algerian NLP module (Milestone 4); "
-                "no sentiment is shown until it has been measured on the benchmark.")
+NO_SENTIMENT = ("No mention has been analysed yet (AI analysis not configured, awaiting "
+                "approval, or no mentions).")
 
 
 @router.get("/summary", response_model=DashboardOut)
@@ -135,6 +146,23 @@ def summary(ctx: AuthContext = Depends(require("brands:read")),
                     Source.coverage_status.in_(["AVAILABLE", "PARTIALLY_AVAILABLE"])),
         by_coverage=[Count(key=k, count=c) for k, c in cov],
     )
+    sent = func.coalesce(MentionAnalysis.corrected_sentiment, MentionAnalysis.sentiment)
+    about = func.coalesce(MentionAnalysis.corrected_about_target, MentionAnalysis.about_target)
+    analysed_q = (select(MentionAnalysis).join(Mention, Mention.id == MentionAnalysis.mention_id)
+                  .where(MentionAnalysis.tenant_id == t, MentionAnalysis.status == "done",
+                         Mention.duplicate_of.is_(None)))
+    analysed = db.scalar(select(func.count()).select_from(analysed_q.subquery())) or 0
+    dist = db.execute(
+        select(sent, func.count()).select_from(MentionAnalysis)
+        .join(Mention, Mention.id == MentionAnalysis.mention_id)
+        .where(MentionAnalysis.tenant_id == t, MentionAnalysis.status == "done",
+               Mention.duplicate_of.is_(None), about != "no")
+        .group_by(sent).order_by(func.count().desc())).all()
+    v = validation_status(db)["tasks"]["sentiment"]
+    sentiment_stats = SentimentStats(
+        analysed=analysed, about_brand=sum(c for _, c in dist),
+        distribution=[Count(key=str(k), count=c) for k, c in dist],
+        validated=v["validated"], macro_f1=v["macro_f1"])
     activity: list[Activity] = []
     if ctx.has("audit:read"):
         rows = db.execute(
@@ -152,7 +180,9 @@ def summary(ctx: AuthContext = Depends(require("brands:read")),
         projects_active=n(MonitoringProject, MonitoringProject.tenant_id == t,
                           MonitoringProject.status == "active"),
         last_run=last_run, mention_stats=mention_stats, source_stats=source_stats,
+        sentiment_stats=sentiment_stats,
         mentions=Capability(available=True),
-        sentiment=Capability(available=False, reason=NO_SENTIMENT),
+        sentiment=Capability(available=analysed > 0,
+                             reason=None if analysed else NO_SENTIMENT),
         sources=Capability(available=True),
     )

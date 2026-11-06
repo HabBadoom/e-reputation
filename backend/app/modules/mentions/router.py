@@ -3,20 +3,27 @@ the NLP analysis in Milestone 4)."""
 
 import csv
 import io
+import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel
-from sqlalchemy import Select, func, select
+from pydantic import BaseModel, Field
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, require
-from app.core.errors import NotFound
-from app.db.models import Brand, Mention, MonitoringProject, Source
+from app.core.errors import AppError, NotFound
+from app.core.config import get_settings
+from app.core.rate_limit import get_limiter
+from app.db.models import Brand, Mention, MentionAnalysis, MonitoringProject, Source
 from app.db.session import get_db
+from app.jobs.queue import enqueue
+from app.modules.audit.service import record
+from app.nlp.prompts import INTENTS
+from app.nlp.service import effective
 
 router = APIRouter(prefix="/mentions", tags=["mentions"])
 
@@ -46,7 +53,8 @@ class MentionOut(BaseModel):
     verification_status: str
     is_repost: bool
     language: str | None
-    analysed: bool          # False until Milestone 4: no sentiment is shown or invented
+    analysed: bool          # True only when the AI analysis completed
+    analysis: dict[str, Any]
 
 
 class MentionDetail(MentionOut):
@@ -59,6 +67,8 @@ class MentionDetail(MentionOut):
     source: dict[str, Any] | None
     project_name: str | None
     provider_fields: dict[str, Any]
+    annotators: list[Any]
+    models: dict[str, Any]
 
 
 class MentionPage(BaseModel):
@@ -69,13 +79,28 @@ class MentionPage(BaseModel):
 
 
 def _base(ctx: AuthContext) -> Select:
-    return (select(Mention, Brand.name).join(Brand, Brand.id == Mention.brand_id)
+    return (select(Mention, Brand.name, MentionAnalysis)
+            .join(Brand, Brand.id == Mention.brand_id)
+            .outerjoin(MentionAnalysis, MentionAnalysis.mention_id == Mention.id)
             .where(Mention.tenant_id == ctx.tenant_id))
 
 
+_SENT = func.coalesce(MentionAnalysis.corrected_sentiment, MentionAnalysis.sentiment)
+_ABOUT = func.coalesce(MentionAnalysis.corrected_about_target, MentionAnalysis.about_target)
+
+
 def _filtered(ctx: AuthContext, brand_id, project_id, entity_type, verification, domain,  # noqa: ANN001
-              since, until, q, include_reposts) -> Select:
+              since, until, q, include_reposts, sentiment=None, language=None,
+              about_target=None) -> Select:
     stmt = _base(ctx)
+    if sentiment:
+        stmt = stmt.where(_SENT == sentiment)
+    if language:
+        stmt = stmt.where(or_(MentionAnalysis.language == language,
+                              (MentionAnalysis.language.is_(None))
+                              & (MentionAnalysis.heuristic_language == language)))
+    if about_target:
+        stmt = stmt.where(_ABOUT == about_target)
     if brand_id:
         stmt = stmt.where(Mention.brand_id == brand_id)
     if project_id:
@@ -98,7 +123,7 @@ def _filtered(ctx: AuthContext, brand_id, project_id, entity_type, verification,
     return stmt
 
 
-def _out(m: Mention, brand_name: str) -> MentionOut:
+def _out(m: Mention, brand_name: str, a: MentionAnalysis | None = None) -> MentionOut:
     return MentionOut(
         id=m.id, brand_id=m.brand_id, brand_name=brand_name, project_id=m.project_id,
         entity_type=m.entity_type, entity_name=m.entity_name, url=m.url, domain=m.domain,
@@ -107,7 +132,9 @@ def _out(m: Mention, brand_name: str) -> MentionOut:
         published_at_source=m.published_at_source, collected_at=m.collected_at,
         last_seen_at=m.last_seen_at, seen_count=m.seen_count,
         collection_method=m.collection_method, verification_status=m.verification_status,
-        is_repost=m.duplicate_of is not None, language=m.language, analysed=False)
+        is_repost=m.duplicate_of is not None,
+        language=(a.language or a.heuristic_language) if a else None,
+        analysed=bool(a and a.status == "done"), analysis=effective(a))
 
 
 class Filters:
@@ -117,9 +144,14 @@ class Filters:
                  domain: str | None = Query(default=None, max_length=255),
                  since: datetime | None = None, until: datetime | None = None,
                  q: str | None = Query(default=None, max_length=200),
-                 include_reposts: bool = False) -> None:
+                 include_reposts: bool = False,
+                 sentiment: Literal["positive", "negative", "neutral", "mixed",
+                                    "UNCERTAIN"] | None = None,
+                 language: Literal["ar-DZ", "ar", "fr", "en", "kab", "mixed", "other",
+                                   "UNCERTAIN"] | None = None,
+                 about_target: Literal["yes", "no", "UNCERTAIN"] | None = None) -> None:
         self.args = (brand_id, project_id, entity_type, verification, domain, since, until, q,
-                     include_reposts)
+                     include_reposts, sentiment, language, about_target)
 
 
 @router.get("", response_model=MentionPage)
@@ -132,7 +164,7 @@ def list_mentions(ctx: AuthContext = Depends(require("mentions:read")),
     rows = db.execute(stmt.order_by(
         func.coalesce(Mention.published_at, Mention.collected_at).desc(), Mention.id)
         .limit(limit).offset(offset)).all()
-    return MentionPage(items=[_out(m, bn) for m, bn in rows], total=total, limit=limit,
+    return MentionPage(items=[_out(m, bn, a) for m, bn, a in rows], total=total, limit=limit,
                        offset=offset)
 
 
@@ -151,13 +183,19 @@ def export_mentions(ctx: AuthContext = Depends(require("mentions:read")),
     w = csv.writer(buf)
     w.writerow(["collected_at", "published_at", "published_at_source", "brand", "entity_type",
                 "entity", "domain", "url", "title", "excerpt", "matched_terms", "method",
-                "verification", "is_repost"])
-    for m, bn in rows:
+                "verification", "is_repost", "language", "sentiment", "sarcasm", "about_target",
+                "intents", "agreement", "corrected"])
+    for m, bn, a in rows:
+        e = effective(a)
         w.writerow([_cell(x) for x in (
             m.collected_at.isoformat(), m.published_at.isoformat() if m.published_at else "",
             m.published_at_source or "", bn, m.entity_type, m.entity_name, m.domain, m.url,
             m.title, m.original_text, "; ".join(m.matched_terms or []), m.collection_method,
-            m.verification_status, "yes" if m.duplicate_of else "no")])
+            m.verification_status, "yes" if m.duplicate_of else "no",
+            (a.language or a.heuristic_language) if a else "", e.get("sentiment") or "",
+            e.get("sarcasm") or "", e.get("about_target") or "", "; ".join(e.get("intents") or []),
+            e.get("agreement") if e.get("agreement") is not None else "",
+            "yes" if e.get("corrected") else "no")])
     return Response("﻿" + buf.getvalue(), media_type="text/csv; charset=utf-8",
                     headers={"content-disposition": 'attachment; filename="mentions.csv"'})
 
@@ -168,13 +206,72 @@ def get_mention(mention_id: uuid.UUID, ctx: AuthContext = Depends(require("menti
     row = db.execute(_base(ctx).where(Mention.id == mention_id)).one_or_none()
     if row is None:
         raise NotFound("Mention not found")
-    m, bn = row
+    m, bn, a = row
     src = db.get(Source, m.source_id) if m.source_id else None
     proj = db.get(MonitoringProject, m.project_id) if m.project_id else None
     return MentionDetail(
-        **_out(m, bn).model_dump(), snippet=m.snippet, canonical_url=m.canonical_url,
+        **_out(m, bn, a).model_dump(), snippet=m.snippet, canonical_url=m.canonical_url,
         connector=m.connector, connector_version=m.connector_version,
         content_hash=m.content_hash, duplicate_of=m.duplicate_of,
         source={"id": str(src.id), "kind": src.kind, "domain": src.domain, "name": src.name,
                 "coverage_status": src.coverage_status} if src else None,
-        project_name=proj.name if proj else None, provider_fields=m.raw or {})
+        project_name=proj.name if proj else None, provider_fields=m.raw or {},
+        annotators=list(a.annotators or []) if a else [], models=dict(a.models or {}) if a else {})
+
+
+class CorrectionIn(BaseModel):
+    sentiment: Literal["positive", "negative", "neutral", "mixed"] | None = None
+    sarcasm: Literal["yes", "no"] | None = None
+    about_target: Literal["yes", "no"] | None = None
+    intents: list[str] | None = Field(default=None, max_length=10)
+
+
+@router.patch("/{mention_id}/analysis", response_model=MentionDetail)
+def correct_analysis(mention_id: uuid.UUID, body: CorrectionIn, request: Request,
+                     ctx: AuthContext = Depends(require("nlp:correct")),
+                     db: Session = Depends(get_db)) -> MentionDetail:
+    """Human correction. Stored beside the AI output (never overwrites it); feeds the training
+    corpus if the organization opted in. Never feeds the gold test set."""
+    row = db.execute(_base(ctx).where(Mention.id == mention_id)).one_or_none()
+    if row is None:
+        raise NotFound("Mention not found")
+    m, _, a = row
+    if body.intents is not None and not set(body.intents) <= set(INTENTS):
+        raise AppError("Unknown intent", code="validation_error", status_code=422)
+    if a is None:
+        a = MentionAnalysis(mention_id=m.id, tenant_id=ctx.tenant_id, status="pending")
+        db.add(a)
+    changes = body.model_dump(exclude_unset=True)
+    for k, v in changes.items():
+        setattr(a, f"corrected_{k}", v)
+    a.corrected_by, a.corrected_at = ctx.user_id, datetime.now(UTC)
+    db.flush()
+    eff = effective(a)
+    labels = {k: eff[k] for k in ("sentiment", "sarcasm", "about_target", "intents")}
+    db.execute(text("SELECT corpus_add_correction(:m, CAST(:l AS jsonb))"),
+               {"m": m.id, "l": json.dumps(labels)})
+    record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id, action="mention.corrected",
+           target_type="mention", target_id=m.id, meta={"fields": sorted(changes)},
+           request=request)
+    db.commit()
+    return get_mention(mention_id, ctx, db)
+
+
+@router.post("/analyze", status_code=202)
+def analyze_backlog(ctx: AuthContext = Depends(require("nlp:correct")),
+                    db: Session = Depends(get_db)) -> dict:
+    """Queue analysis for mentions that have none yet, or whose analysis failed/was blocked."""
+    get_limiter().hit(f"nlp:backlog:{ctx.tenant_id}", 6, 3600)
+    ids = [str(i) for i in db.scalars(
+        select(Mention.id).outerjoin(MentionAnalysis, MentionAnalysis.mention_id == Mention.id)
+        .where(Mention.tenant_id == ctx.tenant_id,
+               or_(MentionAnalysis.mention_id.is_(None),
+                   MentionAnalysis.status.in_(["pending", "failed", "not_configured",
+                                               "blocked_by_policy"])))
+        .order_by(Mention.collected_at.desc()).limit(500))]
+    size = get_settings().nlp_batch_size
+    for i in range(0, len(ids), size):
+        enqueue(db, "nlp.analyze", {"mention_ids": ids[i:i + size]}, tenant_id=ctx.tenant_id,
+                max_attempts=3)
+    db.commit()
+    return {"queued": len(ids)}

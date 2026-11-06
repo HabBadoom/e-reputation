@@ -40,6 +40,7 @@ ignore = ["S101", "B008"]
 "migrations/*" = ["E501", "S608"]
 # Translated copy and inline-styled HTML read better unwrapped.
 "app/modules/notifications/templates.py" = ["E501"]
+"app/nlp/lexicon.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

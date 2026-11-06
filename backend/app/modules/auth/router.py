@@ -166,6 +166,7 @@ def me(ctx: AuthContext = Depends(get_auth), db: Session = Depends(get_db)) -> M
     current = next(t for t in tenants if t.id == ctx.tenant_id)
     return MeOut(user_id=user.id, email=user.email, full_name=user.full_name, locale=user.locale,
                  email_verified=user.email_verified_at is not None,
+                 is_platform_admin=user.is_platform_admin,
                  mfa_enabled=account.mfa_enabled(db, user.id),
                  tenant=current, permissions=sorted(ctx.permissions), tenants=tenants)
 

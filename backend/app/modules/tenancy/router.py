@@ -34,12 +34,16 @@ class TenantOut(BaseModel):
     slug: str
     status: str
     default_locale: str
+    nlp_corpus_opt_in: bool
     created_at: datetime
 
 
 class TenantPatch(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=200)
     default_locale: Literal["fr", "ar", "en"] | None = None
+    # Share analysed excerpts with the platform's Algerian NLP corpus (opt-in; opting out
+    # deletes everything this organization contributed).
+    nlp_corpus_opt_in: bool | None = None
 
 
 class RoleOut(BaseModel):
@@ -130,9 +134,14 @@ def patch_org(body: TenantPatch, request: Request,
     t = db.get(Tenant, ctx.tenant_id)
     assert t is not None
     changes = body.model_dump(exclude_none=True)
+    purged = None
+    if changes.get("nlp_corpus_opt_in") is False and t.nlp_corpus_opt_in:
+        purged = db.execute(text("SELECT corpus_purge_tenant()")).scalar_one()
     for k, v in changes.items():
         setattr(t, k, v.strip() if isinstance(v, str) else v)
     t.updated_at = datetime.now(UTC)
+    if purged is not None:
+        changes["corpus_items_deleted"] = purged
     record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id, action="tenant.updated",
            target_type="tenant", target_id=t.id, meta={"fields": sorted(changes)}, request=request)
     db.commit()

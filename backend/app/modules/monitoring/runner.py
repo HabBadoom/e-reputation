@@ -48,3 +48,21 @@ def execute_run(db: Session, job: Job) -> None:
             run.summary = {"reason": "internal_error"}
     run.finished_at = datetime.now(UTC)
     project.last_run_at = run.finished_at
+    if run.status == "completed":
+        _enqueue_analysis(db, project, run)
+
+
+def _enqueue_analysis(db: Session, project: MonitoringProject, run: MonitoringRun) -> None:
+    """Language analysis of this run's new mentions, in batches (separate jobs, retried)."""
+    from sqlalchemy import select
+
+    from app.core.config import get_settings
+    from app.db.models import Mention
+    from app.jobs.queue import enqueue
+
+    ids = [str(i) for i in db.scalars(select(Mention.id).where(
+        Mention.tenant_id == project.tenant_id, Mention.first_run_id == run.id))]
+    size = get_settings().nlp_batch_size
+    for i in range(0, len(ids), size):
+        enqueue(db, "nlp.analyze", {"mention_ids": ids[i:i + size]},
+                tenant_id=project.tenant_id, max_attempts=3)
