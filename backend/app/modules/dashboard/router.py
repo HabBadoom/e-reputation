@@ -5,7 +5,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, require
@@ -16,8 +16,10 @@ from app.db.models import (
     Competitor,
     Membership,
     MonitoringProject,
+    Mention,
     MonitoringRun,
     Product,
+    Source,
     User,
 )
 from app.db.session import get_db
@@ -43,6 +45,27 @@ class LastRun(BaseModel):
     reason: str | None
 
 
+class Count(BaseModel):
+    key: str
+    count: int
+
+
+class MentionStats(BaseModel):
+    total: int
+    last_7_days: int
+    verified_on_page: int
+    reposts: int
+    top_domains: list[Count]
+    by_entity: list[Count]
+    by_method: list[Count]
+
+
+class SourceStats(BaseModel):
+    registered: int
+    monitored: int
+    by_coverage: list[Count]
+
+
 class DashboardOut(BaseModel):
     brands_total: int
     brands_active: int
@@ -53,13 +76,16 @@ class DashboardOut(BaseModel):
     projects_total: int
     projects_active: int
     last_run: LastRun | None
+    mention_stats: MentionStats
+    source_stats: SourceStats
     recent_activity: list[Activity]
     mentions: Capability
     sentiment: Capability
     sources: Capability
 
 
-NOT_YET = "Content collection is not enabled yet (Milestone 3). No mention data exists."
+NO_SENTIMENT = ("Sentiment analysis arrives with the Algerian NLP module (Milestone 4); "
+                "no sentiment is shown until it has been measured on the benchmark.")
 
 
 @router.get("/summary", response_model=DashboardOut)
@@ -85,6 +111,30 @@ def summary(ctx: AuthContext = Depends(require("brands:read")),
     last_run = LastRun(project_name=last[1], status=last[0].status,
                        finished_at=last[0].finished_at,
                        reason=(last[0].summary or {}).get("reason")) if last else None
+    def grouped(col, *where, limit: int = 10) -> list[Count]:  # noqa: ANN001
+        rows = db.execute(select(col, func.count()).where(Mention.tenant_id == t, *where)
+                          .group_by(col).order_by(func.count().desc()).limit(limit)).all()
+        return [Count(key=str(k), count=c) for k, c in rows]
+
+    week_ago = func.now() - text("interval '7 days'")
+    mention_stats = MentionStats(
+        total=n(Mention, Mention.tenant_id == t),
+        last_7_days=n(Mention, Mention.tenant_id == t, Mention.collected_at >= week_ago),
+        verified_on_page=n(Mention, Mention.tenant_id == t,
+                           Mention.verification_status == "verified_on_page"),
+        reposts=n(Mention, Mention.tenant_id == t, Mention.duplicate_of.is_not(None)),
+        top_domains=grouped(Mention.domain, Mention.duplicate_of.is_(None), limit=5),
+        by_entity=grouped(Mention.entity_type),
+        by_method=grouped(Mention.collection_method),
+    )
+    cov = db.execute(select(Source.coverage_status, func.count()).where(Source.tenant_id == t)
+                     .group_by(Source.coverage_status)).all()
+    source_stats = SourceStats(
+        registered=sum(c for _, c in cov),
+        monitored=n(Source, Source.tenant_id == t, Source.enabled.is_(True),
+                    Source.coverage_status.in_(["AVAILABLE", "PARTIALLY_AVAILABLE"])),
+        by_coverage=[Count(key=k, count=c) for k, c in cov],
+    )
     activity: list[Activity] = []
     if ctx.has("audit:read"):
         rows = db.execute(
@@ -101,8 +151,8 @@ def summary(ctx: AuthContext = Depends(require("brands:read")),
         projects_total=n(MonitoringProject, MonitoringProject.tenant_id == t),
         projects_active=n(MonitoringProject, MonitoringProject.tenant_id == t,
                           MonitoringProject.status == "active"),
-        last_run=last_run,
-        mentions=Capability(available=False, reason=NOT_YET),
-        sentiment=Capability(available=False, reason=NOT_YET),
-        sources=Capability(available=False, reason="Source registry arrives in Milestone 3."),
+        last_run=last_run, mention_stats=mention_stats, source_stats=source_stats,
+        mentions=Capability(available=True),
+        sentiment=Capability(available=False, reason=NO_SENTIMENT),
+        sources=Capability(available=True),
     )

@@ -316,3 +316,87 @@ class MonitoringRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     summary: Mapped[dict] = mapped_column(JSONB, default=dict)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+# ---------------------------------------------------------------- Milestone 3
+class ConnectorPolicy(Base):
+    __tablename__ = "connector_policies"
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    access_method: Mapped[str] = mapped_column(String(40))
+    legal_basis: Mapped[str] = mapped_column(Text)
+    data_categories: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    restrictions: Mapped[str] = mapped_column(Text, default="")
+    retention_days: Mapped[int] = mapped_column()
+    review_status: Mapped[str] = mapped_column(String(30))
+    reviewed_by: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = _created()
+
+
+class Source(Base):
+    __tablename__ = "sources"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    url: Mapped[str] = mapped_column(String(1000))
+    domain: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(String(200), default="")
+    category: Mapped[str] = mapped_column(String(40), default="unknown")
+    country: Mapped[str | None] = mapped_column(String(2))
+    language: Mapped[str | None] = mapped_column(String(10))
+    connector: Mapped[str] = mapped_column(ForeignKey("connector_policies.key"))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    discovered_via: Mapped[str] = mapped_column(String(20), default="manual")
+    coverage_status: Mapped[str] = mapped_column(String(30), default="PARTIALLY_AVAILABLE")
+    restrictions: Mapped[str] = mapped_column(Text, default="")
+    mentions_count: Mapped[int] = mapped_column(default=0)
+    last_collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    consecutive_errors: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class Mention(Base):
+    __tablename__ = "mentions"
+    __table_args__ = (
+        _brand_fk(),
+        ForeignKeyConstraint(["tenant_id", "project_id"],
+                             ["monitoring_projects.tenant_id", "monitoring_projects.id"]),
+        ForeignKeyConstraint(["tenant_id", "source_id"], ["sources.tenant_id", "sources.id"]),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    brand_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    first_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    entity_type: Mapped[str] = mapped_column(String(20))
+    entity_name: Mapped[str] = mapped_column(String(200))
+    url: Mapped[str] = mapped_column(String(2000))
+    canonical_url: Mapped[str] = mapped_column(String(2000))
+    domain: Mapped[str] = mapped_column(String(255))
+    title: Mapped[str] = mapped_column(Text, default="")
+    snippet: Mapped[str] = mapped_column(Text, default="")
+    original_text: Mapped[str] = mapped_column(Text, default="")
+    normalized_text: Mapped[str | None] = mapped_column(Text)
+    language: Mapped[str | None] = mapped_column(String(10))
+    matched_terms: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    publisher: Mapped[str | None] = mapped_column(String(200))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at_source: Mapped[str | None] = mapped_column(String(30))
+    collected_at: Mapped[datetime] = _created()
+    last_seen_at: Mapped[datetime] = _created()
+    seen_count: Mapped[int] = mapped_column(default=1)
+    collection_method: Mapped[str] = mapped_column(String(30))
+    connector: Mapped[str] = mapped_column(String(40))
+    connector_version: Mapped[str] = mapped_column(String(20))
+    verification_status: Mapped[str] = mapped_column(String(30))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    duplicate_of: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mentions.id", ondelete="SET NULL"))
+    raw: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = _created()

@@ -18,7 +18,9 @@ from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
 from app.modules.catalog.router import router as catalog_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.mentions.router import router as mentions_router
 from app.modules.monitoring.router import router as monitoring_router
+from app.modules.sources.router import router as sources_router
 from app.modules.tenancy.router import router as tenancy_router
 
 log = logging.getLogger("repintel.http")
@@ -87,7 +89,7 @@ def create_app() -> FastAPI:
 
     v1 = APIRouter(prefix="/api/v1")
     for r in (auth_router, tenancy_router, brands_router, catalog_router, monitoring_router,
-              dashboard_router, audit_router):
+              mentions_router, sources_router, dashboard_router, audit_router):
         v1.include_router(r)
     app.include_router(v1)
     return app

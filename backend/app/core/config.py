@@ -55,6 +55,23 @@ class Settings(BaseSettings):
     password_reset_ttl_seconds: int = 60 * 60
     mfa_challenge_ttl_seconds: int = 5 * 60
 
+    # Search provider (Serper.dev). Empty key = search connector disabled.
+    serper_api_key: SecretStr = Field(default=SecretStr(""))
+    serper_base_url: str = "https://google.serper.dev"
+    search_country: str = "dz"               # Serper `gl`
+    search_results_per_query: int = 20       # Serper `num`
+    search_endpoints: list[Literal["search", "news"]] = ["news", "search"]
+    max_search_queries_per_run: int = 30
+
+    # Fetching third-party pages / feeds.
+    crawler_user_agent: str = "RepIntelBot/0.1 (+https://example.com/bot)"
+    crawler_robots_token: str = "RepIntelBot"
+    fetch_timeout_seconds: float = 10.0
+    fetch_max_bytes: int = 2 * 1024 * 1024
+    verify_pages: bool = True                # check search hits against the real page
+    max_page_fetches_per_run: int = 25
+    max_feed_items_per_source: int = 200
+
     # Plan given to new organizations; empty = the plan flagged is_default in the DB.
     default_plan: str = ""
     trial_days: int = 14

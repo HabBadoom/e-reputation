@@ -1,8 +1,4 @@
-"""Executes a monitoring run (job kind "monitoring.run").
-
-Until source connectors exist (Milestone 3) a run builds and records the query plan, then
-ends as `skipped` with an explicit reason. It never invents mentions or results.
-"""
+"""Executes a monitoring run (job kind "monitoring.run") through the collection pipeline."""
 
 import logging
 import uuid
@@ -10,15 +6,12 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from app.collection.pipeline import collect_for_project
 from app.db.models import Brand, MonitoringProject, MonitoringRun
 from app.jobs.handlers import PermanentJobError
 from app.jobs.queue import Job
-from app.modules.monitoring.query_plan import load_query_plan
 
 log = logging.getLogger("repintel.monitoring")
-
-NO_CONNECTORS = ("No source connector is enabled yet (Milestone 3). The query plan was "
-                 "built; no content was collected.")
 
 
 def execute_run(db: Session, job: Job) -> None:
@@ -31,7 +24,6 @@ def execute_run(db: Session, job: Job) -> None:
         log.info("monitoring_run_project_gone", extra={"project_id": str(project_id)})
         return  # deleted meanwhile: nothing to do, job succeeds
 
-    now = datetime.now(UTC)
     run = None
     if run_id := job.payload.get("run_id"):
         run = db.get(MonitoringRun, uuid.UUID(run_id))
@@ -39,20 +31,20 @@ def execute_run(db: Session, job: Job) -> None:
         run = MonitoringRun(tenant_id=project.tenant_id, project_id=project.id,
                             trigger=job.payload.get("trigger", "schedule"))
         db.add(run)
-    run.status, run.started_at = "running", now
+    run.status, run.started_at = "running", datetime.now(UTC)
+    db.flush()
 
     brand = db.get(Brand, project.brand_id)
     if brand is None or brand.status != "active":
         run.status, run.summary = "skipped", {"reason": "brand_not_active"}
     else:
-        plan = load_query_plan(db, project)
-        run.status = "skipped"
-        run.summary = {
-            "reason": "no_active_connectors",
-            "detail": NO_CONNECTORS,
-            "query_groups": len(plan),
-            "search_terms": sum(len(g.terms) for g in plan),
-            "mentions_collected": 0,
-        }
+        try:
+            with db.begin_nested():   # a crash rolls back partial writes, keeps the run row
+                run.status, run.summary = collect_for_project(db, project, run)
+        except Exception as e:  # noqa: BLE001 — record the failure on the run, don't retry
+            log.exception("monitoring_run_failed", extra={"run_id": str(run.id)})
+            run.status = "failed"
+            run.error = f"{type(e).__name__}: internal error during collection"
+            run.summary = {"reason": "internal_error"}
     run.finished_at = datetime.now(UTC)
     project.last_run_at = run.finished_at
