@@ -184,9 +184,12 @@ def test_corrections_filters_and_permissions(make_user, openai):
     assert ",mixed," in csv_text
 
 
-def _corpus_count(owner_engine, where=""):
+def _corpus_count(owner_engine, status=None, split=None):
     with owner_engine.begin() as c:
-        return c.execute(text(f"SELECT count(*) FROM language_annotations {where}")).scalar_one()
+        return c.execute(text(
+            "SELECT count(*) FROM language_annotations WHERE (CAST(:st AS text) IS NULL OR "
+            "status = :st) AND (CAST(:sp AS text) IS NULL OR split = :sp)"),
+            {"st": status, "sp": split}).scalar_one()
 
 
 def test_corpus_only_with_opt_in_and_purged_on_opt_out(make_user, openai, owner_engine):
@@ -203,7 +206,7 @@ def test_corpus_only_with_opt_in_and_purged_on_opt_out(make_user, openai, owner_
     # only the new mention is analysed now (the first was already done before the opt-in)
     assert _corpus_count(owner_engine) == 1
     api.patch(f"/api/v1/mentions/{mid}/analysis", json={"sentiment": "neutral"})
-    assert _corpus_count(owner_engine, "WHERE status='tenant_corrected' AND split='train'") == 1
+    assert _corpus_count(owner_engine, status="tenant_corrected", split="train") == 1
 
     api.patch("/api/v1/organization", json={"nlp_corpus_opt_in": False})
     assert _corpus_count(owner_engine) == 0

@@ -1,5 +1,5 @@
-"""Collected mentions with full provenance. Read-only in Milestone 3 (corrections arrive with
-the NLP analysis in Milestone 4)."""
+"""Collected mentions with full provenance and language analysis; human corrections are
+stored beside the AI output, never over it."""
 
 import csv
 import io
@@ -15,8 +15,8 @@ from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, require
-from app.core.errors import AppError, NotFound
 from app.core.config import get_settings
+from app.core.errors import AppError, NotFound
 from app.core.rate_limit import get_limiter
 from app.db.models import Brand, Mention, MentionAnalysis, MonitoringProject, Source
 from app.db.session import get_db
@@ -85,8 +85,8 @@ def _base(ctx: AuthContext) -> Select:
             .where(Mention.tenant_id == ctx.tenant_id))
 
 
-_SENT = func.coalesce(MentionAnalysis.corrected_sentiment, MentionAnalysis.sentiment)
-_ABOUT = func.coalesce(MentionAnalysis.corrected_about_target, MentionAnalysis.about_target)
+_sent = func.coalesce(MentionAnalysis.corrected_sentiment, MentionAnalysis.sentiment)
+_about = func.coalesce(MentionAnalysis.corrected_about_target, MentionAnalysis.about_target)
 
 
 def _filtered(ctx: AuthContext, brand_id, project_id, entity_type, verification, domain,  # noqa: ANN001
@@ -94,13 +94,13 @@ def _filtered(ctx: AuthContext, brand_id, project_id, entity_type, verification,
               about_target=None) -> Select:
     stmt = _base(ctx)
     if sentiment:
-        stmt = stmt.where(_SENT == sentiment)
+        stmt = stmt.where(_sent == sentiment)
     if language:
         stmt = stmt.where(or_(MentionAnalysis.language == language,
                               (MentionAnalysis.language.is_(None))
                               & (MentionAnalysis.heuristic_language == language)))
     if about_target:
-        stmt = stmt.where(_ABOUT == about_target)
+        stmt = stmt.where(_about == about_target)
     if brand_id:
         stmt = stmt.where(Mention.brand_id == brand_id)
     if project_id:
