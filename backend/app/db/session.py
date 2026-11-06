@@ -50,7 +50,14 @@ def _apply_context(session: Session, transaction, connection) -> None:  # noqa: 
 def set_context(
     session: Session, *, tenant_id: uuid.UUID | None, user_id: uuid.UUID | None
 ) -> None:
-    """Set the context for the current and all future transactions on this session."""
+    """Set the context for the current and all future transactions on this session.
+
+    Pending ORM changes are flushed first, under the context they were created in. Without
+    this, rows added before a switch would be written later under the *new* context and be
+    rejected by RLS (or, worse, checked against the wrong tenant).
+    """
+    if session.in_transaction() and (session.new or session.dirty or session.deleted):
+        session.flush()
     session.info["tenant_id"] = tenant_id
     session.info["user_id"] = user_id
     if session.in_transaction():
