@@ -39,15 +39,18 @@ def verify_password(password: str, password_hash: str | None) -> bool:
 class AccessClaims:
     user_id: uuid.UUID
     tenant_id: uuid.UUID
+    session_id: uuid.UUID  # refresh-token family; revoking it kills this token immediately
     jti: str
 
 
-def create_access_token(user_id: uuid.UUID, tenant_id: uuid.UUID) -> tuple[str, int]:
+def create_access_token(user_id: uuid.UUID, tenant_id: uuid.UUID,
+                        session_id: uuid.UUID) -> tuple[str, int]:
     s = get_settings()
     now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "tid": str(tenant_id),
+        "sid": str(session_id),
         "jti": secrets.token_hex(8),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=s.access_token_ttl_seconds)).timestamp()),
@@ -64,11 +67,12 @@ def decode_access_token(token: str) -> AccessClaims:
             token,
             s.jwt_secret.get_secret_value(),
             algorithms=[s.jwt_algorithm],
-            options={"require": ["sub", "tid", "exp", "jti"]},
+            options={"require": ["sub", "tid", "sid", "exp", "jti"]},
         )
         if p.get("typ") != "access":
             raise Unauthorized("Invalid token type")
-        return AccessClaims(uuid.UUID(p["sub"]), uuid.UUID(p["tid"]), p["jti"])
+        return AccessClaims(uuid.UUID(p["sub"]), uuid.UUID(p["tid"]), uuid.UUID(p["sid"]),
+                            p["jti"])
     except jwt.ExpiredSignatureError as e:
         raise Unauthorized("Access token expired", code="token_expired") from e
     except (jwt.PyJWTError, ValueError, KeyError) as e:

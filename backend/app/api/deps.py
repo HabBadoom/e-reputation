@@ -14,13 +14,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastapi import Depends, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import Forbidden, Unauthorized
 from app.core.logging import tenant_id_var
 from app.core.security import constant_time_eq, decode_access_token
-from app.db.models import Membership, Permission, Role, RolePermission, User
+from app.db.models import Membership, Permission, RefreshToken, Role, RolePermission, User
 from app.db.session import get_db, set_context
 
 ACCESS_COOKIE = "ri_access"
@@ -34,6 +34,7 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 class AuthContext:
     user_id: uuid.UUID
     tenant_id: uuid.UUID
+    session_id: uuid.UUID
     membership_id: uuid.UUID
     role_key: str
     role_rank: int
@@ -91,12 +92,22 @@ def get_auth(request: Request, db: Session = Depends(get_db)) -> AuthContext:
         raise Forbidden("CSRF token missing or invalid", code="csrf_failed")
 
     set_context(db, tenant_id=claims.tenant_id, user_id=claims.user_id)
+    # Logout, session revocation and password changes take effect immediately, not when
+    # the 15-minute access token expires.
+    alive = db.scalar(
+        select(RefreshToken.id).where(RefreshToken.family_id == claims.session_id,
+                                      RefreshToken.revoked_at.is_(None),
+                                      RefreshToken.expires_at > func.now()).limit(1)
+    )
+    if alive is None:
+        raise Unauthorized("Session has ended", code="session_revoked")
     membership, role = load_membership(db, claims.user_id, claims.tenant_id)
     tenant_id_var.set(str(claims.tenant_id))
     request.state.user_id = claims.user_id
     return AuthContext(
         user_id=claims.user_id,
         tenant_id=claims.tenant_id,
+        session_id=claims.session_id,
         membership_id=membership.id,
         role_key=role.key,
         role_rank=role.rank,

@@ -14,7 +14,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -204,3 +204,115 @@ class BrandAlias(Base):
     script: Mapped[str] = mapped_column(String(20))
     kind: Mapped[str] = mapped_column(String(20), default="alias")
     created_at: Mapped[datetime] = _created()
+
+
+# ---------------------------------------------------------------- Milestone 2
+class Plan(Base):
+    __tablename__ = "plans"
+    id: Mapped[uuid.UUID] = _pk()
+    key: Mapped[str] = mapped_column(String(50), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = _created()
+
+
+class PlanEntitlement(Base):
+    __tablename__ = "plan_entitlements"
+    plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    value: Mapped[int | None] = mapped_column()
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id"))
+    status: Mapped[str] = mapped_column(String(20), default="trialing")
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+def _brand_fk() -> ForeignKeyConstraint:
+    return ForeignKeyConstraint(["tenant_id", "brand_id"], ["brands.tenant_id", "brands.id"],
+                                ondelete="CASCADE")
+
+
+class Product(Base):
+    __tablename__ = "products"
+    __table_args__ = (_brand_fk(),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    brand_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    name: Mapped[str] = mapped_column(String(200))
+    category: Mapped[str] = mapped_column(String(100), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class Competitor(Base):
+    __tablename__ = "competitors"
+    __table_args__ = (_brand_fk(),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    brand_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    name: Mapped[str] = mapped_column(String(200))
+    website: Mapped[str | None] = mapped_column(String(500))
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class BrandKeyword(Base):
+    __tablename__ = "brand_keywords"
+    __table_args__ = (_brand_fk(),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    brand_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    expression: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(10), default="include")
+    language: Mapped[str | None] = mapped_column(String(10))
+    created_at: Mapped[datetime] = _created()
+
+
+class MonitoringProject(Base):
+    __tablename__ = "monitoring_projects"
+    __table_args__ = (_brand_fk(), UniqueConstraint("tenant_id", "id"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    brand_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    name: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    frequency_minutes: Mapped[int] = mapped_column()
+    include_competitors: Mapped[bool] = mapped_column(Boolean, default=True)
+    languages: Mapped[list[str]] = mapped_column(ARRAY(Text), default=lambda: ["fr", "ar"])
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class MonitoringRun(Base):
+    __tablename__ = "monitoring_runs"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id", "project_id"],
+                             ["monitoring_projects.tenant_id", "monitoring_projects.id"],
+                             ondelete="CASCADE"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    trigger: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    queued_at: Mapped[datetime] = _created()
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary: Mapped[dict] = mapped_column(JSONB, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)

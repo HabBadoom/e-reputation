@@ -1,6 +1,9 @@
+import uuid
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -13,10 +16,10 @@ from app.api.deps import (
     load_membership,
 )
 from app.core.config import get_settings
-from app.core.errors import Conflict, Unauthorized
+from app.core.errors import Conflict, NotFound, Unauthorized
 from app.core.rate_limit import get_limiter
 from app.core.security import hash_token, new_csrf_token
-from app.db.models import Membership, Role, Tenant, User
+from app.db.models import Membership, RefreshToken, Role, Tenant, User
 from app.db.session import get_db, set_context
 from app.modules.audit.service import record
 from app.modules.auth import account, service
@@ -35,6 +38,7 @@ from app.modules.auth.schemas import (
     RefreshIn,
     RegisterIn,
     ResetPasswordIn,
+    SessionOut,
     SwitchTenantIn,
     TenantSummary,
     TokenIn,
@@ -84,15 +88,19 @@ def register(body: RegisterIn, request: Request, response: Response,
     user_id, tenant_id = service.register(
         db, email=body.email, password=body.password, full_name=body.full_name,
         org_name=body.organization_name, locale=body.locale,
+        invitation_token=body.invitation_token,
     )
-    record(db, tenant_id=tenant_id, actor_user_id=user_id, action="tenant.created",
-           target_type="tenant", target_id=tenant_id, request=request)
+    if body.invitation_token:
+        record(db, tenant_id=tenant_id, actor_user_id=user_id, action="invitation.accepted",
+               target_type="user", target_id=user_id, meta={"via": "signup"}, request=request)
+    else:
+        record(db, tenant_id=tenant_id, actor_user_id=user_id, action="tenant.created",
+               target_type="tenant", target_id=tenant_id, request=request)
     tokens = service.issue_tokens(db, user_id=user_id, tenant_id=tenant_id,
                                   user_agent=_ua(request), ip=client_ip(request))
-    db.commit()
     user = db.get(User, user_id)
     assert user is not None
-    account.send_verification(db, user)  # failure is logged; the user can resend
+    account.send_verification(db, user)  # queued in the same transaction as the signup
     db.commit()
     return _deliver(request, response, tokens)
 
@@ -219,9 +227,9 @@ def resend_verification(ctx: AuthContext = Depends(get_auth),
     if user.email_verified_at is not None:
         raise Conflict("Email address already verified", code="already_verified")
     get_limiter().hit(f"email:verify:{user.id}", get_settings().email_rate_limit_per_hour, 3600)
-    sent = account.send_verification(db, user)
+    account.send_verification(db, user)
     db.commit()
-    return {"sent": sent}
+    return {"queued": True}
 
 
 # ---------------------------------------------------------------- passwords
@@ -311,3 +319,62 @@ def mfa_recovery_codes(body: MfaCodeIn, request: Request, ctx: AuthContext = Dep
            request=request)
     db.commit()
     return RecoveryCodesOut(recovery_codes=codes)
+
+
+# ---------------------------------------------------------------- sessions
+_SESSIONS_SQL = text("""
+    SELECT family_id AS id,
+           min(created_at) AS started_at,
+           max(created_at) AS last_active_at,
+           (array_agg(tenant_id ORDER BY created_at DESC))[1] AS tenant_id,
+           (array_agg(user_agent ORDER BY created_at DESC))[1] AS user_agent,
+           (array_agg(host(ip) ORDER BY created_at DESC))[1] AS ip
+    FROM refresh_tokens
+    WHERE user_id = :u
+    GROUP BY family_id
+    HAVING bool_or(revoked_at IS NULL AND expires_at > now())
+    ORDER BY max(created_at) DESC
+""")
+
+
+@router.get("/sessions", response_model=list[SessionOut])
+def list_sessions(ctx: AuthContext = Depends(get_auth),
+                  db: Session = Depends(get_db)) -> list[SessionOut]:
+    """Active sign-ins of the current user across devices (one per refresh-token family)."""
+    return [SessionOut(current=r.id == ctx.session_id, **r._mapping)
+            for r in db.execute(_SESSIONS_SQL, {"u": ctx.user_id})]
+
+
+def _revoke_families(db: Session, user_id: uuid.UUID, family_ids: list[uuid.UUID]) -> int:
+    return db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user_id, RefreshToken.family_id.in_(family_ids),
+               RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    ).rowcount
+
+
+@router.delete("/sessions/{session_id}", status_code=204)
+def revoke_session(session_id: uuid.UUID, request: Request,
+                   ctx: AuthContext = Depends(get_auth),
+                   db: Session = Depends(get_db)) -> Response:
+    if _revoke_families(db, ctx.user_id, [session_id]) == 0:
+        raise NotFound("Session not found")
+    record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id, action="auth.session_revoked",
+           meta={"session_id": str(session_id)}, request=request)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/sessions", status_code=204)
+def revoke_other_sessions(request: Request, ctx: AuthContext = Depends(get_auth),
+                          db: Session = Depends(get_db)) -> Response:
+    """Sign out everywhere except here."""
+    others = [r.id for r in db.execute(_SESSIONS_SQL, {"u": ctx.user_id})
+              if r.id != ctx.session_id]
+    if others:
+        _revoke_families(db, ctx.user_id, others)
+    record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id,
+           action="auth.other_sessions_revoked", meta={"count": len(others)}, request=request)
+    db.commit()
+    return Response(status_code=204)

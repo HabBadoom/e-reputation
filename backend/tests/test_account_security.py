@@ -5,7 +5,15 @@ import time
 from sqlalchemy import text
 
 from app.core import totp
-from tests.conftest import PASSWORD, join, outbox, register, token_from_last_email
+from tests.conftest import (
+    PASSWORD,
+    Api,
+    join,
+    outbox,
+    register,
+    sent_emails,
+    token_from_last_email,
+)
 
 TOKEN = {"x-auth-mode": "token"}
 NEW_PASSWORD = "a brand new passphrase 2026"
@@ -22,7 +30,7 @@ def test_registration_sends_localized_verification_email(client):
         "email": "Amina@Example.dz", "password": PASSWORD, "full_name": "Amina <b>",
         "organization_name": "Org Ar", "locale": "ar"})
     assert r.status_code == 201
-    [msg] = outbox().outbox
+    [msg] = sent_emails()
     assert msg.to_email == "amina@example.dz"
     assert msg.subject == "تأكيد بريدك الإلكتروني"
     assert 'dir="rtl"' in msg.html
@@ -94,10 +102,14 @@ def test_password_reset_flow(client):
     # all sessions revoked, old password dead, new one works
     assert client.post("/api/v1/auth/refresh", headers=TOKEN,
                        json={"refresh_token": api.refresh}).status_code == 401
+    # Sessions end immediately, including the outstanding access token.
+    r = api.get("/api/v1/brands")
+    assert r.status_code == 401 and r.json()["error"]["code"] == "session_revoked"
     assert _login(client, "reset@example.dz").status_code == 401
-    assert _login(client, "reset@example.dz", NEW_PASSWORD).status_code == 200
-    # The (short-lived) access token still works; the org audit trail records the reset.
-    actions = [e["action"] for e in api.get("/api/v1/audit-logs").json()["items"]]
+    fresh = _login(client, "reset@example.dz", NEW_PASSWORD)
+    assert fresh.status_code == 200
+    actions = [e["action"] for e in
+               Api(client, fresh.json()).get("/api/v1/audit-logs").json()["items"]]
     assert "auth.password_reset" in actions
 
 
@@ -108,7 +120,7 @@ def test_forgot_password_does_not_reveal_accounts(client):
     b = client.post("/api/v1/auth/password/forgot", json={"email": "unknown@example.dz"})
     assert a.status_code == b.status_code == 202
     assert a.json() == b.json()
-    assert [m.to_email for m in outbox().outbox] == ["known@example.dz"]
+    assert [m.to_email for m in sent_emails()] == ["known@example.dz"]
 
 
 def test_change_password_requires_current_and_revokes_other_sessions(client):

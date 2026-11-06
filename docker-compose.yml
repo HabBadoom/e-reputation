@@ -72,6 +72,14 @@ services:
       interval: 5s
       retries: 20
 
+  worker:   # background jobs: emails (with retries) and the monitoring scheduler
+    build: ./backend
+    command: ["python", "-m", "app.jobs.worker"]
+    environment: *backend-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
   web:
     build: ./frontend
     environment: { REPINTEL_BACKEND_URL: http://api:8000 }

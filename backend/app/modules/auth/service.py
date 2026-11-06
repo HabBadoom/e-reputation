@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import load_membership
 from app.core.config import get_settings
-from app.core.errors import Conflict, Unauthorized
+from app.core.errors import Conflict, NotFound, Unauthorized
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -22,8 +22,9 @@ from app.core.security import (
     new_refresh_token,
     verify_password,
 )
-from app.db.models import Membership, RefreshToken, Role, Tenant, User
+from app.db.models import Invitation, Membership, RefreshToken, Role, Tenant, User
 from app.db.session import set_context
+from app.modules.billing.entitlements import create_subscription
 
 log = logging.getLogger("repintel.auth")
 
@@ -55,14 +56,15 @@ def issue_tokens(
     ip: str | None = None,
 ) -> IssuedTokens:
     s = get_settings()
-    access, ttl = create_access_token(user_id, tenant_id)
+    family_id = family_id or uuid.uuid4()
+    access, ttl = create_access_token(user_id, tenant_id, family_id)
     raw, hashed = new_refresh_token()
     db.add(
         RefreshToken(
             user_id=user_id,
             tenant_id=tenant_id,
             token_hash=hashed,
-            family_id=family_id or uuid.uuid4(),
+            family_id=family_id,
             expires_at=datetime.now(UTC) + timedelta(seconds=s.refresh_token_ttl_seconds),
             user_agent=(user_agent or "")[:400] or None,
             ip=ip,
@@ -71,10 +73,27 @@ def issue_tokens(
     return IssuedTokens(access, ttl, raw, s.refresh_token_ttl_seconds, user_id, tenant_id)
 
 
+def _valid_invitation(db: Session, raw: str, email: str):  # noqa: ANN202
+    inv = db.execute(
+        text("SELECT id, tenant_id, email, role_id, expires_at, accepted_at, revoked_at "
+             "FROM auth_find_invitation(:h)"), {"h": hash_token(raw)}
+    ).one_or_none()
+    if (inv is None or inv.accepted_at or inv.revoked_at
+            or inv.expires_at <= datetime.now(UTC) or inv.email != email.lower()):
+        raise NotFound("Invitation not found or no longer valid", code="invalid_invitation")
+    return inv
+
+
 def register(
-    db: Session, *, email: str, password: str, full_name: str, org_name: str, locale: str
+    db: Session, *, email: str, password: str, full_name: str, org_name: str | None,
+    locale: str, invitation_token: str | None = None,
 ) -> tuple[uuid.UUID, uuid.UUID]:
-    user_id, tenant_id = uuid.uuid4(), uuid.uuid4()
+    """Create a user and either a new organization (as owner) or, with an invitation token
+    addressed to this email, a membership in the inviting organization (no new org).
+    The email stays unverified either way: the token was also visible to the inviter."""
+    inv = _valid_invitation(db, invitation_token, email) if invitation_token else None
+    user_id = uuid.uuid4()
+    tenant_id = inv.tenant_id if inv else uuid.uuid4()
     set_context(db, tenant_id=tenant_id, user_id=user_id)
     owner_role = db.scalars(select(Role).where(Role.key == "owner")).one()
     try:
@@ -86,10 +105,18 @@ def register(
         # Note: this reveals that the email is registered. Accepted trade-off for a clear UX;
         # registration is rate-limited. Revisit with email verification in Milestone 1.1.
         raise Conflict("An account with this email already exists", code="email_taken") from e
+    if inv is not None:
+        db.add(Membership(tenant_id=tenant_id, user_id=user_id, role_id=inv.role_id))
+        db.execute(update(Invitation).where(Invitation.id == inv.id)
+                   .values(accepted_at=datetime.now(UTC)))
+        db.flush()
+        return user_id, tenant_id
+    assert org_name
     db.add(Tenant(id=tenant_id, name=org_name, slug=_slugify(org_name), default_locale=locale))
     db.flush()
     db.add(Membership(tenant_id=tenant_id, user_id=user_id, role_id=owner_role.id))
     db.flush()
+    create_subscription(db, tenant_id)
     return user_id, tenant_id
 
 

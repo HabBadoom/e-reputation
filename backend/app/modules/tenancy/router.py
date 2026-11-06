@@ -15,6 +15,9 @@ from app.core.security import hash_token, new_refresh_token
 from app.db.models import Invitation, Membership, Role, Tenant, User
 from app.db.session import get_db, set_context
 from app.modules.audit.service import record
+from app.modules.billing.entitlements import ensure_capacity, plan_info, usage
+from app.modules.notifications.email import queue_email
+from app.modules.notifications.templates import invitation_email
 from app.modules.auth import service as auth_service
 from app.modules.auth.router import _deliver
 from app.modules.auth.schemas import AcceptInvitationIn, TokenOut
@@ -226,9 +229,11 @@ def create_invitation(body: InviteIn, request: Request,
     if already:
         raise Conflict("This person is already a member", code="already_member")
     now = datetime.now(UTC)
+    # Re-inviting replaces the pending invitation (and frees its seat before the check).
     db.execute(update(Invitation).where(Invitation.email == email,
                                         Invitation.accepted_at.is_(None),
                                         Invitation.revoked_at.is_(None)).values(revoked_at=now))
+    ensure_capacity(db, ctx.tenant_id, "max_members")
     raw, hashed = new_refresh_token()
     inv = Invitation(tenant_id=ctx.tenant_id, email=email, role_id=role.id, token_hash=hashed,
                      invited_by=ctx.user_id, expires_at=now + INVITE_TTL)
@@ -237,6 +242,11 @@ def create_invitation(body: InviteIn, request: Request,
     record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id, action="invitation.created",
            target_type="invitation", target_id=inv.id, meta={"email": email, "role": role.key},
            request=request)
+    org = db.get(Tenant, ctx.tenant_id)
+    inviter = db.get(User, ctx.user_id)
+    assert org is not None and inviter is not None
+    queue_email(db, invitation_email(email, inviter.full_name, org.name, org.default_locale, raw),
+                tenant_id=ctx.tenant_id)
     db.commit()
     return InviteOut(id=inv.id, email=email, role=role.key, expires_at=inv.expires_at,
                      created_at=inv.created_at, token=raw)
@@ -289,3 +299,22 @@ def accept_invitation(body: AcceptInvitationIn, request: Request, response: Resp
                                        ip=client_ip(request))
     db.commit()
     return _deliver(request, response, tokens)
+
+
+# ---------------------------------------------------------------- plan & usage
+class PlanOut(BaseModel):
+    plan_key: str
+    plan_name: str
+    status: str
+    trial_ends_at: datetime | None
+    limits: dict[str, int | None]
+    usage: dict[str, int]
+
+
+@router.get("/organization/plan", response_model=PlanOut)
+def get_plan(ctx: AuthContext = Depends(require("tenant:read")),
+             db: Session = Depends(get_db)) -> PlanOut:
+    p = plan_info(db, ctx.tenant_id)
+    return PlanOut(plan_key=p.key, plan_name=p.name, status=p.status,
+                   trial_ends_at=p.trial_ends_at, limits=p.limits,
+                   usage=usage(db, ctx.tenant_id))

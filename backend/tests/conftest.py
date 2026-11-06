@@ -12,6 +12,8 @@ os.environ.setdefault("REPINTEL_ENV", "test")
 os.environ.setdefault("REPINTEL_JWT_SECRET", "test-secret-" + "x" * 40)
 os.environ.setdefault("REPINTEL_COOKIE_SECURE", "false")
 os.environ.setdefault("REPINTEL_EMAIL_PROVIDER", "memory")
+# Plan limits are tested explicitly (test_entitlements); other tests run unconstrained.
+os.environ.setdefault("REPINTEL_DEFAULT_PLAN", "unlimited")
 # Test-only key (valid Fernet format). Never used outside the test suite.
 os.environ.setdefault("REPINTEL_ENCRYPTION_KEYS", "dGVzdC1vbmx5LWtleS1kby1ub3QtdXNlLTAxMjM0NTY=")
 
@@ -23,9 +25,10 @@ from app.core.rate_limit import MemoryLimiter, get_limiter  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
-DATA_TABLES = ["audit_logs", "brand_aliases", "brands", "invitations", "refresh_tokens",
-               "mfa_recovery_codes", "user_mfa", "user_tokens", "memberships", "tenants",
-               "users"]
+DATA_TABLES = ["jobs", "monitoring_runs", "monitoring_projects", "brand_keywords",
+               "competitors", "products", "subscriptions", "audit_logs", "brand_aliases",
+               "brands", "invitations", "refresh_tokens", "mfa_recovery_codes", "user_mfa",
+               "user_tokens", "memberships", "tenants", "users"]
 
 
 @pytest.fixture(scope="session")
@@ -55,10 +58,28 @@ def outbox() -> MemoryProvider:
     return p
 
 
+def drain(max_rounds: int = 10) -> int:
+    """Process every due job synchronously (what the worker process does in production)."""
+    from app.jobs.worker import run_once
+
+    total = 0
+    for _ in range(max_rounds):
+        n = run_once(schedule=False)
+        total += n
+        if n == 0:
+            break
+    return total
+
+
+def sent_emails():
+    drain()
+    return list(outbox().outbox)
+
+
 def token_from_last_email(to: str, path: str) -> str:
     """Extract the token from the most recent email to `to` whose link points at `path`."""
     import re
-    for msg in reversed(outbox().outbox):
+    for msg in reversed(sent_emails()):
         if msg.to_email == to.lower():
             m = re.search(rf"{path}\?token=([A-Za-z0-9_-]+)", msg.text)
             if m:

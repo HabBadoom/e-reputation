@@ -50,6 +50,10 @@ jobs:
                 -v ON_ERROR_STOP=1 -f tests/sql/test_rls_user_tables.sql)
           echo "$out"
           echo "$out" | grep -q "ALL USER-TABLE RLS TESTS PASSED"
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_monitoring.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL MONITORING RLS TESTS PASSED"
       - name: API tests
         run: uv run pytest -v
 

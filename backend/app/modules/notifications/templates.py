@@ -7,6 +7,23 @@ from app.core.config import get_settings
 from app.modules.notifications.email import EmailMessage
 
 _T = {
+    "invite": {
+        "fr": ("{inviter} vous invite sur {app}",
+               "Bonjour,",
+               "{inviter} vous invite à rejoindre l'organisation « {org} » sur {app}, la plateforme de veille de réputation.",
+               "Rejoindre {org}",
+               "Ce lien expire dans 7 jours. Utilisez cette adresse e-mail pour créer votre compte ou vous connecter."),
+        "ar": ("{inviter} يدعوك إلى {app}",
+               "مرحبًا،",
+               "يدعوك {inviter} للانضمام إلى مؤسسة «{org}» على {app}، منصة رصد السمعة.",
+               "الانضمام إلى {org}",
+               "تنتهي صلاحية هذا الرابط خلال 7 أيام. استخدم هذا البريد الإلكتروني لإنشاء حسابك أو تسجيل الدخول."),
+        "en": ("{inviter} invited you to {app}",
+               "Hello,",
+               "{inviter} invited you to join the organization “{org}” on {app}, the reputation monitoring platform.",
+               "Join {org}",
+               "This link expires in 7 days. Use this email address to create your account or sign in."),
+    },
     "verify": {
         "fr": ("Confirmez votre adresse e-mail",
                "Bonjour {name},",
@@ -44,13 +61,16 @@ _T = {
 }
 
 
-def _render(kind: str, locale: str, to_email: str, name: str, link: str) -> EmailMessage:
+def _render(kind: str, locale: str, to_email: str, name: str, link: str,
+            **fmt: str) -> EmailMessage:
     s = get_settings()
     lang = locale if locale in ("fr", "ar", "en") else "fr"
     subject, greet, body, cta, foot = _T[kind][lang]
     app = s.email_from_name
+    subject = subject.format(app=app, **fmt)
     greet = greet.format(name=name)
-    body = body.format(app=app)
+    body = body.format(app=app, **fmt)
+    cta = cta.format(app=app, **fmt)
     d = "rtl" if lang == "ar" else "ltr"
     align = "right" if lang == "ar" else "left"
     html = f"""<!doctype html><html lang="{lang}" dir="{d}"><body style="margin:0;background:#f6f5f1;font-family:Arial,Helvetica,sans-serif;color:#0f1f1c">
@@ -77,3 +97,9 @@ def verification_email(to_email: str, name: str, locale: str, token: str) -> Ema
 def password_reset_email(to_email: str, name: str, locale: str, token: str) -> EmailMessage:
     link = f"{get_settings().app_base_url.rstrip('/')}/reset-password?token={token}"
     return _render("reset", locale, to_email, name, link)
+
+
+def invitation_email(to_email: str, inviter: str, org: str, locale: str,
+                     token: str) -> EmailMessage:
+    link = f"{get_settings().app_base_url.rstrip('/')}/invite?token={token}"
+    return _render("invite", locale, to_email, "", link, inviter=inviter, org=org)

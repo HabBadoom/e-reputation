@@ -24,7 +24,7 @@ from app.core.security import hash_password, hash_token, verify_password
 from app.db.models import Membership, MfaRecoveryCode, RefreshToken, User, UserMfa, UserToken
 from app.db.session import set_context
 from app.modules.audit.service import record
-from app.modules.notifications.email import EmailDeliveryError, get_email_provider
+from app.modules.notifications.email import queue_email
 from app.modules.notifications.templates import password_reset_email, verification_email
 
 log = logging.getLogger("repintel.account")
@@ -73,12 +73,8 @@ def mark_used(db: Session, token_id: uuid.UUID) -> None:
                .values(used_at=datetime.now(UTC)))
 
 
-def _send(msg_factory, *args) -> bool:  # noqa: ANN001
-    try:
-        get_email_provider().send(msg_factory(*args))
-        return True
-    except EmailDeliveryError:
-        return False  # already logged by the provider
+def _send(db: Session, msg_factory, *args) -> None:  # noqa: ANN001
+    queue_email(db, msg_factory(*args))
 
 
 def _record_everywhere(db: Session, user_id: uuid.UUID, action: str,
@@ -94,10 +90,10 @@ def _record_everywhere(db: Session, user_id: uuid.UUID, action: str,
 
 
 # ---------------------------------------------------------------- email verification
-def send_verification(db: Session, user: User) -> bool:
+def send_verification(db: Session, user: User) -> None:
     raw = issue_user_token(db, user_id=user.id, purpose="email_verify",
                            ttl_seconds=get_settings().email_verify_ttl_seconds)
-    return _send(verification_email, user.email, user.full_name, user.locale, raw)
+    _send(db, verification_email, user.email, user.full_name, user.locale, raw)
 
 
 def verify_email(db: Session, raw: str) -> uuid.UUID:
@@ -127,7 +123,7 @@ def request_password_reset(db: Session, email: str) -> None:
     assert user is not None
     raw = issue_user_token(db, user_id=user.id, purpose="password_reset",
                            ttl_seconds=get_settings().password_reset_ttl_seconds)
-    _send(password_reset_email, user.email, user.full_name, user.locale, raw)
+    _send(db, password_reset_email, user.email, user.full_name, user.locale, raw)
 
 
 def reset_password(db: Session, raw: str, new_password: str, request: Request) -> None:

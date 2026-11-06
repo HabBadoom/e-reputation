@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     password_reset_ttl_seconds: int = 60 * 60
     mfa_challenge_ttl_seconds: int = 5 * 60
 
+    # Plan given to new organizations; empty = the plan flagged is_default in the DB.
+    default_plan: str = ""
+    trial_days: int = 14
+
     @field_validator("jwt_secret")
     @classmethod
     def _secret_strength(cls, v: SecretStr) -> SecretStr:

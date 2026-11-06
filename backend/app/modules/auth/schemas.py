@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 Locale = Literal["fr", "ar", "en"]
 
@@ -10,16 +11,26 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=12, max_length=128)
     full_name: str = Field(min_length=1, max_length=200)
-    organization_name: str = Field(min_length=2, max_length=200)
+    # Either create a new organization, or join one through an invitation link.
+    organization_name: str | None = Field(default=None, min_length=2, max_length=200)
+    invitation_token: str | None = Field(default=None, min_length=20, max_length=200)
     locale: Locale = "fr"
 
     @field_validator("full_name", "organization_name")
     @classmethod
-    def _strip(cls, v: str) -> str:
+    def _strip(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
         v = v.strip()
         if not v:
             raise ValueError("must not be blank")
         return v
+
+    @model_validator(mode="after")
+    def _org_or_invite(self) -> "RegisterIn":
+        if not self.organization_name and not self.invitation_token:
+            raise ValueError("organization_name is required unless joining with an invitation")
+        return self
 
 
 class LoginIn(BaseModel):
@@ -121,3 +132,13 @@ class MfaDisableIn(BaseModel):
 
 class RecoveryCodesOut(BaseModel):
     recovery_codes: list[str]
+
+
+class SessionOut(BaseModel):
+    id: uuid.UUID
+    current: bool
+    tenant_id: uuid.UUID
+    user_agent: str | None
+    ip: str | None
+    started_at: datetime
+    last_active_at: datetime

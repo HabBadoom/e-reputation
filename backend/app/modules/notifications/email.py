@@ -109,3 +109,15 @@ def get_email_provider() -> EmailProvider:
         else:
             _provider = ConsoleProvider()
     return _provider
+
+
+def queue_email(db, msg: EmailMessage, *, tenant_id=None) -> None:  # noqa: ANN001
+    """Send through the job queue (retries with backoff). The job is created in the caller's
+    transaction, so nothing is sent if that transaction rolls back. The payload (which may
+    contain a sign-in link) is wiped once the email is delivered."""
+    from app.jobs.queue import enqueue  # local import: jobs.handlers imports this module
+
+    enqueue(db, "email.send", {
+        "to_email": msg.to_email, "to_name": msg.to_name, "subject": msg.subject,
+        "html": msg.html, "text": msg.text, "tags": list(msg.tags),
+    }, tenant_id=tenant_id, max_attempts=6, sensitive=True)
