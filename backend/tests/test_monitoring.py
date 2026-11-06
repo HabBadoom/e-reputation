@@ -124,7 +124,8 @@ def test_manual_run_records_honest_skipped_result(make_user):
     assert api.get(f"/api/v1/monitoring-projects/{pid}").json()["last_run"]["status"] == "skipped"
     dash = api.get("/api/v1/dashboard/summary").json()
     assert dash["last_run"]["reason"] == "no_active_connectors"
-    assert dash["mentions"]["available"] is False  # still nothing invented
+    assert dash["mention_stats"]["total"] == 0        # nothing invented
+    assert dash["sentiment"]["available"] is False
 
 
 def test_scheduler_runs_due_active_projects_only(make_user, owner_engine):
