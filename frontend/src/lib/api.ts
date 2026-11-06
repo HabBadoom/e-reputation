@@ -93,6 +93,9 @@ export interface Dashboard {
   brands_total: number; brands_active: number; aliases_total: number; members_total: number;
   products_total: number; competitors_total: number; projects_total: number; projects_active: number;
   last_run: { project_name: string; status: RunStatus; finished_at: string | null; reason: string | null } | null;
+  mention_stats: { total: number; last_7_days: number; verified_on_page: number; reposts: number;
+    top_domains: CountItem[]; by_entity: CountItem[]; by_method: CountItem[] };
+  source_stats: { registered: number; monitored: number; by_coverage: CountItem[] };
   recent_activity: { action: string; actor_email: string | null; created_at: string }[];
   mentions: Capability; sentiment: Capability; sources: Capability;
 }
@@ -126,3 +129,32 @@ export interface PlanUsage {
   plan_key: string; plan_name: string; status: string; trial_ends_at: string | null;
   limits: Record<string, number | null>; usage: Record<string, number>;
 }
+export type Verification = "verified_on_page" | "snippet_only" | "not_found_on_page" | "page_unavailable" | "blocked_by_robots" | "feed_item";
+export type Coverage = "AVAILABLE" | "PARTIALLY_AVAILABLE" | "PENDING_AUTHORIZATION" | "RESTRICTED" | "UNAVAILABLE" | "CONNECTOR_ERROR";
+export interface Mention {
+  id: string; brand_id: string; brand_name: string; project_id: string | null;
+  entity_type: "brand" | "product" | "competitor"; entity_name: string; url: string; domain: string;
+  title: string; original_text: string; matched_terms: string[]; publisher: string | null;
+  published_at: string | null; published_at_source: string | null; collected_at: string; last_seen_at: string;
+  seen_count: number; collection_method: "search_api" | "news_api" | "rss" | "page_fetch";
+  verification_status: Verification; is_repost: boolean; language: string | null; analysed: boolean;
+}
+export interface MentionDetail extends Mention {
+  snippet: string; canonical_url: string; connector: string; connector_version: string; content_hash: string;
+  duplicate_of: string | null; project_name: string | null; provider_fields: Record<string, unknown>;
+  source: { id: string; kind: string; domain: string; name: string; coverage_status: Coverage } | null;
+}
+export interface Source {
+  id: string; kind: "rss" | "website"; url: string; domain: string; name: string; category: string;
+  language: string | null; connector: string; enabled: boolean; monitored: boolean;
+  discovered_via: "manual" | "search" | "feed_discovery"; coverage_status: Coverage; restrictions: string;
+  mentions_count: number; last_collected_at: string | null; last_checked_at: string | null;
+  last_error: string | null; created_at: string;
+}
+export interface SourceCheck { ok: boolean; detail: string; source: Source; discovered_feeds: Source[] }
+export interface ConnectorInfo {
+  key: string; name: string; version: string; category: string; access_method: string; capabilities: string[];
+  limitations: string[]; configured: boolean; review_status: string; allowed: boolean; note: string;
+  legal_basis: string; data_categories: string[]; retention_days: number;
+}
+export interface CountItem { key: string; count: number }

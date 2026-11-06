@@ -60,6 +60,13 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | POST | `/monitoring-projects/{id}/runs` | `monitoring:write` | 202, queues a manual run; 409 if one is queued/running |
 | GET | `/monitoring-projects/{id}/runs` | `monitoring:read` | Latest runs with `summary` |
 | GET | `/monitoring-projects/{id}/query-plan` | `monitoring:read` | Exact terms/exclusions a run will search |
+| GET | `/mentions` | `mentions:read` | Filters: `brand_id, project_id, entity_type, verification, domain, since, until, q, include_reposts` |
+| GET | `/mentions/{id}` | `mentions:read` | Full provenance (canonical URL, connector, provider fields, source) |
+| GET | `/mentions/export.csv` | `mentions:read` | Same filters, max 5,000 rows, formula-neutralised |
+| GET / POST | `/sources` | `sources:read` / `sources:write` | POST `{kind: rss\|website, url, name?, category?, language?}` checks immediately; websites return discovered feeds |
+| POST | `/sources/{id}/check` | `sources:write` | Reachability, robots.txt, feed validity, feed discovery |
+| PATCH / DELETE | `/sources/{id}` | `sources:write` | Enable/disable, rename, categorise |
+| GET | `/connectors` | `sources:read` | Capabilities, limitations, configured?, compliance status |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
 ## Example (API client)

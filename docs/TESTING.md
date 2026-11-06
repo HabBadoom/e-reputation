@@ -15,6 +15,10 @@
 | `backend/tests/test_monitoring.py` | Catalog CRUD and validation, viewer restrictions, cross-tenant 404s on every catalog/monitoring route, manual run → honest `skipped` result, scheduler (due/paused/resume), query plan | `make test-api` |
 | `backend/tests/test_platform.py` | Queue retries/backoff/dead-letter/unknown kind, transactional enqueue, email retry on provider failure, sessions list/revoke/immediate logout, plan limits (402), subscriptions, invitation email + sign-up through invitation | 〃 |
 | `backend/tests/test_query_plan.py` | Query plan grouping, dedupe, exclusions, search string | 〃 |
+| `backend/tests/sql/test_rls_collection.sql` | Sources/mentions isolation, cross-tenant source links refused, connector approval not writable by tenants | `make test-sql` |
+| `backend/tests/test_collection.py` | Full run with mocked Serper + pages + RSS: verification, robots, exclusions, reposts, invalid URLs, provenance, registry states, no duplicates on re-run, filters, CSV injection, auth failure, production compliance gate, sources API, feed discovery, SSRF via sources, isolation, viewer rights | `make test-api` |
+| `backend/tests/test_fetcher.py` | SSRF: private/metadata/IPv6-mapped/mixed DNS, ports, schemes, credentials, malicious redirects, size cap, redirect loops; robots.txt semantics | 〃 |
+| `backend/tests/test_collection_utils.py` | URL canonicalisation, Arabic/French matching, excerpts, hashes, dates (absolute, relative in en/fr/ar), HTML extraction, RSS/Atom | 〃 |
 | `backend/tests/test_brands.py` | Brand CRUD, multi-script aliases, duplicates, LIKE escaping, pagination, script heuristic | 〃 |
 
 Tests use a real PostgreSQL (no SQLite, no mocks of RLS). Each test truncates data tables via the owner role.

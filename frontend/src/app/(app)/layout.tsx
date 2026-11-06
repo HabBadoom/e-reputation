@@ -14,6 +14,8 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
   { href: "/dashboard", key: "nav.dashboard" },
   { href: "/brands", key: "nav.brands" },
   { href: "/monitoring", key: "nav.monitoring", perm: "monitoring:read" },
+  { href: "/mentions", key: "nav.mentions", perm: "mentions:read" },
+  { href: "/sources", key: "nav.sources", perm: "sources:read" },
   { href: "/team", key: "nav.team" },
   { href: "/audit", key: "nav.audit", perm: "audit:read" },
   { href: "/settings", key: "nav.settings" },
@@ -21,8 +23,7 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
 ];
 // Shown disabled so users can see what's coming without being shown fake screens.
 const UPCOMING: { key: MessageKey; milestone: number }[] = [
-  { key: "nav.sources", milestone: 3 },
-  { key: "nav.mentions", milestone: 3 },
+  { key: "nav.sentiment", milestone: 4 },
   { key: "nav.analytics", milestone: 5 },
   { key: "nav.reports", milestone: 5 },
 ];

@@ -66,10 +66,38 @@ export default function DashboardPage() {
         </Card>
       )}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Unavailable label={t("dash.mentions")} cap={d.mentions} />
+        <Stat label={t("dash.mentionsTotal")} value={d.mention_stats.total}
+              sub={`${d.mention_stats.last_7_days} ${t("dash.last7")}`} />
+        <Stat label={t("dash.sourcesCovered")} value={d.source_stats.monitored}
+              sub={t("dash.ofRegistered", { n: d.source_stats.registered })} />
         <Unavailable label={t("dash.sentiment")} cap={d.sentiment} />
-        <Unavailable label={t("dash.sources")} cap={d.sources} />
       </div>
+      {d.mention_stats.total > 0 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card title={t("dash.topDomains")} action={<Link href="/mentions" className="text-sm text-brand hover:underline">{t("nav.mentions")}</Link>}>
+            <ul className="space-y-2 text-sm">
+              {d.mention_stats.top_domains.map((x) => {
+                const max = d.mention_stats.top_domains[0]?.count || 1;
+                return (
+                  <li key={x.key}>
+                    <div className="mb-0.5 flex justify-between"><span dir="ltr">{x.key}</span><span className="tabular-nums text-ink-soft">{x.count}</span></div>
+                    <div className="h-1.5 rounded bg-paper-sunk"><div className="h-1.5 rounded bg-brand" style={{ width: `${(x.count / max) * 100}%` }} /></div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+          <Card title={t("dash.verified")}>
+            <p className="text-3xl font-semibold tabular-nums">{d.mention_stats.verified_on_page}</p>
+            <p className="mt-1 text-xs text-ink-soft">/ {d.mention_stats.total} · {d.mention_stats.reposts} {t("mentions.repost").toLowerCase()}</p>
+            <ul className="mt-3 flex flex-wrap gap-2 text-xs">
+              {d.mention_stats.by_method.map((x) => (
+                <li key={x.key} className="rounded bg-paper-sunk px-2 py-1">{t(`method.${x.key}` as "method.rss")}: {x.count}</li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      )}
       {d.recent_activity.length > 0 && (
         <Card title={t("dash.activity")}>
           <ul className="divide-y divide-line text-sm">

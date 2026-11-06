@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 — Milestone 3: Source intelligence (2026-11-06)
+
+### Added
+- Migration 0004: `connector_policies`, `sources`, `mentions`; `mentions:read`, `sources:read`, `sources:write` permissions.
+- Connectors: Serper (Google news + web, `gl=dz`, `hl` per project language), RSS/Atom, web page reader; unified interface and compliance gate.
+- Collection pipeline in monitoring runs: exclusions, verification on the real page (robots.txt honoured), excerpt around the match, publication dates with their origin, URL canonicalisation, repost detection, source auto-registration with coverage states; already-known URLs are not re-fetched.
+- SSRF-safe fetcher, Arabic-aware term matching, HTML/RSS parsing (stdlib only).
+- APIs and UI: Mentions inbox (filters, provenance, CSV export), Sources (add, check, enable, feed discovery, connectors and their compliance status), dashboard statistics.
+
+### Changed
+- Monitoring runs now end `completed`, `skipped` (with reason) or `failed`; summary includes per-connector results.
+- Dashboard: mentions/sources available; sentiment explicitly unavailable until Milestone 4.
+
 ## 0.3.0 — Milestone 2: Brands & monitoring (2026-11-06)
 
 ### Added

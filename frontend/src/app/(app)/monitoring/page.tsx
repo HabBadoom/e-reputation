@@ -123,6 +123,13 @@ function ProjectDetails({ project }: { project: MonitoringProject }) {
                   <span className="text-xs text-ink-mute">{t(`monitoring.trigger.${r.trigger}`)}</span></span>
                 <span className="text-xs text-ink-mute">{fmtDate(r.finished_at ?? r.queued_at)}</span>
               </div>
+              {r.status === "completed" && (
+                <p className="mt-1 text-xs text-ink-soft">
+                  {t("run.collected", { n: Number(r.summary.mentions_collected ?? 0) })}
+                  {" · "}{t("run.known", { n: Number(r.summary.already_known ?? 0) })}
+                  {" · "}{t("run.excluded", { n: Number(r.summary.excluded ?? 0) })}
+                </p>
+              )}
               {runReason(r, t) && <p className="mt-1 text-xs text-ink-soft">{runReason(r, t)}</p>}
             </li>
           ))}
@@ -198,9 +205,6 @@ export default function MonitoringPage() {
             : <Button onClick={() => setCreating(true)} disabled={!brands.data}>{t("monitoring.new")}</Button>
         )}
       </div>
-      <p className="rounded border border-signal-warn/30 bg-signal-warn/5 px-4 py-3 text-sm text-signal-warn">
-        {t("monitoring.noConnectors")}
-      </p>
       {creating && brands.data && <NewProject brands={brands.data.items} onDone={() => setCreating(false)} />}
       {projects.isLoading ? <Spinner /> : projects.error ? <ErrorBanner error={projects.error} /> : (
         <ul className="card divide-y divide-line">

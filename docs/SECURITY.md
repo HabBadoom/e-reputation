@@ -45,6 +45,16 @@ Pre-authentication lookups (login by email, refresh token, invitation token) use
 - Email jobs are marked sensitive: their payload (which may contain a sign-in link) is wiped once delivered.
 - Delivery is at-least-once (a job whose worker dies is re-queued after 15 min); handlers are written to tolerate repeats.
 
+## Collection (Milestone 3)
+
+- **SSRF**: every third-party URL goes through `app/collection/fetcher.py`: http/https only, ports 80/443, no credentials in URLs, every redirect hop re-checked, hostnames must resolve **only** to public addresses (metadata endpoints, loopback, RFC 1918, link-local, CGNAT, IPv4-mapped IPv6 refused), 2 MB / 10 s caps. Tested in `tests/test_fetcher.py`. Residual DNS-rebinding risk → egress firewall for workers (M6).
+- **Untrusted content**: third-party text is stored as data and rendered escaped (React); links open with `rel="noopener noreferrer nofollow ugc"`; CSV export neutralises formulas (`=`, `+`, `-`, `@`).
+- **XML**: feeds parsed with the stdlib (no external entities; expat entity-expansion limits); size-capped.
+- **robots.txt** honoured; no login, paywall, CAPTCHA or anti-bot bypass.
+- **Compliance gate**: connectors whose legal review is pending are blocked in staging/production (`connector_policies`).
+- **Data minimisation**: excerpts, not full pages.
+- **Serper API key**: environment only, sent only to `google.serper.dev`, never logged.
+
 ## Plans
 
 Limits are read from `plans`/`plan_entitlements` and enforced server-side (HTTP 402 `plan_limit_reached`). Tenants can read but not change their subscription.

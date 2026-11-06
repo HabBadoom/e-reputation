@@ -50,6 +50,17 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_MFA_CHALLENGE_TTL_SECONDS` | `300` | Time to enter the code after the password |
 | `REPINTEL_DEFAULT_PLAN` | empty | Plan key for new organizations; empty = plan flagged `is_default` (`trial`) |
 | `REPINTEL_TRIAL_DAYS` | `14` | Recorded on the subscription (not enforced yet) |
+| `REPINTEL_SERPER_API_KEY` | — | Enables the Serper connector. Secret |
+| `REPINTEL_SEARCH_COUNTRY` | `dz` | Serper `gl` |
+| `REPINTEL_SEARCH_RESULTS_PER_QUERY` | `20` | Serper `num` |
+| `REPINTEL_SEARCH_ENDPOINTS` | `["news","search"]` | JSON list |
+| `REPINTEL_MAX_SEARCH_QUERIES_PER_RUN` | `30` | Cost cap per run |
+| `REPINTEL_CRAWLER_USER_AGENT` | `RepIntelBot/0.1 (+https://example.com/bot)` | Set a real info URL |
+| `REPINTEL_CRAWLER_ROBOTS_TOKEN` | `RepIntelBot` | robots.txt user-agent |
+| `REPINTEL_FETCH_TIMEOUT_SECONDS` / `_MAX_BYTES` | `10` / `2097152` | |
+| `REPINTEL_VERIFY_PAGES` | `true` | Check search hits on the real page |
+| `REPINTEL_MAX_PAGE_FETCHES_PER_RUN` | `25` | |
+| `REPINTEL_MAX_FEED_ITEMS_PER_SOURCE` | `200` | |
 | `REPINTEL_REDIS_URL` | `redis://localhost:6379/0` | Rate limiting |
 | `REPINTEL_RABBITMQ_URL` | `amqp://guest:guest@localhost:5672/` | From M2 |
 | `REPINTEL_ACCESS_TOKEN_TTL_SECONDS` | `900` | |
