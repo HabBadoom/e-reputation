@@ -15,12 +15,12 @@ from app.core.security import hash_token, new_refresh_token
 from app.db.models import Invitation, Membership, Role, Tenant, User
 from app.db.session import get_db, set_context
 from app.modules.audit.service import record
-from app.modules.billing.entitlements import ensure_capacity, plan_info, usage
-from app.modules.notifications.email import queue_email
-from app.modules.notifications.templates import invitation_email
 from app.modules.auth import service as auth_service
 from app.modules.auth.router import _deliver
 from app.modules.auth.schemas import AcceptInvitationIn, TokenOut
+from app.modules.billing.entitlements import ensure_capacity, plan_info, usage
+from app.modules.notifications.email import queue_email
+from app.modules.notifications.templates import invitation_email
 
 router = APIRouter(tags=["organization"])
 INVITE_TTL = timedelta(days=7)
