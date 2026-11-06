@@ -262,6 +262,10 @@ def accept_invitation(body: AcceptInvitationIn, request: Request, response: Resp
                       db: Session = Depends(get_db)) -> TokenOut:
     me = db.get(User, ctx.user_id)
     assert me is not None
+    if me.email_verified_at is None:
+        # Otherwise anyone could register with someone else's address and take their seat.
+        raise Forbidden("Verify your email address before accepting an invitation",
+                        code="email_unverified")
     inv = db.execute(
         text("SELECT id, tenant_id, email, role_id, expires_at, accepted_at, revoked_at "
              "FROM auth_find_invitation(:h)"), {"h": hash_token(body.token)}

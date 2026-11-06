@@ -8,6 +8,9 @@
 | `backend/tests/test_tenant_isolation.py` | Mandatory Tenant A / Tenant B test through the API: lists, direct IDs, search, aliases, members, invitations, audit, dashboard, tenant switching, forged/unsigned JWTs | `make test-api` |
 | `backend/tests/test_auth.py` | Registration, login, indistinguishable failures, refresh rotation + reuse detection, logout, cookie + CSRF flow, rate limiting, disabled users | 〃 |
 | `backend/tests/test_rbac.py` | Viewer/analyst/admin/owner permissions, escalation rules, last-owner protection, immediate revocation | 〃 |
+| `backend/tests/sql/test_rls_user_tables.sql` | Tokens, MFA secrets and recovery codes are visible/writable only by their owner; token lookup is purpose-bound | `make test-sql` |
+| `backend/tests/test_totp.py` | RFC 6238 Appendix B vectors, drift window, replay rejection | `make test-api` |
+| `backend/tests/test_account_security.py` | Verification (localized email, single use, expiry, resend, invitation gate), reset (no enumeration, single use, sessions revoked), change password, MFA (challenge, replay, recovery codes, attempt limit, disable, encryption at rest, revoked member) | 〃 |
 | `backend/tests/test_brands.py` | Brand CRUD, multi-script aliases, duplicates, LIKE escaping, pagination, script heuristic | 〃 |
 
 Tests use a real PostgreSQL (no SQLite, no mocks of RLS). Each test truncates data tables via the owner role.

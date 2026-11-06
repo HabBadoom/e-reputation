@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,20 +13,31 @@ from app.api.deps import (
     load_membership,
 )
 from app.core.config import get_settings
-from app.core.errors import Unauthorized
+from app.core.errors import Conflict, Unauthorized
 from app.core.rate_limit import get_limiter
-from app.core.security import new_csrf_token
+from app.core.security import hash_token, new_csrf_token
 from app.db.models import Membership, Role, Tenant, User
 from app.db.session import get_db, set_context
 from app.modules.audit.service import record
-from app.modules.auth import service
+from app.modules.auth import account, service
 from app.modules.auth.schemas import (
+    ChangePasswordIn,
+    EmailIn,
     LoginIn,
     MeOut,
+    MfaChallengeOut,
+    MfaCodeIn,
+    MfaDisableIn,
+    MfaLoginIn,
+    MfaSetupOut,
+    MfaStatusOut,
+    RecoveryCodesOut,
     RefreshIn,
     RegisterIn,
+    ResetPasswordIn,
     SwitchTenantIn,
     TenantSummary,
+    TokenIn,
     TokenOut,
 )
 
@@ -78,18 +90,28 @@ def register(body: RegisterIn, request: Request, response: Response,
     tokens = service.issue_tokens(db, user_id=user_id, tenant_id=tenant_id,
                                   user_agent=_ua(request), ip=client_ip(request))
     db.commit()
+    user = db.get(User, user_id)
+    assert user is not None
+    account.send_verification(db, user)  # failure is logged; the user can resend
+    db.commit()
     return _deliver(request, response, tokens)
 
 
-@router.post("/login", response_model=TokenOut)
+@router.post("/login", response_model=TokenOut | MfaChallengeOut)
 def login(body: LoginIn, request: Request, response: Response,
-          db: Session = Depends(get_db)) -> TokenOut:
+          db: Session = Depends(get_db)) -> TokenOut | MfaChallengeOut:
     s = get_settings()
     lim = get_limiter()
     lim.hit(f"login:ip:{client_ip(request)}", s.login_rate_limit_per_minute * 3, 60)
     lim.hit(f"login:email:{body.email.lower()}", s.login_rate_limit_per_minute, 60)
     user_id, tenant_id = service.authenticate(db, email=body.email, password=body.password,
                                               tenant_id=body.tenant_id)
+    if account.mfa_enabled(db, user_id):
+        raw = account.issue_user_token(db, user_id=user_id, purpose="mfa_login",
+                                       tenant_id=tenant_id,
+                                       ttl_seconds=s.mfa_challenge_ttl_seconds)
+        db.commit()
+        return MfaChallengeOut(mfa_token=raw, expires_in=s.mfa_challenge_ttl_seconds)
     record(db, tenant_id=tenant_id, actor_user_id=user_id, action="auth.login", request=request)
     tokens = service.issue_tokens(db, user_id=user_id, tenant_id=tenant_id,
                                   user_agent=_ua(request), ip=client_ip(request))
@@ -135,6 +157,8 @@ def me(ctx: AuthContext = Depends(get_auth), db: Session = Depends(get_db)) -> M
     tenants = [TenantSummary(id=t.id, name=t.name, slug=t.slug, role=r) for t, r in rows]
     current = next(t for t in tenants if t.id == ctx.tenant_id)
     return MeOut(user_id=user.id, email=user.email, full_name=user.full_name, locale=user.locale,
+                 email_verified=user.email_verified_at is not None,
+                 mfa_enabled=account.mfa_enabled(db, user.id),
                  tenant=current, permissions=sorted(ctx.permissions), tenants=tenants)
 
 
@@ -153,3 +177,137 @@ def switch_tenant(body: SwitchTenantIn, request: Request, response: Response,
                                   user_agent=_ua(request), ip=client_ip(request))
     db.commit()
     return _deliver(request, response, tokens)
+
+
+# ---------------------------------------------------------------- MFA login step
+@router.post("/login/mfa", response_model=TokenOut)
+def login_mfa(body: MfaLoginIn, request: Request, response: Response,
+              db: Session = Depends(get_db)) -> TokenOut:
+    # At most 5 guesses per challenge (and per IP) — a 6-digit code can't be brute-forced.
+    get_limiter().hit(f"mfa:tok:{hash_token(body.mfa_token)}", 5, 300)
+    get_limiter().hit(f"mfa:ip:{client_ip(request)}", 30, 300)
+    tok = account.find_valid_token(db, body.mfa_token, "mfa_login")
+    method = account.mfa_check(db, tok.user_id, body.code)
+    if method is None:
+        db.commit()
+        raise Unauthorized("Invalid code", code="invalid_mfa_code")
+    account.mark_used(db, tok.id)
+    assert tok.tenant_id is not None
+    set_context(db, tenant_id=tok.tenant_id, user_id=tok.user_id)
+    load_membership(db, tok.user_id, tok.tenant_id)  # access may have been revoked meanwhile
+    record(db, tenant_id=tok.tenant_id, actor_user_id=tok.user_id, action="auth.login",
+           meta={"mfa": method}, request=request)
+    tokens = service.issue_tokens(db, user_id=tok.user_id, tenant_id=tok.tenant_id,
+                                  user_agent=_ua(request), ip=client_ip(request))
+    db.commit()
+    return _deliver(request, response, tokens)
+
+
+# ---------------------------------------------------------------- email verification
+@router.post("/email/verify")
+def verify_email(body: TokenIn, db: Session = Depends(get_db)) -> dict:
+    account.verify_email(db, body.token)
+    db.commit()
+    return {"verified": True}
+
+
+@router.post("/email/resend", status_code=202)
+def resend_verification(ctx: AuthContext = Depends(get_auth),
+                        db: Session = Depends(get_db)) -> dict:
+    user = db.get(User, ctx.user_id)
+    assert user is not None
+    if user.email_verified_at is not None:
+        raise Conflict("Email address already verified", code="already_verified")
+    get_limiter().hit(f"email:verify:{user.id}", get_settings().email_rate_limit_per_hour, 3600)
+    sent = account.send_verification(db, user)
+    db.commit()
+    return {"sent": sent}
+
+
+# ---------------------------------------------------------------- passwords
+@router.post("/password/forgot", status_code=202)
+def forgot_password(body: EmailIn, request: Request, db: Session = Depends(get_db)) -> dict:
+    s = get_settings()
+    get_limiter().hit(f"reset:ip:{client_ip(request)}", s.email_rate_limit_per_hour * 4, 3600)
+    get_limiter().hit(f"reset:email:{body.email.lower()}", s.email_rate_limit_per_hour, 3600)
+    account.request_password_reset(db, body.email)
+    db.commit()
+    # Same answer whether or not the account exists.
+    return {"accepted": True}
+
+
+@router.post("/password/reset", status_code=204)
+def reset_password(body: ResetPasswordIn, request: Request,
+                   db: Session = Depends(get_db)) -> Response:
+    get_limiter().hit(f"reset:apply:{client_ip(request)}", 20, 3600)
+    account.reset_password(db, body.token, body.password, request)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.post("/password/change", response_model=TokenOut)
+def change_password(body: ChangePasswordIn, request: Request, response: Response,
+                    ctx: AuthContext = Depends(get_auth),
+                    db: Session = Depends(get_db)) -> TokenOut:
+    get_limiter().hit(f"pwchange:{ctx.user_id}", 10, 3600)
+    account.change_password(db, ctx.user_id, body.current_password, body.new_password)
+    record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id,
+           action="auth.password_changed", target_type="user", target_id=ctx.user_id,
+           request=request)
+    # Every other session was revoked; give this one a fresh pair.
+    tokens = service.issue_tokens(db, user_id=ctx.user_id, tenant_id=ctx.tenant_id,
+                                  user_agent=_ua(request), ip=client_ip(request))
+    db.commit()
+    return _deliver(request, response, tokens)
+
+
+# ---------------------------------------------------------------- MFA management
+@router.get("/mfa", response_model=MfaStatusOut)
+def mfa_status(ctx: AuthContext = Depends(get_auth),
+               db: Session = Depends(get_db)) -> MfaStatusOut:
+    return MfaStatusOut(enabled=account.mfa_enabled(db, ctx.user_id),
+                        recovery_codes_remaining=account.recovery_codes_remaining(db, ctx.user_id))
+
+
+@router.post("/mfa/setup", response_model=MfaSetupOut)
+def mfa_setup(ctx: AuthContext = Depends(get_auth), db: Session = Depends(get_db)) -> JSONResponse:
+    user = db.get(User, ctx.user_id)
+    assert user is not None
+    secret, uri = account.mfa_setup(db, user)
+    db.commit()
+    return JSONResponse(MfaSetupOut(secret=secret, otpauth_uri=uri).model_dump(),
+                        headers={"cache-control": "no-store"})
+
+
+@router.post("/mfa/enable", response_model=RecoveryCodesOut)
+def mfa_enable(body: MfaCodeIn, request: Request, ctx: AuthContext = Depends(get_auth),
+               db: Session = Depends(get_db)) -> RecoveryCodesOut:
+    get_limiter().hit(f"mfa:enable:{ctx.user_id}", 10, 300)
+    codes = account.mfa_enable(db, ctx.user_id, body.code)
+    record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id, action="auth.mfa_enabled",
+           target_type="user", target_id=ctx.user_id, request=request)
+    db.commit()
+    return RecoveryCodesOut(recovery_codes=codes)
+
+
+@router.post("/mfa/disable", status_code=204)
+def mfa_disable(body: MfaDisableIn, request: Request, ctx: AuthContext = Depends(get_auth),
+                db: Session = Depends(get_db)) -> Response:
+    get_limiter().hit(f"mfa:disable:{ctx.user_id}", 5, 300)
+    account.mfa_disable(db, ctx.user_id, body.password, body.code)
+    record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id, action="auth.mfa_disabled",
+           target_type="user", target_id=ctx.user_id, request=request)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.post("/mfa/recovery-codes", response_model=RecoveryCodesOut)
+def mfa_recovery_codes(body: MfaCodeIn, request: Request, ctx: AuthContext = Depends(get_auth),
+                       db: Session = Depends(get_db)) -> RecoveryCodesOut:
+    get_limiter().hit(f"mfa:codes:{ctx.user_id}", 5, 300)
+    codes = account.mfa_regenerate_codes(db, ctx.user_id, body.code)
+    record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id,
+           action="auth.mfa_recovery_regenerated", target_type="user", target_id=ctx.user_id,
+           request=request)
+    db.commit()
+    return RecoveryCodesOut(recovery_codes=codes)

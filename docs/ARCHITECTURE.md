@@ -70,7 +70,7 @@ Global tables (`users`, `roles`, `permissions`, `role_permissions`) are not tena
 - Short-lived access JWT (default 15 min) containing `sub`, `tid`, `jti`. Opaque refresh token (default 14 days), stored **hashed**, rotated on every use; reuse of a revoked token revokes the whole family.
 - Browser clients: tokens in `httpOnly; Secure; SameSite=Lax` cookies + double-submit CSRF token on unsafe methods. API clients: `Authorization: Bearer`.
 - Login/registration rate-limited (Redis fixed window, in-memory fallback in tests only).
-- MFA (TOTP) — **planned, Milestone 1.1.**
+- TOTP MFA with recovery codes, email verification and password reset via Brevo (Milestone 1.1, see SECURITY.md).
 
 ## 6. AI, connectors, browser fleet **(planned)**
 

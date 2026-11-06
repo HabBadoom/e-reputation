@@ -26,6 +26,17 @@ Pre-authentication lookups (login by email, refresh token, invitation token) use
 - Rate limiting: login per-email (10/min) and per-IP (30/min); register per-IP (20/h). Redis-backed and **fails closed** if Redis is down.
 - Disabling a user, removing a member or changing a role takes effect on the next request (tested), not at token expiry.
 
+## Account security (Milestone 1.1)
+
+- **Email verification**: link valid 48 h, single use, a new link invalidates the previous one. Accepting an invitation requires a verified address (otherwise someone could register with another person's email and take the seat they were invited to).
+- **Password reset**: `/password/forgot` always answers 202 with the same body (no account enumeration); link valid 1 h, single use, purpose-bound (a verification token can't reset a password). Reset revokes **all** sessions and pending MFA challenges and is written to the audit log of every organization the user belongs to.
+- **Password change**: requires the current password; revokes all other sessions and issues a fresh pair for the current one.
+- **TOTP MFA** (RFC 6238, SHA-1/6 digits/30 s, ±1 step): secret 160 bits, **encrypted at rest** with Fernet (`REPINTEL_ENCRYPTION_KEYS`, rotation supported), stored in its own user-scoped table. Replay guard: a code's time step must be newer than the last accepted one (row-locked). Login with MFA returns a 5-minute single-use challenge instead of a session; 5 attempts per challenge, 30 per IP per 5 min. Removing a member between password and code blocks the login.
+- **Recovery codes**: 10 × 50-bit codes, stored as SHA-256, single use, shown once; regenerate or disable MFA only with a valid code (disable also needs the password).
+- All tokens in emails are 256-bit random values stored only as SHA-256 hashes, looked up through `auth_find_user_token` (SECURITY DEFINER, bound to purpose).
+- RLS on `user_tokens`, `user_mfa`, `mfa_recovery_codes`: own rows only (tested in `tests/sql/test_rls_user_tables.sql`).
+- **Brevo API key**: environment / secret manager only; never logged (error logs record only status and Brevo's error message).
+
 ## RBAC
 
 Roles `owner (100) > admin (80) > analyst (50) > viewer (10)`; permissions are rows in `role_permissions`. Rules: nobody changes their own role; you can't grant above your rank; only owners grant `owner`; non-owners can't modify equal/higher members; the last owner can't be removed or demoted.
@@ -43,8 +54,9 @@ Roles `owner (100) > admin (80) > analyst (50) > viewer (10)`; permissions are r
 
 | Item | Milestone |
 |---|---|
-| TOTP MFA, email verification, password reset | 1.1 |
-| Session list & remote revoke UI | 1.1 |
+| Session list & remote revoke UI | 2 |
+| Email sending through a queue with retries (currently synchronous) | 2 |
+| Optional org policy "MFA required for all members" | 2 |
 | Registration with an invite token (no new org created) | 2 |
 | Secret manager integration (Vault / cloud KMS) | 8 |
 | SSRF-safe fetcher, egress allowlist for workers | 3 / 6 |

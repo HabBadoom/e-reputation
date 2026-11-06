@@ -6,8 +6,8 @@ Each milestone ends with passing tests, migrations, docs and a recorded list of 
 |---|---|---|
 | **0 — Inspection & design** | Repo inspection, architecture, data model, security model, roadmap | ✅ Done |
 | **1 — Foundation** | Monorepo, Docker Compose, config, Postgres + RLS, Redis, FastAPI, Next.js, auth (register/login/refresh/logout), multi-tenancy, RBAC, audit log, rate limiting, Alembic, CI, cross-tenant tests. Brands CRUD included as the first tenant-scoped resource to prove isolation end to end. | ✅ Done |
-| 1.1 — Auth hardening | TOTP MFA, password reset by email, email verification, session list & revoke | Next |
-| **2 — Brands & monitoring** | Invitations, products, competitors, keywords, monitoring projects, RabbitMQ worker + scheduler, entitlements skeleton, dashboard aggregates | Planned |
+| **1.1 — Auth hardening** | TOTP MFA + recovery codes, password reset & change, email verification (Brevo), MFA secrets encrypted at rest | ✅ Done (session list & remote revoke moved to M2) |
+| **2 — Brands & monitoring** | Session list & revoke, email sending via worker with retries, invitations by email, products, competitors, keywords, monitoring projects, RabbitMQ worker + scheduler, entitlements skeleton, dashboard aggregates | Planned |
 | **3 — Source intelligence** | Connector interface, RSS, website reader (SSRF-safe fetcher), one search provider, source registry + coverage states, collection pipeline, dedup (hash + near-dup), provenance, OpenSearch index. Agent Reach adapter after licence/behaviour review. | Planned |
 | **4 — Algerian NLP** | Annotation workflow, `ALGERIAN_NLP_BENCHMARK`, language/Arabizi/code-switch detection, normalizer, LLM-backed sentiment/intent/sarcasm with calibration and `UNCERTAIN`. Support claimed only per measured benchmark results. | Planned |
 | **5 — Reputation intelligence** | Entity resolution, sentiment analytics, trends, crisis detection, competitor comparison, alert rules, PDF/CSV/XLSX reports | Planned |

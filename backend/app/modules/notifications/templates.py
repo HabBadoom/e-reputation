@@ -1,0 +1,79 @@
+"""Email templates in French, Arabic and English. Plain, inline-styled HTML that renders in
+every mail client, plus a text part. User-supplied values are HTML-escaped."""
+
+from html import escape
+
+from app.core.config import get_settings
+from app.modules.notifications.email import EmailMessage
+
+_T = {
+    "verify": {
+        "fr": ("Confirmez votre adresse e-mail",
+               "Bonjour {name},",
+               "Confirmez votre adresse e-mail pour sécuriser votre compte {app}.",
+               "Confirmer mon adresse",
+               "Ce lien expire dans 48 heures. Si vous n'avez pas créé de compte, ignorez ce message."),
+        "ar": ("تأكيد بريدك الإلكتروني",
+               "مرحبًا {name}،",
+               "يُرجى تأكيد بريدك الإلكتروني لتأمين حسابك على {app}.",
+               "تأكيد البريد الإلكتروني",
+               "تنتهي صلاحية هذا الرابط خلال 48 ساعة. إذا لم تنشئ حسابًا، تجاهل هذه الرسالة."),
+        "en": ("Confirm your email address",
+               "Hello {name},",
+               "Please confirm your email address to secure your {app} account.",
+               "Confirm my email",
+               "This link expires in 48 hours. If you didn't create an account, ignore this email."),
+    },
+    "reset": {
+        "fr": ("Réinitialisation de votre mot de passe",
+               "Bonjour {name},",
+               "Une réinitialisation du mot de passe de votre compte {app} a été demandée.",
+               "Choisir un nouveau mot de passe",
+               "Ce lien expire dans 1 heure et ne fonctionne qu'une fois. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : votre mot de passe reste inchangé."),
+        "ar": ("إعادة تعيين كلمة المرور",
+               "مرحبًا {name}،",
+               "تم طلب إعادة تعيين كلمة مرور حسابك على {app}.",
+               "اختيار كلمة مرور جديدة",
+               "تنتهي صلاحية هذا الرابط خلال ساعة واحدة ويعمل مرة واحدة فقط. إذا لم تطلب ذلك، تجاهل هذه الرسالة وستبقى كلمة مرورك كما هي."),
+        "en": ("Reset your password",
+               "Hello {name},",
+               "Someone asked to reset the password of your {app} account.",
+               "Choose a new password",
+               "This link expires in 1 hour and works once. If you didn't ask for this, ignore this email: your password stays the same."),
+    },
+}
+
+
+def _render(kind: str, locale: str, to_email: str, name: str, link: str) -> EmailMessage:
+    s = get_settings()
+    lang = locale if locale in ("fr", "ar", "en") else "fr"
+    subject, greet, body, cta, foot = _T[kind][lang]
+    app = s.email_from_name
+    greet = greet.format(name=name)
+    body = body.format(app=app)
+    d = "rtl" if lang == "ar" else "ltr"
+    align = "right" if lang == "ar" else "left"
+    html = f"""<!doctype html><html lang="{lang}" dir="{d}"><body style="margin:0;background:#f6f5f1;font-family:Arial,Helvetica,sans-serif;color:#0f1f1c">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" style="max-width:520px;background:#ffffff;border:1px solid #dcdad2;border-radius:6px" cellpadding="0" cellspacing="0">
+<tr><td style="padding:28px;text-align:{align}" dir="{d}">
+<p style="margin:0 0 20px;font-weight:bold;font-size:16px">{escape(app)}</p>
+<p style="margin:0 0 12px;font-size:15px">{escape(greet)}</p>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.5">{escape(body)}</p>
+<p style="margin:0 0 24px"><a href="{escape(link, quote=True)}" style="display:inline-block;background:#0d6b5c;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;font-size:15px">{escape(cta)}</a></p>
+<p style="margin:0 0 8px;font-size:12px;color:#6b7d79;line-height:1.5">{escape(foot)}</p>
+<p style="margin:0;font-size:12px;color:#6b7d79;word-break:break-all" dir="ltr">{escape(link)}</p>
+</td></tr></table></td></tr></table></body></html>"""
+    text = f"{greet}\n\n{body}\n\n{cta}: {link}\n\n{foot}\n"
+    return EmailMessage(to_email=to_email, to_name=name, subject=subject, html=html, text=text,
+                        tags=(kind,))
+
+
+def verification_email(to_email: str, name: str, locale: str, token: str) -> EmailMessage:
+    link = f"{get_settings().app_base_url.rstrip('/')}/verify-email?token={token}"
+    return _render("verify", locale, to_email, name, link)
+
+
+def password_reset_email(to_email: str, name: str, locale: str, token: str) -> EmailMessage:
+    link = f"{get_settings().app_base_url.rstrip('/')}/reset-password?token={token}"
+    return _render("reset", locale, to_email, name, link)

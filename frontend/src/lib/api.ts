@@ -71,6 +71,7 @@ export type RoleKey = "owner" | "admin" | "analyst" | "viewer";
 export interface TenantSummary { id: string; name: string; slug: string; role: RoleKey }
 export interface Me {
   user_id: string; email: string; full_name: string; locale: string;
+  email_verified: boolean; mfa_enabled: boolean;
   tenant: TenantSummary; permissions: string[]; tenants: TenantSummary[];
 }
 export interface Alias { id: string; alias: string; script: string; kind: string; created_at: string }
@@ -98,3 +99,9 @@ export interface AuditEntry {
   id: string; action: string; actor_email: string | null; target_type: string | null;
   target_id: string | null; metadata: Record<string, unknown>; ip: string | null; created_at: string;
 }
+export interface MfaChallenge { mfa_required: true; mfa_token: string; expires_in: number }
+export interface SessionTokens { mfa_required?: undefined; expires_in: number; tenant_id: string }
+export type LoginResult = MfaChallenge | SessionTokens;
+export interface MfaStatus { enabled: boolean; recovery_codes_remaining: number }
+export interface MfaSetup { secret: string; otpauth_uri: string }
+export interface RecoveryCodes { recovery_codes: string[] }

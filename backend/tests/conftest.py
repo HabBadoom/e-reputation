@@ -11,6 +11,9 @@ import uuid
 os.environ.setdefault("REPINTEL_ENV", "test")
 os.environ.setdefault("REPINTEL_JWT_SECRET", "test-secret-" + "x" * 40)
 os.environ.setdefault("REPINTEL_COOKIE_SECURE", "false")
+os.environ.setdefault("REPINTEL_EMAIL_PROVIDER", "memory")
+# Test-only key (valid Fernet format). Never used outside the test suite.
+os.environ.setdefault("REPINTEL_ENCRYPTION_KEYS", "dGVzdC1vbmx5LWtleS1kby1ub3QtdXNlLTAxMjM0NTY=")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -18,9 +21,11 @@ from sqlalchemy import create_engine, text  # noqa: E402
 
 from app.core.rate_limit import MemoryLimiter, get_limiter  # noqa: E402
 from app.main import create_app  # noqa: E402
+from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
 DATA_TABLES = ["audit_logs", "brand_aliases", "brands", "invitations", "refresh_tokens",
-               "memberships", "tenants", "users"]
+               "mfa_recovery_codes", "user_mfa", "user_tokens", "memberships", "tenants",
+               "users"]
 
 
 @pytest.fixture(scope="session")
@@ -40,7 +45,25 @@ def _clean_db(owner_engine):
     lim = get_limiter()
     if isinstance(lim, MemoryLimiter):
         lim.reset()
+    outbox().clear()
     yield
+
+
+def outbox() -> MemoryProvider:
+    p = get_email_provider()
+    assert isinstance(p, MemoryProvider)
+    return p
+
+
+def token_from_last_email(to: str, path: str) -> str:
+    """Extract the token from the most recent email to `to` whose link points at `path`."""
+    import re
+    for msg in reversed(outbox().outbox):
+        if msg.to_email == to.lower():
+            m = re.search(rf"{path}\?token=([A-Za-z0-9_-]+)", msg.text)
+            if m:
+                return m.group(1)
+    raise AssertionError(f"no email to {to} with a {path} link")
 
 
 @pytest.fixture(scope="session")
@@ -85,14 +108,18 @@ class Api:
 PASSWORD = "correct horse battery staple"
 
 
-def register(client: TestClient, *, email: str | None = None, org: str = "Org") -> Api:
+def register(client: TestClient, *, email: str | None = None, org: str = "Org",
+             verify: bool = True) -> Api:
     email = email or f"u{uuid.uuid4().hex[:8]}@example.dz"
     r = client.post("/api/v1/auth/register", headers={"x-auth-mode": "token"},
                     json={"email": email, "password": PASSWORD, "full_name": "Test User",
                           "organization_name": org})
     assert r.status_code == 201, r.text
     api = Api(client, r.json())
-    api.email = email  # type: ignore[attr-defined]
+    api.email = email.lower()  # type: ignore[attr-defined]
+    if verify:
+        tok = token_from_last_email(email, "/verify-email")
+        assert client.post("/api/v1/auth/email/verify", json={"token": tok}).status_code == 200
     return api
 
 

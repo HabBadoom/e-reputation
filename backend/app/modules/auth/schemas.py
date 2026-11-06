@@ -52,6 +52,8 @@ class MeOut(BaseModel):
     email: str
     full_name: str
     locale: str
+    email_verified: bool
+    mfa_enabled: bool
     tenant: TenantSummary
     permissions: list[str]
     tenants: list[TenantSummary]
@@ -65,3 +67,57 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"  # noqa: S105 — OAuth token type, not a secret
     expires_in: int
     tenant_id: uuid.UUID
+
+
+class MfaChallengeOut(BaseModel):
+    """Password was correct but a second factor is required. No session is issued yet."""
+
+    mfa_required: Literal[True] = True
+    mfa_token: str
+    expires_in: int
+
+
+class MfaLoginIn(BaseModel):
+    mfa_token: str = Field(min_length=20, max_length=200)
+    code: str = Field(min_length=6, max_length=20, description="6-digit code or recovery code")
+
+
+class TokenIn(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+
+
+class EmailIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
+class MfaStatusOut(BaseModel):
+    enabled: bool
+    recovery_codes_remaining: int
+
+
+class MfaSetupOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class MfaCodeIn(BaseModel):
+    code: str = Field(min_length=6, max_length=20)
+
+
+class MfaDisableIn(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+    code: str = Field(min_length=6, max_length=20)
+
+
+class RecoveryCodesOut(BaseModel):
+    recovery_codes: list[str]

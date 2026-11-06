@@ -2,13 +2,14 @@
 
 Multi-tenant SaaS for monitoring brand reputation, built first for Algeria (French, Arabic, Darija, Arabizi) with an architecture meant for international expansion. `RepIntel` is a placeholder name.
 
-**Current state: Milestone 1 (Foundation).** Accounts, organizations, team roles, brands with multi-script aliases, audit log, French/Arabic (RTL)/English UI, enforced tenant isolation. **No content is collected yet**: the dashboard says so explicitly instead of showing sample numbers. See [ROADMAP](docs/ROADMAP.md).
+**Current state: Milestone 1.1 (Foundation + account security).** Accounts with email verification, password reset and two-step verification (TOTP), organizations, team roles, brands with multi-script aliases, audit log, French/Arabic (RTL)/English UI, enforced tenant isolation. **No content is collected yet**: the dashboard says so explicitly instead of showing sample numbers. See [ROADMAP](docs/ROADMAP.md).
 
 ## Quick start
 
 ```bash
 cp .env.example .env
 python -c "import secrets;print('REPINTEL_JWT_SECRET='+secrets.token_urlsafe(48))" >> .env
+python -c "import base64,os;print('REPINTEL_ENCRYPTION_KEYS='+base64.urlsafe_b64encode(os.urandom(32)).decode())" >> .env
 docker compose up --build
 ```
 

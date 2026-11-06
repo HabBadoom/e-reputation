@@ -1,6 +1,6 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -16,6 +16,7 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
   { href: "/team", key: "nav.team" },
   { href: "/audit", key: "nav.audit", perm: "audit:read" },
   { href: "/settings", key: "nav.settings" },
+  { href: "/account", key: "nav.account" },
 ];
 // Shown disabled so users can see what's coming without being shown fake screens.
 const UPCOMING: { key: MessageKey; milestone: number }[] = [
@@ -24,6 +25,21 @@ const UPCOMING: { key: MessageKey; milestone: number }[] = [
   { key: "nav.analytics", milestone: 5 },
   { key: "nav.reports", milestone: 5 },
 ];
+
+function UnverifiedBanner() {
+  const { t } = useI18n();
+  const resend = useMutation({ mutationFn: () => api.post("/auth/email/resend") });
+  return (
+    <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b border-signal-warn/30 bg-signal-warn/10 px-4 py-2 text-sm text-signal-warn md:px-8">
+      <span>{t("banner.unverified")}</span>
+      {resend.isSuccess ? <span>{t("banner.resent")}</span> : (
+        <button className="font-medium underline" disabled={resend.isPending} onClick={() => resend.mutate()}>
+          {t("banner.resend")}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
@@ -100,6 +116,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {NAV.slice(0, 3).map((n) => <Link key={n.href} href={n.href}>{t(n.key)}</Link>)}
           </nav>
         </header>
+        {!u.email_verified && <UnverifiedBanner />}
         <main className="mx-auto max-w-6xl p-4 md:p-8">{children}</main>
       </div>
     </div>

@@ -35,6 +35,16 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_DATABASE_URL` | app role @ localhost | Must be the NOBYPASSRLS role |
 | `REPINTEL_MIGRATION_DATABASE_URL` | owner role @ localhost | Alembic + tests only |
 | `REPINTEL_DB_APP_ROLE` | `repintel_app` | Role granted privileges by migrations |
+| `REPINTEL_ENCRYPTION_KEYS` | — (required) | Fernet key(s), comma-separated; first encrypts, all decrypt (rotation) |
+| `REPINTEL_APP_BASE_URL` | `http://localhost:3000` | Used to build links in emails |
+| `REPINTEL_EMAIL_PROVIDER` | `console` | `brevo` (required in staging/production), `console` (dev: logs emails), `memory` (tests) |
+| `REPINTEL_BREVO_API_KEY` | — | Required when provider is `brevo`. Secret: env/secret manager only |
+| `REPINTEL_BREVO_API_URL` | `https://api.brevo.com/v3/smtp/email` | |
+| `REPINTEL_EMAIL_FROM_ADDRESS` / `_NAME` | `no-reply@example.com` / `RepIntel` | Sender must be verified in Brevo |
+| `REPINTEL_EMAIL_RATE_LIMIT_PER_HOUR` | `5` | Verification resends / reset requests per address |
+| `REPINTEL_EMAIL_VERIFY_TTL_SECONDS` | `172800` | 48 h |
+| `REPINTEL_PASSWORD_RESET_TTL_SECONDS` | `3600` | 1 h |
+| `REPINTEL_MFA_CHALLENGE_TTL_SECONDS` | `300` | Time to enter the code after the password |
 | `REPINTEL_REDIS_URL` | `redis://localhost:6379/0` | Rate limiting |
 | `REPINTEL_RABBITMQ_URL` | `amqp://guest:guest@localhost:5672/` | From M2 |
 | `REPINTEL_ACCESS_TOKEN_TTL_SECONDS` | `900` | |
