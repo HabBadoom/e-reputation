@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — Milestone 4: Algerian language intelligence (2026-11-06)
+
+### Added
+- Migration 0005: `mention_analysis`, `language_annotations`, `language_evaluation_runs`, `dialect_expressions` (30 seed entries), protected `users.is_platform_admin`, `tenants.nlp_corpus_opt_in`, `openai` compliance record, `nlp:correct` permission.
+- Deterministic layer: script, heuristic language, Darija markers, code-switching, Darija/Arabizi normaliser with traceability.
+- OpenAI provider (structured outputs) and ensemble: 3 annotators (models × prompt variants), majority vote, arbitration, UNCERTAIN; injection-safe prompts; outputs re-validated.
+- Analysis jobs after each monitoring run; backlog analysis; corrections stored beside AI labels; sentiment/language/homonym filters; CSV columns.
+- Corpus with opt-in and purge; gold-set sampling and verification screen; `ALGERIAN_NLP_BENCHMARK` runs; validation status per task drives "not validated" labels in the UI.
+- UI: analysis badges and correction form on mentions, sentiment card on the dashboard, corpus opt-in in settings, "Language (NLP)" page (status, gold review, benchmark, dictionary).
+
 ## 0.4.0 — Milestone 3: Source intelligence (2026-11-06)
 
 ### Added

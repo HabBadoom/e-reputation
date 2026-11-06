@@ -19,6 +19,10 @@
 | `backend/tests/test_collection.py` | Full run with mocked Serper + pages + RSS: verification, robots, exclusions, reposts, invalid URLs, provenance, registry states, no duplicates on re-run, filters, CSV injection, auth failure, production compliance gate, sources API, feed discovery, SSRF via sources, isolation, viewer rights | `make test-api` |
 | `backend/tests/test_fetcher.py` | SSRF: private/metadata/IPv6-mapped/mixed DNS, ports, schemes, credentials, malicious redirects, size cap, redirect loops; robots.txt semantics | 〃 |
 | `backend/tests/test_collection_utils.py` | URL canonicalisation, Arabic/French matching, excerpts, hashes, dates (absolute, relative in en/fr/ar), HTML extraction, RSS/Atom | 〃 |
+| `backend/tests/sql/test_rls_nlp.sql` | Analysis isolation, corpus opt-in enforcement, corpus unreadable by non-admins, platform-admin flag protected, opt-out purge | `make test-sql` |
+| `backend/tests/test_nlp_basics.py` | Script/language/Darija/code-switching detection, normaliser traceability, metrics (macro-F1, confusion, coverage, multi-label) | `make test-api` |
+| `backend/tests/test_nlp_ensemble.py` | Majority, arbitration, UNCERTAIN, invalid outputs rejected, fatal errors, injection framing, lexicon hints | 〃 |
+| `backend/tests/test_nlp.py` | Mocked OpenAI end to end: 3 annotators, arbitration, not-configured/production gate, auth failure stops batch, corrections/filters/permissions/isolation, corpus opt-in & purge, gold review, benchmark metrics, validation flags, analysis after collection | 〃 |
 | `backend/tests/test_brands.py` | Brand CRUD, multi-script aliases, duplicates, LIKE escaping, pagination, script heuristic | 〃 |
 
 Tests use a real PostgreSQL (no SQLite, no mocks of RLS). Each test truncates data tables via the owner role.

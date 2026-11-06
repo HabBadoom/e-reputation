@@ -60,13 +60,21 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | POST | `/monitoring-projects/{id}/runs` | `monitoring:write` | 202, queues a manual run; 409 if one is queued/running |
 | GET | `/monitoring-projects/{id}/runs` | `monitoring:read` | Latest runs with `summary` |
 | GET | `/monitoring-projects/{id}/query-plan` | `monitoring:read` | Exact terms/exclusions a run will search |
-| GET | `/mentions` | `mentions:read` | Filters: `brand_id, project_id, entity_type, verification, domain, since, until, q, include_reposts` |
+| GET | `/mentions` | `mentions:read` | Filters: `brand_id, project_id, entity_type, verification, domain, since, until, q, include_reposts, sentiment, language, about_target`; each item has an `analysis` block |
 | GET | `/mentions/{id}` | `mentions:read` | Full provenance (canonical URL, connector, provider fields, source) |
 | GET | `/mentions/export.csv` | `mentions:read` | Same filters, max 5,000 rows, formula-neutralised |
 | GET / POST | `/sources` | `sources:read` / `sources:write` | POST `{kind: rss\|website, url, name?, category?, language?}` checks immediately; websites return discovered feeds |
 | POST | `/sources/{id}/check` | `sources:write` | Reachability, robots.txt, feed validity, feed discovery |
 | PATCH / DELETE | `/sources/{id}` | `sources:write` | Enable/disable, rename, categorise |
 | GET | `/connectors` | `sources:read` | Capabilities, limitations, configured?, compliance status |
+| PATCH | `/mentions/{id}/analysis` | `nlp:correct` | `{sentiment?, sarcasm?, about_target?, intents?}`; stored beside the AI output |
+| POST | `/mentions/analyze` | `nlp:correct` | Queue analysis of pending/failed/blocked mentions (max 500) |
+| GET | `/nlp/status` | authenticated | Per-task validation (latest benchmark vs thresholds) |
+| GET | `/nlp/expressions` | authenticated | Seed Darija expression dictionary |
+| GET | `/nlp/corpus/stats`, `/nlp/corpus/queue` | platform admin | Corpus counts; gold items awaiting verification |
+| POST | `/nlp/corpus/sample` | platform admin | `{n, split}` script-balanced sampling into gold |
+| POST | `/nlp/corpus/{id}/verify`, `/reject` | platform admin | `{labels: {sentiment, sarcasm, about_target, language, intents}}` |
+| GET / POST | `/nlp/benchmark` | platform admin | Runs (metrics) / start a run |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
 ## Example (API client)

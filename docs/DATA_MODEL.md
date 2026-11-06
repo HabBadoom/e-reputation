@@ -54,9 +54,19 @@ Conventions: UUIDv4 primary keys, `timestamptz` everywhere, CHECK constraints fo
 | `sources` | tenant | `kind ∈ website/rss`, coverage state, discovery origin, error tracking; unique `(tenant_id, kind, lower(url))` |
 | `mentions` | tenant | composite FKs to brand, project, source; unique `(tenant_id, brand_id, canonical_url)`; `content_hash` + `duplicate_of` for reposts; `original_text` excerpt never rewritten; `normalized_text`/`language` reserved for M4; `published_at` NULL when unknown + `published_at_source` (`page_metadata`, `feed`, `provider`, `provider_relative` = approximate) |
 
+## Milestone 4 tables
+
+| Table | Scope | Notes |
+|---|---|---|
+| `mention_analysis` | tenant | 1:1 with mention (composite FK); heuristic fields, final AI labels, agreement, all annotator outputs, versions; `corrected_*` beside AI labels |
+| `language_annotations` | platform (admin-only RLS) | corpus/gold set; `auto_labels` vs human `labels`; `status`, `split` (gold_test/gold_dev/train); origin tenant (cascade + purge on opt-out) |
+| `language_evaluation_runs` | platform | benchmark runs: models, prompt/analysis versions, metrics |
+| `dialect_expressions` | platform, read-only | seed lexicon (`seed_unvalidated`) |
+| `users.is_platform_admin`, `tenants.nlp_corpus_opt_in` | — | flag protected by trigger; opt-in per organization |
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:
-source_health_checks / collection_events history, mention_entities (M5) · dialect_expressions, language_annotations, language_model_versions, language_evaluation_runs (M4) · mention_analysis, sentiment_history, trend_events, crisis_events, reputation_metrics, competitor_analysis, notifications, reports (M5) · browser_* , captcha_events, human_interventions (M6) · ai_tasks, ai_actions, agent_runs, approval_requests (M7) · invoices, usage metering (M8).
+source_health_checks / collection_events history, mention_entities (M5) · mention_analysis, sentiment_history, trend_events, crisis_events, reputation_metrics, competitor_analysis, notifications, reports (M5) · browser_* , captcha_events, human_interventions (M6) · ai_tasks, ai_actions, agent_runs, approval_requests (M7) · invoices, usage metering (M8).
 
 `mentions` will keep `original_text` immutable alongside `normalized_text`, `content_hash`, `source_url`, `collection_method`, `connector_version`, `published_at` (nullable — never invented) and `collected_at`.

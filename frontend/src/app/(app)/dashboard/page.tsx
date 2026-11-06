@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useI18n } from "@/components/providers";
 import { Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { api, type Capability, type Dashboard } from "@/lib/api";
+import { hasMessage } from "@/lib/i18n";
 import { useCan } from "@/lib/session";
 
 function Stat({ label, value, sub }: { label: string; value: number; sub?: string }) {
@@ -70,8 +71,30 @@ export default function DashboardPage() {
               sub={`${d.mention_stats.last_7_days} ${t("dash.last7")}`} />
         <Stat label={t("dash.sourcesCovered")} value={d.source_stats.monitored}
               sub={t("dash.ofRegistered", { n: d.source_stats.registered })} />
-        <Unavailable label={t("dash.sentiment")} cap={d.sentiment} />
+        {d.sentiment.available
+          ? <Stat label={t("dash.sentiment")} value={d.sentiment_stats.analysed}
+                  sub={t("dash.analysedOf", { n: d.sentiment_stats.analysed })} />
+          : <Unavailable label={t("dash.sentiment")} cap={d.sentiment} />}
       </div>
+      {d.sentiment_stats.about_brand > 0 && (
+        <Card title={t("dash.sentimentTitle")}>
+          <div className="flex h-3 overflow-hidden rounded">
+            {d.sentiment_stats.distribution.map((x) => (
+              <div key={x.key} title={`${x.key}: ${x.count}`}
+                   className={{ positive: "bg-signal-pos", negative: "bg-signal-neg", mixed: "bg-signal-warn",
+                     neutral: "bg-ink-mute", UNCERTAIN: "bg-line" }[x.key] ?? "bg-line"}
+                   style={{ width: `${(x.count / d.sentiment_stats.about_brand) * 100}%` }} />
+            ))}
+          </div>
+          <ul className="mt-3 flex flex-wrap gap-4 text-sm">
+            {d.sentiment_stats.distribution.map((x) => (
+              <li key={x.key}>{hasMessage(`sent.${x.key}`) ? t(`sent.${x.key}` as "sent.positive") : x.key}: <span className="tabular-nums font-medium">{x.count}</span>
+                <span className="text-ink-mute"> ({Math.round((x.count / d.sentiment_stats.about_brand) * 100)} %)</span></li>
+            ))}
+          </ul>
+          {!d.sentiment_stats.validated && <p className="mt-3 text-xs text-signal-warn">{t("dash.notValidatedNote")}</p>}
+        </Card>
+      )}
       {d.mention_stats.total > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
           <Card title={t("dash.topDomains")} action={<Link href="/mentions" className="text-sm text-brand hover:underline">{t("nav.mentions")}</Link>}>

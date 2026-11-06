@@ -71,7 +71,7 @@ export type RoleKey = "owner" | "admin" | "analyst" | "viewer";
 export interface TenantSummary { id: string; name: string; slug: string; role: RoleKey }
 export interface Me {
   user_id: string; email: string; full_name: string; locale: string;
-  email_verified: boolean; mfa_enabled: boolean;
+  email_verified: boolean; mfa_enabled: boolean; is_platform_admin: boolean;
   tenant: TenantSummary; permissions: string[]; tenants: TenantSummary[];
 }
 export interface Alias { id: string; alias: string; script: string; kind: string; created_at: string }
@@ -96,10 +96,11 @@ export interface Dashboard {
   mention_stats: { total: number; last_7_days: number; verified_on_page: number; reposts: number;
     top_domains: CountItem[]; by_entity: CountItem[]; by_method: CountItem[] };
   source_stats: { registered: number; monitored: number; by_coverage: CountItem[] };
+  sentiment_stats: { analysed: number; about_brand: number; distribution: CountItem[]; validated: boolean; macro_f1: number | null };
   recent_activity: { action: string; actor_email: string | null; created_at: string }[];
   mentions: Capability; sentiment: Capability; sources: Capability;
 }
-export interface Organization { id: string; name: string; slug: string; status: string; default_locale: string; created_at: string }
+export interface Organization { id: string; name: string; slug: string; status: string; default_locale: string; nlp_corpus_opt_in: boolean; created_at: string }
 export interface AuditEntry {
   id: string; action: string; actor_email: string | null; target_type: string | null;
   target_id: string | null; metadata: Record<string, unknown>; ip: string | null; created_at: string;
@@ -138,10 +139,12 @@ export interface Mention {
   published_at: string | null; published_at_source: string | null; collected_at: string; last_seen_at: string;
   seen_count: number; collection_method: "search_api" | "news_api" | "rss" | "page_fetch";
   verification_status: Verification; is_repost: boolean; language: string | null; analysed: boolean;
+  analysis: Analysis;
 }
 export interface MentionDetail extends Mention {
   snippet: string; canonical_url: string; connector: string; connector_version: string; content_hash: string;
   duplicate_of: string | null; project_name: string | null; provider_fields: Record<string, unknown>;
+  annotators: Record<string, unknown>[]; models: Record<string, unknown>;
   source: { id: string; kind: string; domain: string; name: string; coverage_status: Coverage } | null;
 }
 export interface Source {
@@ -158,3 +161,34 @@ export interface ConnectorInfo {
   legal_basis: string; data_categories: string[]; retention_days: number;
 }
 export interface CountItem { key: string; count: number }
+export type Sentiment = "positive" | "negative" | "neutral" | "mixed" | "UNCERTAIN";
+export interface Analysis {
+  status: "pending" | "done" | "failed" | "not_configured" | "blocked_by_policy";
+  script?: string | null; heuristic_language?: string | null; code_switching?: boolean | null;
+  normalized_text?: string | null; language?: string | null; dialect?: string | null;
+  sentiment?: Sentiment | null; sarcasm?: "yes" | "no" | "UNCERTAIN" | null;
+  about_target?: "yes" | "no" | "UNCERTAIN" | null; intents?: string[]; emotions?: string[];
+  topics?: string[]; translation_fr?: string | null; agreement?: number | null;
+  arbitration_used?: boolean; corrected?: boolean; error?: string | null;
+}
+export interface TaskStatus { validated: boolean; macro_f1: number | null; coverage: number | null; n: number }
+export interface NlpStatus {
+  run_id: string | null; finished_at: string | null; ai_configured: boolean;
+  tasks: Record<"sentiment" | "sarcasm" | "about_target" | "language" | "intents", TaskStatus>;
+  thresholds: { macro_f1: number; coverage: number; gold_items: number };
+}
+export interface CorpusItem {
+  id: string; text: string; normalized_text: string | null; source_url: string | null; script: string | null;
+  auto_labels: Record<string, unknown>; auto_status: string; labels: Record<string, unknown> | null;
+  status: string; split: string; verified_at: string | null;
+}
+export interface EvalRun {
+  id: string; status: string; split: string; n_items: number; prompt_version: string | null;
+  analysis_version: string | null; models: Record<string, unknown>; metrics: Record<string, unknown>;
+  error: string | null; created_at: string; finished_at: string | null;
+}
+export interface Expression { canonical: string; arabic: string | null; variants: string[]; meaning_fr: string; polarity: string; status: string }
+export interface MetricBlock {
+  n: number; macro_f1: number; coverage?: number; accuracy?: number;
+  confusion?: Record<string, Record<string, number>>;
+}

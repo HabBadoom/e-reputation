@@ -55,6 +55,13 @@ Pre-authentication lookups (login by email, refresh token, invitation token) use
 - **Data minimisation**: excerpts, not full pages.
 - **Serper API key**: environment only, sent only to `google.serper.dev`, never logged.
 
+## Language analysis (Milestone 4)
+
+- Prompt injection: untrusted text passed as escaped JSON in a `<data>` frame, explicit system rule, no tools, strict output schema re-validated server-side (tested: frame can't be broken, out-of-schema labels rejected).
+- OpenAI calls gated by `connector_policies('openai')` (blocked in production until approved); only excerpt/title/brand are sent.
+- Corpus: readable only by platform admins (RLS via `app_is_platform_admin()`); tenant contributions only through `corpus_add*` functions that enforce the opt-in; opt-out purges; tenant corrections never enter the gold test split.
+- `users.is_platform_admin` cannot be set or changed by the app role (trigger, tested).
+
 ## Plans
 
 Limits are read from `plans`/`plan_entitlements` and enforced server-side (HTTP 402 `plan_limit_reached`). Tenants can read but not change their subscription.

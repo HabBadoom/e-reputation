@@ -1,10 +1,12 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
+import { AnalysisBadges, AnalysisDetails, CorrectionForm, langLabel, SENTIMENTS } from "@/components/analysis";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, ErrorBanner, Spinner } from "@/components/ui";
 import { api, type Brand, type Mention, type MentionDetail, type Page, type Verification } from "@/lib/api";
+import { useCan } from "@/lib/session";
 
 const PAGE = 25;
 const VERIF_TONE: Record<Verification, "brand" | "neutral" | "warn" | "neg"> = {
@@ -47,6 +49,7 @@ function Provenance({ id }: { id: string }) {
           <Fragment key={k}><dt className="text-ink-mute">{k}</dt><dd>{v}</dd></Fragment>
         ))}
       </dl>
+      <div className="mt-2"><AnalysisDetails a={d.analysis} /></div>
       {d.snippet && d.snippet !== d.original_text && (
         <p className="mt-2 text-xs text-ink-soft" dir="auto"><span className="text-ink-mute">{t("mentions.snippet")}: </span>{d.snippet}</p>
       )}
@@ -56,7 +59,9 @@ function Provenance({ id }: { id: string }) {
 
 function MentionCard({ m }: { m: Mention }) {
   const { t } = useI18n();
+  const canCorrect = useCan("nlp:correct");
   const [open, setOpen] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   return (
     <li className="p-5">
       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-ink-mute">
@@ -71,11 +76,17 @@ function MentionCard({ m }: { m: Mention }) {
         <Badge tone={VERIF_TONE[m.verification_status]}>{t(`verif.${m.verification_status}`)}</Badge>
         <Badge>{t(`method.${m.collection_method}`)}</Badge>
         {m.is_repost && <Badge tone="warn">{t("mentions.repost")}</Badge>}
-        <Badge>{t("mentions.notAnalysed")}</Badge>
-        <button className="ms-auto text-xs text-brand hover:underline" onClick={() => setOpen(!open)}>
-          {t(open ? "monitoring.hide" : "mentions.provenance")}
-        </button>
+        <AnalysisBadges a={m.analysis} />
+        <span className="ms-auto flex gap-3">
+          {canCorrect && m.analysis.status === "done" && (
+            <button className="text-xs text-brand hover:underline" onClick={() => setCorrecting(!correcting)}>{t("nlp.correct")}</button>
+          )}
+          <button className="text-xs text-brand hover:underline" onClick={() => setOpen(!open)}>
+            {t(open ? "monitoring.hide" : "mentions.provenance")}
+          </button>
+        </span>
       </div>
+      {correcting && <CorrectionForm id={m.id} a={m.analysis} onDone={() => setCorrecting(false)} />}
       {open && <Provenance id={m.id} />}
     </li>
   );
@@ -83,7 +94,13 @@ function MentionCard({ m }: { m: Mention }) {
 
 export default function MentionsPage() {
   const { t } = useI18n();
-  const [f, setF] = useState({ brand_id: "", verification: "", entity_type: "", q: "", since: "", include_reposts: false });
+  const [f, setF] = useState({ brand_id: "", verification: "", entity_type: "", sentiment: "", language: "", q: "", since: "", include_reposts: false });
+  const canCorrect = useCan("nlp:correct");
+  const qc = useQueryClient();
+  const backlog = useMutation({
+    mutationFn: () => api.post<{ queued: number }>("/mentions/analyze"),
+    onSuccess: () => setTimeout(() => qc.invalidateQueries({ queryKey: ["mentions"] }), 5000),
+  });
   const [offset, setOffset] = useState(0);
   const brands = useQuery({ queryKey: ["brands", "all"], queryFn: () => api.get<Page<Brand>>("/brands?limit=100") });
   const params = new URLSearchParams();
@@ -106,7 +123,11 @@ export default function MentionsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{t("mentions.title")}</h1>
-        <a href={`/api/v1/mentions/export.csv?${qs}`} download><Button variant="ghost">{t("mentions.export")}</Button></a>
+        <div className="flex flex-wrap items-center gap-2">
+          {backlog.data && <span className="text-xs text-ink-mute">{t("nlp.queued", { n: backlog.data.queued })}</span>}
+          {canCorrect && <Button variant="ghost" onClick={() => backlog.mutate()} disabled={backlog.isPending}>{t("nlp.analyzeBacklog")}</Button>}
+          <a href={`/api/v1/mentions/export.csv?${qs}`} download><Button variant="ghost">{t("mentions.export")}</Button></a>
+        </div>
       </div>
       <div className="card grid gap-3 p-4 md:grid-cols-3 lg:grid-cols-6">
         <input className="field md:col-span-2" type="search" dir="auto" placeholder={t("mentions.search")}
@@ -122,6 +143,14 @@ export default function MentionsPage() {
         <select className="field" value={f.verification} onChange={set("verification")} aria-label={t("mentions.provenance")}>
           <option value="">{t("mentions.allStatuses")}</option>
           {VERIFS.map((v) => <option key={v} value={v}>{t(`verif.${v}`)}</option>)}
+        </select>
+        <select className="field" value={f.sentiment} onChange={set("sentiment")} aria-label={t("dash.sentiment")}>
+          <option value="">{t("nlp.allSentiments")}</option>
+          {[...SENTIMENTS, "UNCERTAIN" as const].map((s) => <option key={s} value={s}>{t(`sent.${s}`)}</option>)}
+        </select>
+        <select className="field" value={f.language} onChange={set("language")} aria-label={t("nlp.languageLabel")}>
+          <option value="">{t("nlp.allLanguages")}</option>
+          {["ar-DZ", "ar", "fr", "en", "mixed"].map((l) => <option key={l} value={l}>{langLabel(l, t)}</option>)}
         </select>
         <label className="flex items-center gap-2 text-sm">
           <span className="shrink-0 text-ink-soft">{t("mentions.since")}</span>

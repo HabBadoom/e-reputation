@@ -61,6 +61,13 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_VERIFY_PAGES` | `true` | Check search hits on the real page |
 | `REPINTEL_MAX_PAGE_FETCHES_PER_RUN` | `25` | |
 | `REPINTEL_MAX_FEED_ITEMS_PER_SOURCE` | `200` | |
+| `REPINTEL_OPENAI_API_KEY` | — | Enables AI analysis. Secret |
+| `REPINTEL_NLP_MODELS` | `[]` | JSON list of model ids, cycled over annotators (required with the key) |
+| `REPINTEL_NLP_ARBITER_MODEL` | first of `NLP_MODELS` | |
+| `REPINTEL_NLP_ANNOTATORS` | `3` | 2–5 |
+| `REPINTEL_NLP_BATCH_SIZE` | `25` | Mentions per analysis job |
+| `REPINTEL_NLP_MIN_MACRO_F1` / `_MIN_COVERAGE` / `_MIN_GOLD_ITEMS` | `0.70` / `0.60` / `100` | Validation thresholds |
+| `REPINTEL_NLP_BENCHMARK_MAX_ITEMS` | `500` | |
 | `REPINTEL_REDIS_URL` | `redis://localhost:6379/0` | Rate limiting |
 | `REPINTEL_RABBITMQ_URL` | `amqp://guest:guest@localhost:5672/` | From M2 |
 | `REPINTEL_ACCESS_TOKEN_TTL_SECONDS` | `900` | |

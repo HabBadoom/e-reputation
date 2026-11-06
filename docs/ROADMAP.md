@@ -9,7 +9,7 @@ Each milestone ends with passing tests, migrations, docs and a recorded list of 
 | **1.1 — Auth hardening** | TOTP MFA + recovery codes, password reset & change, email verification (Brevo), MFA secrets encrypted at rest | ✅ Done (session list & remote revoke moved to M2) |
 | **2 — Brands & monitoring** | Products, competitors, keywords, monitoring projects + scheduler, background worker (Postgres queue, retries, dead-letter), emails via queue, invitation emails & sign-up through invitations, session list & revoke (immediate), plan entitlements, dashboard aggregates | ✅ Done |
 | **3 — Source intelligence** | Connector interface + compliance gate, Serper (search & news), RSS/Atom, web page verification & feed discovery (SSRF-safe, robots.txt), source registry with coverage states, collection pipeline with provenance, URL + repost dedup, mentions inbox & CSV export. **Deferred:** OpenSearch (Postgres filtering is enough at current volume), Agent Reach (licence review first) | ✅ Done |
-| **4 — Algerian NLP** | Annotation workflow, `ALGERIAN_NLP_BENCHMARK`, language/Arabizi/code-switch detection, normalizer, LLM-backed sentiment/intent/sarcasm with calibration and `UNCERTAIN`. Support claimed only per measured benchmark results. | Planned |
+| **4 — Algerian NLP** | Deterministic layer (script, language, Darija markers, code-switching, normaliser, seed lexicon), OpenAI ensemble (3 annotators + arbiter, strict outputs, injection-safe), automatic corpus with opt-in, gold-set verification screen, `ALGERIAN_NLP_BENCHMARK` (macro-F1, P/R, confusion, coverage) gating validated tasks, corrections | ✅ Done (calibrated probabilities after the first gold set) |
 | **5 — Reputation intelligence** | Entity resolution, sentiment analytics, trends, crisis detection, competitor comparison, alert rules, PDF/CSV/XLSX reports | Planned |
 | **6 — Browser fleet** | Worker registry, scheduler, mission state machine, context isolation, egress controls, CAPTCHA detection → human intervention UI | Planned |
 | **7 — Multi-agent** | LangGraph orchestrator + agents over typed service interfaces, prompt-injection test suite | Planned |
@@ -30,5 +30,6 @@ Each milestone ends with passing tests, migrations, docs and a recorded list of 
 
 1. **Search provider** — Serper chosen (2026-11-06). **Legal review of Serper / Google-derived results is required before production** (blocked there until `connector_policies` is approved).
 2. **Legal review** of EU hosting under Law 18-07 (transfer conditions, ANPDP formalities).
-3. **Agent Reach** — commercial use must be confirmed against its licence and each underlying platform's terms before enabling.
-4. **Product name** — `RepIntel` is a placeholder.
+3. **OpenAI data processing** — DPA and Law 18-07 review before production (blocked there until `connector_policies('openai')` is approved).
+4. **Agent Reach** — commercial use must be confirmed against its licence and each underlying platform's terms before enabling.
+5. **Product name** — `RepIntel` is a placeholder.

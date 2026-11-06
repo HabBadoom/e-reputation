@@ -55,6 +55,27 @@ function PlanCard() {
   );
 }
 
+function CorpusCard({ org }: { org: Organization }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const canEdit = useCan("tenant:update");
+  const m = useMutation({
+    mutationFn: (on: boolean) => api.patch<Organization>("/organization", { nlp_corpus_opt_in: on }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["org"] }),
+  });
+  return (
+    <Card title={t("settings.corpusTitle")}>
+      <p className="mb-3 text-sm text-ink-soft">{t("settings.corpusHelp")}</p>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={org.nlp_corpus_opt_in} disabled={!canEdit || m.isPending}
+               onChange={(e) => (e.target.checked || confirm(t("common.confirmDelete"))) && m.mutate(e.target.checked)} />
+        {t("settings.corpusOn")}
+      </label>
+      <div className="mt-2"><ErrorBanner error={m.error} /></div>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -91,6 +112,7 @@ export default function SettingsPage() {
         </form>
       </Card>
       <PlanCard />
+      {org.data && <CorpusCard org={org.data} />}
     </div>
   );
 }
