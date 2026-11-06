@@ -13,6 +13,7 @@ import { useMe } from "@/lib/session";
 const NAV: { href: string; key: MessageKey; perm?: string }[] = [
   { href: "/dashboard", key: "nav.dashboard" },
   { href: "/brands", key: "nav.brands" },
+  { href: "/monitoring", key: "nav.monitoring", perm: "monitoring:read" },
   { href: "/team", key: "nav.team" },
   { href: "/audit", key: "nav.audit", perm: "audit:read" },
   { href: "/settings", key: "nav.settings" },

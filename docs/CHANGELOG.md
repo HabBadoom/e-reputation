@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 — Milestone 2: Brands & monitoring (2026-11-06)
+
+### Added
+- Migration 0003: products, competitors, brand keywords, monitoring projects & runs, plans / entitlements / subscriptions, PostgreSQL job queue with scheduler function; `monitoring:read` / `monitoring:write` permissions.
+- Background worker (`python -m app.jobs.worker`, compose service `worker`): scheduler tick, retries with exponential backoff, dead-letter, stale-job recovery.
+- Emails (verification, reset, invitations) now go through the queue; invitation emails; sign-up through an invitation joins that organization without creating a new one.
+- Monitoring projects: frequency, languages, competitors toggle, pause/resume, run now, run history, query-plan preview. Runs record what would be searched and end as "nothing collected" until connectors exist (Milestone 3).
+- Sessions: list, sign out one device, sign out everywhere else; logout and revocation are immediate.
+- Plan limits from the database (brands, projects, members incl. pending invitations, fastest frequency, competitors and keywords per brand), plan & usage view.
+- UI: brand catalog (products, competitors, keywords), Monitoring page, sessions, plan & usage, translated error messages.
+
+### Changed
+- Access tokens carry `sid`; tokens without it are rejected (clients refresh transparently).
+- Dashboard summary adds catalog/project counts and the last run.
+- **Deviation from spec**: job queue in PostgreSQL instead of RabbitMQ (see ARCHITECTURE.md decisions).
+
 ## 0.2.0 — Milestone 1.1: Account security (2026-11-06)
 
 ### Added

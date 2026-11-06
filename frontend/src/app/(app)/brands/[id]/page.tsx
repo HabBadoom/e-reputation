@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { KeywordsCard, NamedListCard } from "@/components/catalog";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Field, Spinner } from "@/components/ui";
 import { api, type Brand } from "@/lib/api";
@@ -97,6 +98,12 @@ export default function BrandDetail() {
         )}
         <div className="mt-3"><ErrorBanner error={addAlias.error ?? delAlias.error} /></div>
       </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <NamedListCard brandId={id} kind="products" canWrite={canWrite} />
+        <NamedListCard brandId={id} kind="competitors" canWrite={canWrite} />
+      </div>
+      <KeywordsCard brandId={id} canWrite={canWrite} />
 
       <Card title={t("nav.settings")}>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>

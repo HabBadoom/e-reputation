@@ -7,7 +7,7 @@ Each milestone ends with passing tests, migrations, docs and a recorded list of 
 | **0 — Inspection & design** | Repo inspection, architecture, data model, security model, roadmap | ✅ Done |
 | **1 — Foundation** | Monorepo, Docker Compose, config, Postgres + RLS, Redis, FastAPI, Next.js, auth (register/login/refresh/logout), multi-tenancy, RBAC, audit log, rate limiting, Alembic, CI, cross-tenant tests. Brands CRUD included as the first tenant-scoped resource to prove isolation end to end. | ✅ Done |
 | **1.1 — Auth hardening** | TOTP MFA + recovery codes, password reset & change, email verification (Brevo), MFA secrets encrypted at rest | ✅ Done (session list & remote revoke moved to M2) |
-| **2 — Brands & monitoring** | Session list & revoke, email sending via worker with retries, invitations by email, products, competitors, keywords, monitoring projects, RabbitMQ worker + scheduler, entitlements skeleton, dashboard aggregates | Planned |
+| **2 — Brands & monitoring** | Products, competitors, keywords, monitoring projects + scheduler, background worker (Postgres queue, retries, dead-letter), emails via queue, invitation emails & sign-up through invitations, session list & revoke (immediate), plan entitlements, dashboard aggregates | ✅ Done |
 | **3 — Source intelligence** | Connector interface, RSS, website reader (SSRF-safe fetcher), one search provider, source registry + coverage states, collection pipeline, dedup (hash + near-dup), provenance, OpenSearch index. Agent Reach adapter after licence/behaviour review. | Planned |
 | **4 — Algerian NLP** | Annotation workflow, `ALGERIAN_NLP_BENCHMARK`, language/Arabizi/code-switch detection, normalizer, LLM-backed sentiment/intent/sarcasm with calibration and `UNCERTAIN`. Support claimed only per measured benchmark results. | Planned |
 | **5 — Reputation intelligence** | Entity resolution, sentiment analytics, trends, crisis detection, competitor comparison, alert rules, PDF/CSV/XLSX reports | Planned |
@@ -25,6 +25,8 @@ Each milestone ends with passing tests, migrations, docs and a recorded list of 
 | NLP annotation | **Automatic by the SaaS** (revised 2026-11-05) | M4 builds an auto-annotation pipeline: several independent LLM "annotators" (different models/prompts) label each text; agreement → accepted label with confidence, disagreement → automatic arbitration or `UNCERTAIN`. Corrections users make on mentions feed back into the corpus. A small human-verified **gold set** is still required to measure accuracy (the benchmark can't be graded by the same models it evaluates); verified by the founder (target 300–500 texts, one-click confirm/correct UI). |
 
 ## Open questions (remaining)
+
+0. **Plan limits** — only a `trial` plan (placeholder limits: 2 brands, 2 projects, 3 members, every 6 h) and an internal `unlimited` plan exist. Real tiers (Starter → Enterprise) and their limits need to be defined.
 
 1. **Search provider(s)** — still open; needed before source discovery goes beyond RSS/known sites.
 2. **Legal review** of EU hosting under Law 18-07 (transfer conditions, ANPDP formalities).

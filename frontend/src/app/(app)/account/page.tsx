@@ -5,7 +5,8 @@ import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Field, fieldErrors, Spinner } from "@/components/ui";
-import { api, type MfaSetup, type MfaStatus, type RecoveryCodes } from "@/lib/api";
+import { api, type MfaSetup, type MfaStatus, type RecoveryCodes, type UserSession } from "@/lib/api";
+import { deviceLabel } from "@/lib/format";
 import { useMe } from "@/lib/session";
 
 function RecoveryCodeList({ codes, onDone }: { codes: string[]; onDone: () => void }) {
@@ -167,6 +168,42 @@ function PasswordSection() {
   );
 }
 
+function SessionsSection() {
+  const { t, fmtDate } = useI18n();
+  const qc = useQueryClient();
+  const me = useMe().data!;
+  const q = useQuery({ queryKey: ["sessions"], queryFn: () => api.get<UserSession[]>("/auth/sessions") });
+  const refresh = () => qc.invalidateQueries({ queryKey: ["sessions"] });
+  const revoke = useMutation({ mutationFn: (id: string) => api.del(`/auth/sessions/${id}`), onSuccess: refresh });
+  const others = useMutation({ mutationFn: () => api.del("/auth/sessions"), onSuccess: refresh });
+  const orgName = (id: string) => me.tenants.find((x) => x.id === id)?.name;
+  return (
+    <Card title={t("sessions.title")} action={(q.data?.length ?? 0) > 1 && (
+      <Button variant="ghost" onClick={() => others.mutate()} disabled={others.isPending}>{t("sessions.revokeOthers")}</Button>
+    )}>
+      <ErrorBanner error={q.error ?? revoke.error ?? others.error} />
+      <ul className="divide-y divide-line">
+        {q.data?.map((s) => (
+          <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+            <div>
+              <p className="flex items-center gap-2 font-medium">
+                {deviceLabel(s.user_agent) ?? t("sessions.unknownDevice")}
+                {s.current && <Badge tone="brand">{t("sessions.current")}</Badge>}
+              </p>
+              <p className="text-xs text-ink-mute">
+                {orgName(s.tenant_id)}{s.ip && <> · <span dir="ltr">{s.ip}</span></>} · {t("sessions.lastActive")} {fmtDate(s.last_active_at)}
+              </p>
+            </div>
+            {!s.current && (
+              <Button variant="ghost" onClick={() => revoke.mutate(s.id)} disabled={revoke.isPending}>{t("sessions.revoke")}</Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 export default function AccountPage() {
   const { t } = useI18n();
   const me = useMe().data!;
@@ -183,6 +220,7 @@ export default function AccountPage() {
       </Card>
       <PasswordSection />
       <MfaSection />
+      <SessionsSection />
     </div>
   );
 }

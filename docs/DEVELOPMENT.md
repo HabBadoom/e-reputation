@@ -19,8 +19,11 @@ cd backend && uv sync && uv run alembic upgrade head
 REPINTEL_JWT_SECRET=… REPINTEL_COOKIE_SECURE=false \
 REPINTEL_DATABASE_URL=postgresql+psycopg://repintel_app:repintel_app@localhost:5432/repintel \
   uv run uvicorn app.main:app --reload
+uv run python -m app.jobs.worker      # in another terminal: emails + monitoring scheduler
 cd ../frontend && npm install && npm run dev
 ```
+
+Without the worker, emails and monitoring runs stay queued (visible with `SELECT * FROM job_stats()` as the owner role).
 
 **First install:** commit the generated `backend/uv.lock` and `frontend/package-lock.json`, then switch CI to `uv sync --frozen` / `npm ci`.
 
@@ -45,6 +48,8 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_EMAIL_VERIFY_TTL_SECONDS` | `172800` | 48 h |
 | `REPINTEL_PASSWORD_RESET_TTL_SECONDS` | `3600` | 1 h |
 | `REPINTEL_MFA_CHALLENGE_TTL_SECONDS` | `300` | Time to enter the code after the password |
+| `REPINTEL_DEFAULT_PLAN` | empty | Plan key for new organizations; empty = plan flagged `is_default` (`trial`) |
+| `REPINTEL_TRIAL_DAYS` | `14` | Recorded on the subscription (not enforced yet) |
 | `REPINTEL_REDIS_URL` | `redis://localhost:6379/0` | Rate limiting |
 | `REPINTEL_RABBITMQ_URL` | `amqp://guest:guest@localhost:5672/` | From M2 |
 | `REPINTEL_ACCESS_TOKEN_TTL_SECONDS` | `900` | |

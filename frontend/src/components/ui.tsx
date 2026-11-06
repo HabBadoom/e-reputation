@@ -2,7 +2,7 @@
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { ApiError } from "@/lib/api";
-import { LOCALES } from "@/lib/i18n";
+import { hasMessage, LOCALES } from "@/lib/i18n";
 import { useI18n } from "./providers";
 
 type Variant = "primary" | "ghost" | "danger";
@@ -71,7 +71,11 @@ export function Badge({ tone = "neutral", children }: { tone?: keyof typeof tone
 export function ErrorBanner({ error }: { error: unknown }) {
   const { t } = useI18n();
   if (!error) return null;
-  const msg = error instanceof ApiError ? error.message : t("common.error");
+  // Known error codes get a translated message; otherwise the server's (English) message.
+  const key = error instanceof ApiError ? `err.${error.code}` : "";
+  const msg = hasMessage(key) ? t(key)
+    : error instanceof ApiError && error.status === 403 ? t("err.forbidden")
+    : error instanceof ApiError ? error.message : t("common.error");
   const rid = error instanceof ApiError ? error.requestId : undefined;
   return (
     <div role="alert" className="rounded border border-signal-neg/30 bg-signal-neg/5 px-3 py-2 text-sm text-signal-neg">

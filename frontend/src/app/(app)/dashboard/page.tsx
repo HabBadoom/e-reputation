@@ -47,9 +47,24 @@ export default function DashboardPage() {
       )}
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label={t("dash.brands")} value={d.brands_total} sub={`${d.brands_active} ${t("dash.active")}`} />
-        <Stat label={t("dash.aliases")} value={d.aliases_total} />
+        <Stat label={t("dash.projects")} value={d.projects_total} sub={`${d.projects_active} ${t("dash.active")}`} />
         <Stat label={t("dash.members")} value={d.members_total} />
+        <Stat label={t("dash.products")} value={d.products_total} />
+        <Stat label={t("dash.competitors")} value={d.competitors_total} />
+        <Stat label={t("dash.aliases")} value={d.aliases_total} />
       </div>
+      {d.last_run && (
+        <Card title={t("dash.lastRun")}>
+          <p className="text-sm">
+            <Link href="/monitoring" className="font-medium hover:underline">{d.last_run.project_name}</Link>
+            {" · "}{t(`monitoring.run.${d.last_run.status}`)}
+            {d.last_run.finished_at && <span className="text-ink-mute"> · {fmtDate(d.last_run.finished_at)}</span>}
+          </p>
+          {d.last_run.reason === "no_active_connectors" && (
+            <p className="mt-1 text-xs text-ink-soft">{t("monitoring.noConnectors")}</p>
+          )}
+        </Card>
+      )}
       <div className="grid gap-4 sm:grid-cols-3">
         <Unavailable label={t("dash.mentions")} cap={d.mentions} />
         <Unavailable label={t("dash.sentiment")} cap={d.sentiment} />

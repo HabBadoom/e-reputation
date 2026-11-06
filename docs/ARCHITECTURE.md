@@ -47,7 +47,11 @@ backend/app/
   modules/
     auth/      register, login, refresh, logout, me, switch-tenant
     tenancy/   tenants, memberships, roles, permissions, RBAC dependency
-    brands/    brands + aliases (first tenant-scoped business resource)
+    brands/    brands + aliases
+    catalog/   products, competitors, keywords (per brand)
+    monitoring/ projects, runs, query plan, run executor
+    billing/   plans & entitlements (limits from the database)
+    notifications/ email providers (Brevo) and templates
     audit/     append-only audit log
   api/v1/      router assembly
 migrations/    Alembic; RLS policies live in migrations, not in ORM code
@@ -87,5 +91,5 @@ Global tables (`users`, `roles`, `permissions`, `role_permissions`) are not tena
 | Sync vs async SQLAlchemy | Sync (psycopg 3), FastAPI runs it in threadpool | Simpler transaction/RLS handling; adequate for MVP load. Revisit if profiling says so. |
 | Tenant in token vs header | Token (`tid`), switch via endpoint | Client can't forge tenant; one less check to forget. |
 | Search | Postgres FTS first, OpenSearch from Phase 3 | Avoid running OpenSearch before there's content to index. |
-| Queue | RabbitMQ (in compose now, used from Phase 2) | Per spec. |
+| Queue | **PostgreSQL job queue** (transactional outbox, `FOR UPDATE SKIP LOCKED`) — deviation from spec | Jobs are created in the same transaction as the change that causes them (no email for a rolled-back signup, no lost job if a broker is down) and there is one less service to run. Access only through SECURITY DEFINER functions. `app/jobs/queue.py` is the only interface, so RabbitMQ can replace it when volume/fan-out justifies it (browser fleet, Milestone 6). RabbitMQ stays in compose for that. |
 | IDs | UUIDv4 | No enumeration; safe across tenants. |

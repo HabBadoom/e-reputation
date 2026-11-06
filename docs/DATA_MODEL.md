@@ -33,9 +33,22 @@ erDiagram
 
 Conventions: UUIDv4 primary keys, `timestamptz` everywhere, CHECK constraints for enumerations, JSONB only for `audit_logs.metadata`.
 
+## Milestone 1.1 & 2 tables
+
+| Table | Scope | Notes |
+|---|---|---|
+| `user_tokens`, `user_mfa`, `mfa_recovery_codes` | user | own-row RLS; tokens/codes stored as SHA-256, MFA secret Fernet-encrypted |
+| `plans`, `plan_entitlements` | global, read-only to app | NULL entitlement = unlimited |
+| `subscriptions` | tenant | one per tenant; app can read/insert, not change plan |
+| `products`, `competitors` | tenant | composite FK to brand; `aliases text[]`; unique `(brand_id, lower(name))` |
+| `brand_keywords` | tenant | `kind ∈ include/exclude`; unique `(brand_id, kind, lower(expression))` |
+| `monitoring_projects` | tenant | frequency 15 min–7 days; `next_run_at` NULL when paused |
+| `monitoring_runs` | tenant | `trigger ∈ schedule/manual`, `status ∈ queued/running/completed/skipped/failed`, `summary jsonb` |
+| `jobs` | system | RLS forced, **no** policy or grant: reachable only via `enqueue_job`, `claim_jobs`, `complete_job`, `fail_job`, `requeue_stale_jobs`, `schedule_due_monitoring`, `job_stats` |
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:
-products, competitors, brand_keywords, monitoring_projects (M2) · source_* tables, mentions, collection_* , deduplication_records (M3) · dialect_expressions, language_annotations, language_model_versions, language_evaluation_runs (M4) · mention_analysis, sentiment_history, trend_events, crisis_events, reputation_metrics, competitor_analysis, notifications, reports (M5) · browser_* , captcha_events, human_interventions (M6) · ai_tasks, ai_actions, agent_runs, approval_requests (M7) · subscriptions, invoices, entitlements (M8).
+source_* tables, mentions, collection_* , deduplication_records (M3) · dialect_expressions, language_annotations, language_model_versions, language_evaluation_runs (M4) · mention_analysis, sentiment_history, trend_events, crisis_events, reputation_metrics, competitor_analysis, notifications, reports (M5) · browser_* , captcha_events, human_interventions (M6) · ai_tasks, ai_actions, agent_runs, approval_requests (M7) · subscriptions, invoices, entitlements (M8).
 
 `mentions` will keep `original_text` immutable alongside `normalized_text`, `content_hash`, `source_url`, `collection_method`, `connector_version`, `published_at` (nullable — never invented) and `collected_at`.

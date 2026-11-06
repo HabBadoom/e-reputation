@@ -6,7 +6,7 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 
 - **Auth**: browser → httpOnly cookies + `X-CSRF-Token` header (value of the `ri_csrf` cookie) on POST/PATCH/DELETE. API client → send `X-Auth-Mode: token` on login/register/refresh to receive tokens in the body, then `Authorization: Bearer <access_token>`.
 - **Tenant**: always the tenant in your token. Switch with `POST /auth/switch-tenant`.
-- **Errors**: `{"error": {"code", "message", "request_id", "details?"}}`. Codes include `unauthorized`, `token_expired`, `membership_revoked`, `forbidden`, `csrf_failed`, `not_found`, `conflict`, `duplicate`, `last_owner`, `email_taken`, `email_unverified`, `invalid_token`, `invalid_mfa_code`, `mfa_enabled`, `already_verified`, `validation_error`, `rate_limited`, `internal_error`.
+- **Errors**: `{"error": {"code", "message", "request_id", "details?"}}`. Codes include `unauthorized`, `token_expired`, `membership_revoked`, `forbidden`, `csrf_failed`, `not_found`, `conflict`, `duplicate`, `last_owner`, `email_taken`, `email_unverified`, `invalid_token`, `invalid_mfa_code`, `mfa_enabled`, `already_verified`, `session_revoked`, `plan_limit_reached` (402), `run_in_progress`, `invalid_invitation`, `validation_error`, `rate_limited`, `internal_error`.
 - **Pagination**: `limit` + `offset`, response `{items, total, limit, offset}`.
 - **Request IDs**: send `X-Request-ID` to correlate; always echoed back.
 - Resources in another tenant return **404**, identical to non-existent ones.
@@ -15,7 +15,7 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| POST | `/auth/register` | public, rate-limited | Creates user + organization (owner) |
+| POST | `/auth/register` | public, rate-limited | Creates user + organization (owner), or joins one with `invitation_token` instead of `organization_name` |
 | POST | `/auth/login` | public, rate-limited | Optional `tenant_id` |
 | POST | `/auth/login/mfa` | MFA challenge token | `{mfa_token, code}`; code = 6 digits or recovery code. When MFA is on, `/auth/login` returns `{mfa_required: true, mfa_token, expires_in}` instead of a session |
 | POST | `/auth/email/verify` | public | `{token}` from the email link |
@@ -46,6 +46,20 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | DELETE | `/brands/{id}/aliases/{alias_id}` | `brands:write` | |
 | GET | `/dashboard/summary` | `brands:read` | Real counts; unbuilt capabilities flagged `available: false` |
 | GET | `/audit-logs` | `audit:read` | |
+| GET / DELETE | `/auth/sessions` | authenticated | List own sessions; DELETE = sign out all others |
+| DELETE | `/auth/sessions/{id}` | authenticated | Sign out one session (immediate) |
+| GET | `/organization/plan` | `tenant:read` | Plan, limits (`null` = unlimited) and usage |
+| GET / POST | `/brands/{id}/products` | `brands:read` / `brands:write` | `{name, category, description, aliases[]}` |
+| PATCH / DELETE | `/brands/{id}/products/{pid}` | `brands:write` | |
+| GET / POST | `/brands/{id}/competitors` | read / write | `{name, website, aliases[], notes}`; plan limit per brand |
+| PATCH / DELETE | `/brands/{id}/competitors/{cid}` | `brands:write` | |
+| GET / POST | `/brands/{id}/keywords` | read / write | `{expression, kind: include\|exclude, language?}` |
+| DELETE | `/brands/{id}/keywords/{kid}` | `brands:write` | |
+| GET / POST | `/monitoring-projects` | `monitoring:read` / `monitoring:write` | `{name, brand_id, frequency_minutes, include_competitors, languages[], status}` |
+| GET / PATCH / DELETE | `/monitoring-projects/{id}` | read / write | Pausing clears `next_run_at`; resuming schedules now |
+| POST | `/monitoring-projects/{id}/runs` | `monitoring:write` | 202, queues a manual run; 409 if one is queued/running |
+| GET | `/monitoring-projects/{id}/runs` | `monitoring:read` | Latest runs with `summary` |
+| GET | `/monitoring-projects/{id}/query-plan` | `monitoring:read` | Exact terms/exclusions a run will search |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
 ## Example (API client)

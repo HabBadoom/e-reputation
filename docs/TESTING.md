@@ -11,6 +11,10 @@
 | `backend/tests/sql/test_rls_user_tables.sql` | Tokens, MFA secrets and recovery codes are visible/writable only by their owner; token lookup is purpose-bound | `make test-sql` |
 | `backend/tests/test_totp.py` | RFC 6238 Appendix B vectors, drift window, replay rejection | `make test-api` |
 | `backend/tests/test_account_security.py` | Verification (localized email, single use, expiry, resend, invitation gate), reset (no enumeration, single use, sessions revoked), change password, MFA (challenge, replay, recovery codes, attempt limit, disable, encryption at rest, revoked member) | 〃 |
+| `backend/tests/sql/test_rls_monitoring.sql` | Catalog/monitoring/subscription isolation, composite FKs, plans read-only, jobs unreachable directly, tenant-bound enqueue, scheduler once-only, no double claim, retry → dead-letter | `make test-sql` |
+| `backend/tests/test_monitoring.py` | Catalog CRUD and validation, viewer restrictions, cross-tenant 404s on every catalog/monitoring route, manual run → honest `skipped` result, scheduler (due/paused/resume), query plan | `make test-api` |
+| `backend/tests/test_platform.py` | Queue retries/backoff/dead-letter/unknown kind, transactional enqueue, email retry on provider failure, sessions list/revoke/immediate logout, plan limits (402), subscriptions, invitation email + sign-up through invitation | 〃 |
+| `backend/tests/test_query_plan.py` | Query plan grouping, dedupe, exclusions, search string | 〃 |
 | `backend/tests/test_brands.py` | Brand CRUD, multi-script aliases, duplicates, LIKE escaping, pagination, script heuristic | 〃 |
 
 Tests use a real PostgreSQL (no SQLite, no mocks of RLS). Each test truncates data tables via the owner role.

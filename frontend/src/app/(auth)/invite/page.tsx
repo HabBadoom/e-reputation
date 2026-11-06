@@ -24,9 +24,12 @@ function Invite() {
       {me.isLoading ? <Spinner /> : me.isError ? (
         <>
           <p className="text-sm text-ink-soft">{t("invite.needLogin")}</p>
-          <Link href={`/login?next=${next}`} className="mt-4 inline-block text-sm text-brand hover:underline">
-            {t("auth.login")}
-          </Link>
+          <div className="mt-4 flex flex-col gap-2 text-sm">
+            <Link href={`/login?next=${next}`} className="text-brand hover:underline">{t("auth.login")}</Link>
+            <Link href={`/register?invite=${encodeURIComponent(token)}`} className="text-brand hover:underline">
+              {t("invite.createAccount")}
+            </Link>
+          </div>
         </>
       ) : (
         <div className="space-y-4">

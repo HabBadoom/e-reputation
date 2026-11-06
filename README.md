@@ -2,7 +2,7 @@
 
 Multi-tenant SaaS for monitoring brand reputation, built first for Algeria (French, Arabic, Darija, Arabizi) with an architecture meant for international expansion. `RepIntel` is a placeholder name.
 
-**Current state: Milestone 1.1 (Foundation + account security).** Accounts with email verification, password reset and two-step verification (TOTP), organizations, team roles, brands with multi-script aliases, audit log, French/Arabic (RTL)/English UI, enforced tenant isolation. **No content is collected yet**: the dashboard says so explicitly instead of showing sample numbers. See [ROADMAP](docs/ROADMAP.md).
+**Current state: Milestone 2 (Brands & monitoring).** Accounts with email verification, password reset, two-step verification and session management; organizations, team roles, plan limits; brands with products, competitors and keywords; monitoring projects with a scheduler and background worker; brands with multi-script aliases, audit log, French/Arabic (RTL)/English UI, enforced tenant isolation. **No content is collected yet**: the dashboard says so explicitly instead of showing sample numbers. See [ROADMAP](docs/ROADMAP.md).
 
 ## Quick start
 

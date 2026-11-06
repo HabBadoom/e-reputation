@@ -91,6 +91,8 @@ export interface Invitation {
 export interface Capability { available: boolean; reason: string | null }
 export interface Dashboard {
   brands_total: number; brands_active: number; aliases_total: number; members_total: number;
+  products_total: number; competitors_total: number; projects_total: number; projects_active: number;
+  last_run: { project_name: string; status: RunStatus; finished_at: string | null; reason: string | null } | null;
   recent_activity: { action: string; actor_email: string | null; created_at: string }[];
   mentions: Capability; sentiment: Capability; sources: Capability;
 }
@@ -105,3 +107,22 @@ export type LoginResult = MfaChallenge | SessionTokens;
 export interface MfaStatus { enabled: boolean; recovery_codes_remaining: number }
 export interface MfaSetup { secret: string; otpauth_uri: string }
 export interface RecoveryCodes { recovery_codes: string[] }
+export interface Product { id: string; name: string; category: string; description: string; aliases: string[]; created_at: string }
+export interface Competitor { id: string; name: string; website: string | null; aliases: string[]; notes: string; created_at: string }
+export interface Keyword { id: string; expression: string; kind: "include" | "exclude"; language: string | null; created_at: string }
+export type RunStatus = "queued" | "running" | "completed" | "skipped" | "failed";
+export interface MonitoringRun {
+  id: string; trigger: "schedule" | "manual"; status: RunStatus; queued_at: string;
+  started_at: string | null; finished_at: string | null; summary: Record<string, unknown>; error: string | null;
+}
+export interface MonitoringProject {
+  id: string; name: string; brand_id: string; brand_name: string; status: "active" | "paused";
+  frequency_minutes: number; include_competitors: boolean; languages: string[];
+  next_run_at: string | null; last_run_at: string | null; last_run: MonitoringRun | null; created_at: string;
+}
+export interface QueryGroup { entity_type: "brand" | "product" | "competitor"; entity_name: string; terms: string[]; exclude: string[]; search_string: string }
+export interface UserSession { id: string; current: boolean; tenant_id: string; user_agent: string | null; ip: string | null; started_at: string; last_active_at: string }
+export interface PlanUsage {
+  plan_key: string; plan_name: string; status: string; trial_ends_at: string | null;
+  limits: Record<string, number | null>; usage: Record<string, number>;
+}

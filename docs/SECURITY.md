@@ -25,6 +25,7 @@ Pre-authentication lookups (login by email, refresh token, invitation token) use
 - API clients: `X-Auth-Mode: token` returns tokens in the body; send `Authorization: Bearer`.
 - Rate limiting: login per-email (10/min) and per-IP (30/min); register per-IP (20/h). Redis-backed and **fails closed** if Redis is down.
 - Disabling a user, removing a member or changing a role takes effect on the next request (tested), not at token expiry.
+- **Sessions**: every access token carries its session id (`sid` = refresh-token family). Each request checks the session is still live, so logout, "sign out this device", "sign out everywhere else", password change/reset take effect immediately (tested). Users can list and revoke their sessions; they can't see or revoke anyone else's (RLS, tested).
 
 ## Account security (Milestone 1.1)
 
@@ -36,6 +37,17 @@ Pre-authentication lookups (login by email, refresh token, invitation token) use
 - All tokens in emails are 256-bit random values stored only as SHA-256 hashes, looked up through `auth_find_user_token` (SECURITY DEFINER, bound to purpose).
 - RLS on `user_tokens`, `user_mfa`, `mfa_recovery_codes`: own rows only (tested in `tests/sql/test_rls_user_tables.sql`).
 - **Brevo API key**: environment / secret manager only; never logged (error logs record only status and Brevo's error message).
+
+## Background jobs (Milestone 2)
+
+- The `jobs` table is not readable or writable by the app role; only SECURITY DEFINER functions touch it. `enqueue_job` refuses to create a job for a tenant other than the current one.
+- The worker runs each job with the DB context set to the job's tenant (no user), so RLS still applies to everything a handler reads or writes.
+- Email jobs are marked sensitive: their payload (which may contain a sign-in link) is wiped once delivered.
+- Delivery is at-least-once (a job whose worker dies is re-queued after 15 min); handlers are written to tolerate repeats.
+
+## Plans
+
+Limits are read from `plans`/`plan_entitlements` and enforced server-side (HTTP 402 `plan_limit_reached`). Tenants can read but not change their subscription.
 
 ## RBAC
 
@@ -54,10 +66,8 @@ Roles `owner (100) > admin (80) > analyst (50) > viewer (10)`; permissions are r
 
 | Item | Milestone |
 |---|---|
-| Session list & remote revoke UI | 2 |
-| Email sending through a queue with retries (currently synchronous) | 2 |
-| Optional org policy "MFA required for all members" | 2 |
-| Registration with an invite token (no new org created) | 2 |
+| Optional org policy "MFA required for all members" | 3 |
+| Separate DB role for the worker (today it shares the API role and calls the queue functions) | 6 |
 | Secret manager integration (Vault / cloud KMS) | 8 |
 | SSRF-safe fetcher, egress allowlist for workers | 3 / 6 |
 | Prompt-injection defences | 7 |

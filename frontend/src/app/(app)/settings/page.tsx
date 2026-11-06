@@ -2,11 +2,58 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import type { MessageKey } from "@/lib/i18n";
 import { useI18n } from "@/components/providers";
 import { Button, Card, ErrorBanner, Field, Spinner } from "@/components/ui";
-import { api, type Organization } from "@/lib/api";
+import { api, type Organization, type PlanUsage } from "@/lib/api";
+import { frequencyLabel } from "@/lib/format";
 import { LOCALES } from "@/lib/i18n";
 import { useCan } from "@/lib/session";
+
+const USAGE_KEYS = ["max_brands", "max_monitoring_projects", "max_members"] as const;
+
+function PlanCard() {
+  const { t, fmtDate } = useI18n();
+  const q = useQuery({ queryKey: ["plan"], queryFn: () => api.get<PlanUsage>("/organization/plan") });
+  if (!q.data) return <ErrorBanner error={q.error} />;
+  const p = q.data;
+  const freq = p.limits.min_frequency_minutes;
+  return (
+    <Card title={t("plan.title")}>
+      <p className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-medium">{p.plan_name}</span>
+        {p.trial_ends_at && p.status === "trialing" && (
+          <span className="text-ink-mute">· {t("plan.trialEnds", { date: fmtDate(p.trial_ends_at) })}</span>
+        )}
+      </p>
+      <ul className="space-y-3">
+        {USAGE_KEYS.map((k) => {
+          const limit = p.limits[k];
+          const used = p.usage[k] ?? 0;
+          const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+          return (
+            <li key={k}>
+              <div className="mb-1 flex justify-between text-sm">
+                <span>{t(`plan.${k}` as MessageKey)}</span>
+                <span className="tabular-nums text-ink-soft">{used} / {limit ?? t("plan.unlimited")}</span>
+              </div>
+              {limit !== null && (
+                <div className="h-1.5 rounded bg-paper-sunk">
+                  <div className={`h-1.5 rounded ${pct >= 100 ? "bg-signal-neg" : "bg-brand"}`} style={{ width: `${pct}%` }} />
+                </div>
+              )}
+            </li>
+          );
+        })}
+        <li className="flex justify-between text-sm">
+          <span>{t("plan.min_frequency_minutes")}</span>
+          <span className="text-ink-soft">{freq ? frequencyLabel(freq, t) : t("plan.unlimited")}</span>
+        </li>
+      </ul>
+      <p className="mt-4 text-xs text-ink-mute">{t("plan.contact")}</p>
+    </Card>
+  );
+}
 
 export default function SettingsPage() {
   const { t } = useI18n();
@@ -43,6 +90,7 @@ export default function SettingsPage() {
           <p className="font-mono text-xs text-ink-mute" dir="ltr">{org.data?.slug}</p>
         </form>
       </Card>
+      <PlanCard />
     </div>
   );
 }
