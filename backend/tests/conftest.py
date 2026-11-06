@@ -25,8 +25,8 @@ from app.core.rate_limit import MemoryLimiter, get_limiter  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
-DATA_TABLES = ["mentions", "sources", "jobs", "monitoring_runs", "monitoring_projects", "brand_keywords",
-               "competitors", "products", "subscriptions", "audit_logs", "brand_aliases",
+DATA_TABLES = ["mentions", "sources", "jobs", "monitoring_runs", "monitoring_projects",
+               "brand_keywords", "competitors", "products", "subscriptions", "audit_logs", "brand_aliases",
                "brands", "invitations", "refresh_tokens", "mfa_recovery_codes", "user_mfa",
                "user_tokens", "memberships", "tenants", "users"]
 

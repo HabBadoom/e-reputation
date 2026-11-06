@@ -65,7 +65,7 @@ class Settings(BaseSettings):
 
     # Fetching third-party pages / feeds.
     crawler_user_agent: str = "RepIntelBot/0.1 (+https://example.com/bot)"
-    crawler_robots_token: str = "RepIntelBot"
+    crawler_robots_token: str = "RepIntelBot"  # noqa: S105 — robots.txt user-agent, not a secret
     fetch_timeout_seconds: float = 10.0
     fetch_max_bytes: int = 2 * 1024 * 1024
     verify_pages: bool = True                # check search hits against the real page

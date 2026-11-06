@@ -1,11 +1,14 @@
 """Minimal, dependency-free HTML extraction (stdlib html.parser)."""
 
 import json
+import logging
 import re
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 
 from app.collection.dates import parse_absolute
+
+log = logging.getLogger("repintel.html")
 
 _SKIP = {"script", "style", "noscript", "template", "svg", "iframe", "head"}
 _BLOCK = {"p", "div", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6", "article", "section",
@@ -71,8 +74,8 @@ class Page:
         try:
             p.feed(html)
             p.close()
-        except Exception:  # noqa: BLE001 — malformed HTML: keep what was parsed
-            pass
+        except Exception as e:  # noqa: BLE001 — malformed HTML: keep what was parsed
+            log.debug("html_parse_partial", extra={"url": url, "error": type(e).__name__})
         text = "".join(p.parts)
         self.text = re.sub(r"[ \t\r\f\v]+", " ", re.sub(r"\n\s*\n+", "\n", text)).strip()
         self.title = " ".join(p.title.split()) or p.meta.get("og:title", "")
