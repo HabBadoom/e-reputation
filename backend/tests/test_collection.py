@@ -254,7 +254,7 @@ def test_sources_api(make_user, internet):
     assert api.delete(f"/api/v1/sources/{sid}").status_code == 204
 
     conns = {c["key"]: c for c in api.get("/api/v1/connectors").json()}
-    assert set(conns) == {"serper", "rss", "web"}
+    assert set(conns) == {"serper", "rss", "web", "browser"}
     assert conns["serper"]["configured"] is True
     assert conns["serper"]["review_status"] == "pending_legal_review"
     assert "Google" in conns["serper"]["legal_basis"]

@@ -183,7 +183,8 @@ def test_plan_limits_are_enforced(make_user, owner_engine):
     assert api.post("/api/v1/invitations", json={"email": "m0@example.dz"}).status_code == 201
 
     usage = api.get("/api/v1/organization/plan").json()["usage"]
-    assert usage == {"max_brands": 2, "max_monitoring_projects": 1, "max_members": 3}
+    assert usage == {"max_brands": 2, "max_monitoring_projects": 1, "max_members": 3,
+                     "max_browser_missions_per_day": 0}
 
 
 def test_new_organizations_get_a_subscription(client, owner_engine):

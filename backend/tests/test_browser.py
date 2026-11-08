@@ -115,7 +115,7 @@ def run_browser(rounds: int = 1) -> BrowserWorker:
 
 
 def _project(api, site, urls):
-    site["serper"][:] = [{"title": "Djezzy", "link": u, "snippet": "Djezzy panne réseau",
+    site["serper"][:] = [{"title": f"Djezzy {i}", "link": u, "snippet": f"Djezzy panne réseau {i}",
                           "position": i} for i, u in enumerate(urls)]
     b = api.post("/api/v1/brands", json={"name": "Djezzy"}).json()
     p = api.post("/api/v1/monitoring-projects", json={
