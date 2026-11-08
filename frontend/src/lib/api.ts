@@ -192,3 +192,54 @@ export interface MetricBlock {
   n: number; macro_f1: number; coverage?: number; accuracy?: number;
   confusion?: Record<string, Record<string, number>>;
 }
+// ---- Milestone 5: reputation intelligence -----------------------------------------------------
+export type Severity = "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export interface DayPoint {
+  day: string; total: number; positive: number; negative: number; neutral: number; mixed: number;
+  uncertain: number; unanalysed: number;
+}
+export interface Totals {
+  total: number; positive: number; negative: number; neutral: number; mixed: number; uncertain: number;
+  unanalysed: number; domains: number; undated: number;
+}
+export interface Reputation { value: number | null; net_sentiment: number | null; sample: number; min_sample: number }
+export interface EntityStat {
+  entity_type: "brand" | "product" | "competitor"; entity_name: string; total: number; positive: number;
+  negative: number; neutral: number; mixed: number; uncertain: number; unanalysed: number;
+  share_of_voice: number | null; reputation: Reputation;
+}
+export interface TrendTopic { brand_id: string; brand: string; topic: string; day: string; count: number; expected: number; z: number }
+export interface Crisis {
+  id: string; brand_id: string; brand: string; status: "active" | "resolved"; severity: Severity;
+  started_at: string; last_detected_at: string; resolved_at: string | null; peak_negative: number;
+  metrics: Record<string, number | string>;
+}
+export interface Overview {
+  brand_id: string | null; days: number; timezone: string; period_start: string; period_end: string;
+  series: DayPoint[]; totals: Totals; previous_totals: Totals; reputation: Reputation;
+  previous_reputation: Reputation; entities: EntityStat[]; topics: TrendTopic[]; active_crises: Crisis[];
+}
+export interface Alert {
+  id: string; rule_id: string | null; kind: string; severity: Severity; title: string; body: string;
+  brand_id: string | null; data: Record<string, unknown>; status: "open" | "acknowledged" | "resolved";
+  acknowledged_at: string | null; resolved_at: string | null; created_at: string;
+}
+export interface AlertSummary { open: number; by_severity: Partial<Record<Severity, number>> }
+export type RuleKind = "negative_mention" | "negative_spike" | "crisis" | "emerging_topic" | "competitor_spike" | "connector_failure";
+export type Channel = "in_app" | "email" | "webhook";
+export interface AlertRule {
+  id: string; name: string; kind: RuleKind; brand_id: string | null; params: Record<string, number | boolean>;
+  min_severity: Severity; channels: Channel[]; notify_roles: RoleKey[]; webhook_id: string | null;
+  enabled: boolean; last_evaluated_at: string | null; created_at: string;
+}
+export interface Webhook {
+  id: string; name: string; url: string; enabled: boolean; last_status: number | null;
+  last_error: string | null; last_delivery_at: string | null; created_at: string; secret?: string;
+}
+export type ReportKind = "daily" | "weekly" | "monthly" | "crisis" | "competitor" | "custom";
+export type ReportFormat = "pdf" | "xlsx" | "csv" | "html";
+export interface Report {
+  id: string; kind: ReportKind; format: ReportFormat; locale: "fr" | "ar" | "en"; brand_id: string | null;
+  period_start: string; period_end: string; status: "queued" | "running" | "ready" | "failed";
+  filename: string | null; size_bytes: number | null; error: string | null; created_at: string; finished_at: string | null;
+}

@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useI18n } from "@/components/providers";
 import { Button, Card, ErrorBanner, Spinner } from "@/components/ui";
-import { api, type Capability, type Dashboard } from "@/lib/api";
+import { ReputationValue, SeverityBadge } from "@/components/intel";
+import { api, type AlertSummary, type Capability, type Dashboard, type Overview } from "@/lib/api";
 import { hasMessage } from "@/lib/i18n";
 import { useCan } from "@/lib/session";
 
@@ -29,9 +30,45 @@ function Unavailable({ label, cap }: { label: string; cap: Capability }) {
   );
 }
 
+/** Reputation (30 days), active crises and open alerts. */
+function IntelTiles() {
+  const { t } = useI18n();
+  const canAlerts = useCan("alerts:read");
+  const o = useQuery({ queryKey: ["analytics", "", 30], queryFn: () => api.get<Overview>("/analytics/overview?days=30") });
+  const a = useQuery({ queryKey: ["alerts-summary"], queryFn: () => api.get<AlertSummary>("/alerts/summary"), enabled: canAlerts });
+  if (!o.data) return null;
+  const crises = o.data.active_crises;
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      <Link href="/analytics" className="card block p-5 hover:border-brand/40">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-mute">{t("dash.reputation30")}</p>
+        <ReputationValue r={o.data.reputation} previous={o.data.previous_reputation} />
+      </Link>
+      <Link href="/alerts?tab=crises"
+            className={`card block p-5 ${crises.length ? "border-signal-neg/40 bg-signal-neg/5" : ""}`}>
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-mute">{t("dash.crises")}</p>
+        <p className={`mt-2 text-3xl font-semibold tabular-nums ${crises.length ? "text-signal-neg" : ""}`}>{crises.length}</p>
+        <p className="mt-1 flex flex-wrap gap-1 text-xs text-ink-soft">
+          {crises.length ? crises.map((c) => <span key={c.id}><SeverityBadge s={c.severity} /> {c.brand}</span>) : t("dash.noCrisis")}
+        </p>
+      </Link>
+      {a.data && (
+        <Link href="/alerts" className="card block p-5 hover:border-brand/40">
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-mute">{t("dash.openAlerts")}</p>
+          <p className="mt-2 text-3xl font-semibold tabular-nums">{a.data.open}</p>
+          <p className="mt-1 text-xs text-ink-soft">
+            {(["CRITICAL", "HIGH", "MEDIUM"] as const).filter((s) => a.data.by_severity[s]).map((s) => `${t(`sev.${s}`)} ${a.data.by_severity[s]}`).join(" · ")}
+          </p>
+        </Link>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { t, fmtDate } = useI18n();
   const canWrite = useCan("brands:write");
+  const canMentions = useCan("mentions:read");
   const q = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get<Dashboard>("/dashboard/summary") });
   if (q.isLoading) return <Spinner />;
   if (q.error || !q.data) return <ErrorBanner error={q.error} />;
@@ -46,6 +83,7 @@ export default function DashboardPage() {
           {canWrite && <Link href="/brands"><Button>{t("brands.new")}</Button></Link>}
         </div>
       )}
+      {canMentions && d.brands_total > 0 && <IntelTiles />}
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label={t("dash.brands")} value={d.brands_total} sub={`${d.brands_active} ${t("dash.active")}`} />
         <Stat label={t("dash.projects")} value={d.projects_total} sub={`${d.projects_active} ${t("dash.active")}`} />

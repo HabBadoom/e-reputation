@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 — Milestone 5: Reputation intelligence (2026-11-08)
+
+### Added
+- Migration 0006: `webhooks`, `alert_rules`, `alerts`, `crisis_events`, `trend_events`, `reports` (RLS), `schedule_alert_evaluations()`, `request_alert_evaluation()`, `alerts:read/manage`, `reports:read/create` permissions.
+- Analytics: daily series by sentiment, reputation index with minimum sample and previous period, share of voice, products, emerging topics — on dated, de-duplicated, on-topic mentions (`docs/REPUTATION_METHODOLOGY.md`).
+- Potential-crisis lifecycle per brand (open, escalate, resolve after 48 h quiet).
+- Alert rules (6 kinds, thresholds, minimum severity, brand scope), recommended defaults, de-duplication and flood cap; channels in-app, e-mail digest (fr/ar/en) and HMAC-signed webhooks with retries; evaluation every 15 min and after each analysis batch.
+- Reports in PDF (sandboxed headless Chromium), Excel, CSV and HTML, in French, Arabic (RTL) and English, with rule-based recommendations and explicit data limitations.
+- UI: Analytics page, Alerts (feed, crises, rules, webhooks), Reports, notification bell, dashboard reputation/crisis/alert tiles.
+
+### Changed
+- Worker image installs Chromium and Latin/Arabic fonts; CI installs Chromium for PDF tests.
+
 ## 0.5.0 — Milestone 4: Algerian language intelligence (2026-11-06)
 
 ### Added

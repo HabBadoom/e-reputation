@@ -1,12 +1,12 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, LangSwitcher, Spinner } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type AlertSummary } from "@/lib/api";
 import type { MessageKey } from "@/lib/i18n";
 import { useMe } from "@/lib/session";
 
@@ -15,6 +15,9 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
   { href: "/brands", key: "nav.brands" },
   { href: "/monitoring", key: "nav.monitoring", perm: "monitoring:read" },
   { href: "/mentions", key: "nav.mentions", perm: "mentions:read" },
+  { href: "/analytics", key: "nav.analytics", perm: "mentions:read" },
+  { href: "/alerts", key: "nav.alerts", perm: "alerts:read" },
+  { href: "/reports", key: "nav.reports", perm: "reports:read" },
   { href: "/sources", key: "nav.sources", perm: "sources:read" },
   { href: "/nlp", key: "nav.nlp" },
   { href: "/team", key: "nav.team" },
@@ -24,9 +27,35 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
 ];
 // Shown disabled so users can see what's coming without being shown fake screens.
 const UPCOMING: { key: MessageKey; milestone: number }[] = [
-  { key: "nav.analytics", milestone: 5 },
-  { key: "nav.reports", milestone: 5 },
+  { key: "nav.browserFleet", milestone: 6 },
+  { key: "nav.agents", milestone: 7 },
 ];
+
+/** Open alerts counter, refreshed every minute. */
+function AlertBell() {
+  const { t } = useI18n();
+  const q = useQuery({
+    queryKey: ["alerts-summary"],
+    queryFn: () => api.get<AlertSummary>("/alerts/summary"),
+    refetchInterval: 60_000,
+  });
+  const n = q.data?.open ?? 0;
+  const urgent = (q.data?.by_severity.CRITICAL ?? 0) + (q.data?.by_severity.HIGH ?? 0) > 0;
+  return (
+    <Link href="/alerts" aria-label={t("bell.label", { n })}
+          className="relative inline-flex h-8 w-8 items-center justify-center rounded text-ink-soft hover:bg-paper-sunk">
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+        <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z" strokeLinejoin="round" />
+        <path d="M10 20a2 2 0 0 0 4 0" strokeLinecap="round" />
+      </svg>
+      {n > 0 && (
+        <span className={`absolute -end-1 -top-1 min-w-[18px] rounded-full px-1 text-center text-[11px] font-semibold leading-[18px] text-white ${urgent ? "bg-signal-neg" : "bg-signal-warn"}`}>
+          {n > 99 ? "99+" : n}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 function UnverifiedBanner() {
   const { t } = useI18n();
@@ -74,7 +103,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-e border-line bg-paper-raised md:flex">
-        <div className="border-b border-line px-5 py-4 text-base font-semibold tracking-tight">{t("app.name")}</div>
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <span className="text-base font-semibold tracking-tight">{t("app.name")}</span>
+          {u.permissions.includes("alerts:read") && <AlertBell />}
+        </div>
         <div className="border-b border-line px-3 py-3">
           {u.tenants.length > 1 ? (
             <select className="field" value={u.tenant.id} onChange={(e) => switchTenant(e.target.value)}
@@ -114,6 +146,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex-1">
         <header className="flex items-center justify-between border-b border-line bg-paper-raised px-4 py-3 md:hidden">
           <span className="font-semibold">{t("app.name")}</span>
+          {u.permissions.includes("alerts:read") && <AlertBell />}
           <nav className="flex gap-3 text-sm">
             {NAV.slice(0, 3).map((n) => <Link key={n.href} href={n.href}>{t(n.key)}</Link>)}
           </nav>

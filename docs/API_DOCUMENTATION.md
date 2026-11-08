@@ -75,6 +75,19 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | POST | `/nlp/corpus/sample` | platform admin | `{n, split}` script-balanced sampling into gold |
 | POST | `/nlp/corpus/{id}/verify`, `/reject` | platform admin | `{labels: {sentiment, sarcasm, about_target, language, intents}}` |
 | GET / POST | `/nlp/benchmark` | platform admin | Runs (metrics) / start a run |
+| GET | `/analytics/overview` | `mentions:read` | `brand_id?, days (1–365)`: daily series, totals vs previous period, reputation index (null below minimum sample), entities with share of voice, emerging topics, active crises |
+| GET | `/crises` | `alerts:read` | `brand_id?, status?` |
+| GET | `/alerts`, `/alerts/summary` | `alerts:read` | Filters `status, severity, kind, brand_id`; summary = open count by severity |
+| POST | `/alerts/{id}/acknowledge`, `/resolve`, `/alerts/acknowledge-all` | `alerts:manage` | |
+| POST | `/alerts/evaluate` | `alerts:manage` | 202, queues an evaluation now (once while pending) |
+| GET / POST | `/alert-rules` | `alerts:read` / `alerts:manage` | `{name, kind, brand_id?, params{min_count, z_threshold, max_age_days, error_threshold, escalation_only}, min_severity, channels[in_app,email,webhook], notify_roles, webhook_id?}` |
+| POST | `/alert-rules/defaults` | `alerts:manage` | Adds recommended rules for missing kinds (idempotent) |
+| PATCH / DELETE | `/alert-rules/{id}` | `alerts:manage` | |
+| GET / POST | `/webhooks` | `alerts:manage` | POST `{name, url}` (public https only) returns the signing `secret` **once** |
+| PATCH / DELETE | `/webhooks/{id}`; POST `/webhooks/{id}/test`, `/rotate-secret` | `alerts:manage` | test sends a signed `ping` |
+| POST | `/reports` | `reports:create` | 202 `{kind: daily\|weekly\|monthly\|crisis\|competitor\|custom, format: pdf\|xlsx\|csv\|html, locale, brand_id?, period_start?, period_end?}` (custom needs a period ≤ 366 days, timezone-aware) |
+| GET | `/reports`, `/reports/{id}`, `/reports/{id}/download` | `reports:read` | download 409 until `ready`; always an attachment |
+| DELETE | `/reports/{id}` | `reports:create` | |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
 ## Example (API client)
@@ -84,4 +97,27 @@ curl -s -X POST localhost:8000/api/v1/auth/login -H 'content-type: application/j
   -H 'x-auth-mode: token' -d '{"email":"me@example.dz","password":"…"}'
 # → {"access_token":"…","refresh_token":"…","expires_in":900,"tenant_id":"…"}
 curl -s localhost:8000/api/v1/brands -H "authorization: Bearer $ACCESS"
+```
+
+## Webhooks
+
+Each new alert is POSTed as JSON (`event: "alert.created"`, `id`, `tenant_id`, `created_at`, `alert{kind, severity, title, body, brand_id, status, data, url}`), with headers:
+
+| Header | Value |
+|---|---|
+| `X-RepIntel-Event` | `alert.created` or `ping` |
+| `X-RepIntel-Delivery` | alert id (idempotency key) |
+| `X-RepIntel-Timestamp` | Unix seconds |
+| `X-RepIntel-Signature` | `sha256=` + hex HMAC-SHA256(secret, `"{timestamp}.{raw body}"`) |
+
+Verify in constant time and reject timestamps older than ~5 minutes. Non-2xx answers, redirects and timeouts are retried with backoff (5 attempts), and the last status/error is shown in the UI.
+
+```python
+import hmac, hashlib, time
+def verify(secret: str, headers, body: bytes) -> bool:
+    ts = headers["X-RepIntel-Timestamp"]
+    if abs(time.time() - int(ts)) > 300:
+        return False
+    mac = hmac.new(secret.encode(), f"{ts}.".encode() + body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest("sha256=" + mac, headers["X-RepIntel-Signature"])
 ```

@@ -78,6 +78,14 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_LOGIN_RATE_LIMIT_PER_MINUTE` | `10` | Per email; per-IP is 3× |
 | `REPINTEL_REGISTER_RATE_LIMIT_PER_HOUR` | `20` | Per IP |
 | `REPINTEL_LOG_LEVEL` | `INFO` | JSON logs to stdout |
+| `REPINTEL_ANALYTICS_TIMEZONE` | `Africa/Algiers` | Calendar days for analytics, alerts and reports |
+| `REPINTEL_REPUTATION_MIN_SAMPLE` | `10` | Analysed mentions needed before showing the reputation index |
+| `REPINTEL_TREND_BASELINE_DAYS` | `28` | History used as the usual level for spikes and topics |
+| `REPINTEL_CRISIS_QUIET_HOURS` | `48` | A potential crisis is resolved after this long undetected |
+| `REPINTEL_ALERT_EVAL_EVERY_MINUTES` | `15` | Periodic evaluation of alert rules |
+| `REPINTEL_ALERTS_PER_RULE_PER_RUN` | `20` | Flood guard |
+| `REPINTEL_REPORT_RENDER_TIMEOUT_SECONDS` | `60` | PDF rendering timeout |
+| `REPINTEL_REPORT_MAX_BYTES` | `20000000` | Largest stored report |
 | `REPINTEL_BACKEND_URL` (frontend, build time) | `http://localhost:8000` | Target of the `/api/*` rewrite |
 
 ## Adding a tenant-scoped table (checklist)

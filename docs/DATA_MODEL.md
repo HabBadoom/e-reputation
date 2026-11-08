@@ -64,6 +64,19 @@ Conventions: UUIDv4 primary keys, `timestamptz` everywhere, CHECK constraints fo
 | `dialect_expressions` | platform, read-only | seed lexicon (`seed_unvalidated`) |
 | `users.is_platform_admin`, `tenants.nlp_corpus_opt_in` | — | flag protected by trigger; opt-in per organization |
 
+## Milestone 5 tables
+
+| Table | Scope | Notes |
+|---|---|---|
+| `webhooks` | tenant | https-only URL (CHECK), Fernet-encrypted signing secret, last delivery status |
+| `alert_rules` | tenant | `kind`, optional brand (composite FK), `params`, `min_severity`, `channels ⊂ {in_app,email,webhook}`, `notify_roles`, webhook (composite FK, SET NULL) |
+| `alerts` | tenant | unique `(tenant_id, dedup_key)`; `status ∈ open/acknowledged/resolved`; `data` holds the measured facts |
+| `crisis_events` | tenant | one active per brand (partial unique index); severity, peak, metrics, resolution |
+| `trend_events` | tenant | emerging topics per brand and day (unique on `lower(topic)`) |
+| `reports` | tenant | kind, period, format, locale, status, content (bytea), filename |
+
+Daily sentiment and reputation figures are computed on demand from `mentions` + `mention_analysis` (single source of truth) — see `REPUTATION_METHODOLOGY.md`.
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

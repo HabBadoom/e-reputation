@@ -23,6 +23,9 @@
 | `backend/tests/test_nlp_basics.py` | Script/language/Darija/code-switching detection, normaliser traceability, metrics (macro-F1, confusion, coverage, multi-label) | `make test-api` |
 | `backend/tests/test_nlp_ensemble.py` | Majority, arbitration, UNCERTAIN, invalid outputs rejected, fatal errors, injection framing, lexicon hints | 〃 |
 | `backend/tests/test_nlp.py` | Mocked OpenAI end to end: 3 annotators, arbitration, not-configured/production gate, auth failure stops batch, corrections/filters/permissions/isolation, corpus opt-in & purge, gold review, benchmark metrics, validation flags, analysis after collection | 〃 |
+| `backend/tests/sql/test_rls_intelligence.sql` | Alerts, rules, webhooks, crises, reports isolated; no cross-tenant webhook wiring; https only; alert de-duplication; evaluation scheduled once per tenant, on-demand evaluation bound to the caller's tenant | `make test-sql` |
+| `backend/tests/test_analytics_stats.py` | Reputation index, Poisson z, spikes, emerging topics, crisis assessment, share of voice | `make test-api` |
+| `backend/tests/test_intelligence.py` | Overview counts (reposts/homonyms excluded, min sample), crisis open → no duplicates → resolved, undated/old mentions don't alert, competitor spike, min severity, rule validation & RBAC, ack/resolve, signed webhook delivery + HMAC check + failure recorded + SSRF refusal, reports CSV/XLSX/HTML/PDF, period validation, isolation | 〃 |
 | `backend/tests/test_brands.py` | Brand CRUD, multi-script aliases, duplicates, LIKE escaping, pagination, script heuristic | 〃 |
 
 Tests use a real PostgreSQL (no SQLite, no mocks of RLS). Each test truncates data tables via the owner role.
