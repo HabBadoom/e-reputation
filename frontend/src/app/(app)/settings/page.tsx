@@ -10,7 +10,7 @@ import { frequencyLabel } from "@/lib/format";
 import { LOCALES } from "@/lib/i18n";
 import { useCan } from "@/lib/session";
 
-const USAGE_KEYS = ["max_brands", "max_monitoring_projects", "max_members"] as const;
+const USAGE_KEYS = ["max_brands", "max_monitoring_projects", "max_members", "max_browser_missions_per_day"] as const;
 
 function PlanCard() {
   const { t, fmtDate } = useI18n();

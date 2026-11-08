@@ -88,6 +88,12 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | POST | `/reports` | `reports:create` | 202 `{kind: daily\|weekly\|monthly\|crisis\|competitor\|custom, format: pdf\|xlsx\|csv\|html, locale, brand_id?, period_start?, period_end?}` (custom needs a period ≤ 366 days, timezone-aware) |
 | GET | `/reports`, `/reports/{id}`, `/reports/{id}/download` | `reports:read` | download 409 until `ready`; always an attachment |
 | DELETE | `/reports/{id}` | `reports:create` | |
+| GET | `/browser/missions`, `/browser/missions/{id}` | `browser:read` | Filters `status, kind`; detail = authorization record, event timeline, sessions, challenges |
+| POST | `/browser/missions/{id}/cancel` | `browser:run` | 409 when already final |
+| GET | `/browser/challenges` | `browser:read` | Detected challenges with state, fallback and cooldown |
+| GET | `/browser/fleet` | platform admin | Workers, capacity, domains cooling down |
+| POST | `/sources/{id}/browser-check` | `browser:run` | 202 `{mission_id, status, error}`; refused missions come back `FAILED` with the reason |
+| PATCH | `/sources/{id}` | `sources:write` | now also `render_mode: auto\|static\|browser` |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
 ## Example (API client)

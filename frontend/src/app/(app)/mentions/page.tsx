@@ -12,6 +12,7 @@ const PAGE = 25;
 const VERIF_TONE: Record<Verification, "brand" | "neutral" | "warn" | "neg"> = {
   verified_on_page: "brand", feed_item: "brand", snippet_only: "neutral",
   not_found_on_page: "warn", page_unavailable: "neutral", blocked_by_robots: "neutral",
+  pending_render: "neutral", blocked_by_challenge: "warn",
 };
 const VERIFS = Object.keys(VERIF_TONE) as Verification[];
 

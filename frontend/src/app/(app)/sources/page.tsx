@@ -1,10 +1,12 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Field, Spinner } from "@/components/ui";
 import { api, type ConnectorInfo, type Coverage, type Page, type Source, type SourceCheck } from "@/lib/api";
+import type { MessageKey } from "@/lib/i18n";
 import { useCan } from "@/lib/session";
 
 const COVERAGE_TONE: Record<Coverage, "brand" | "neutral" | "warn" | "neg"> = {
@@ -79,6 +81,9 @@ function SourceRow({ s, canWrite, onChecked }: { s: Source; canWrite: boolean; o
   const check = useMutation({ mutationFn: () => api.post<SourceCheck>(`/sources/${s.id}/check`), onSuccess: (r) => { onChecked(r); refresh(); } });
   const toggle = useMutation({ mutationFn: () => api.patch(`/sources/${s.id}`, { enabled: !s.enabled }), onSuccess: refresh });
   const del = useMutation({ mutationFn: () => api.del(`/sources/${s.id}`), onSuccess: refresh });
+  const canBrowse = useCan("browser:run");
+  const mode = useMutation({ mutationFn: (render_mode: Source["render_mode"]) => api.patch(`/sources/${s.id}`, { render_mode }), onSuccess: refresh });
+  const render = useMutation({ mutationFn: () => api.post<{ mission_id: string; status: string; error: string | null }>(`/sources/${s.id}/browser-check`) });
   return (
     <li className="flex flex-wrap items-start justify-between gap-3 p-4">
       <div className="min-w-0">
@@ -96,17 +101,37 @@ function SourceRow({ s, canWrite, onChecked }: { s: Source; canWrite: boolean; o
         {(s.restrictions || s.last_error) && (
           <p className="mt-1 text-xs text-signal-warn" dir="ltr">{s.restrictions || s.last_error}</p>
         )}
+        {s.last_challenge_kind && s.last_challenge_at && (
+          <p className="mt-1 text-xs text-signal-warn">
+            {t("sources.challenge", { kind: t(`challenge.kind.${s.last_challenge_kind}` as MessageKey), d: fmtDate(s.last_challenge_at), n: s.challenge_count })}
+          </p>
+        )}
+        {render.data && (
+          <p className="mt-1 text-xs text-ink-soft">
+            {render.data.status === "QUEUED" ? t("sources.renderQueued") : t("sources.renderRefused", { r: render.data.error ?? "" })}
+            {" "}<Link href="/browser" className="text-brand hover:underline">{t("nav.browser")}</Link>
+          </p>
+        )}
       </div>
       {canWrite && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {s.kind === "website" && (
+            <select className="field w-40" value={s.render_mode} aria-label={t("sources.renderMode")}
+                    title={t("sources.renderModeHelp")} onChange={(e) => mode.mutate(e.target.value as Source["render_mode"])}>
+              {(["auto", "static", "browser"] as const).map((m) => <option key={m} value={m}>{t(`sources.render.${m}`)}</option>)}
+            </select>
+          )}
           <Button variant="ghost" onClick={() => check.mutate()} disabled={check.isPending}>{t("sources.check")}</Button>
+          {s.kind === "website" && canBrowse && (
+            <Button variant="ghost" onClick={() => render.mutate()} disabled={render.isPending}>{t("sources.renderCheck")}</Button>
+          )}
           <Button variant="ghost" onClick={() => toggle.mutate()} disabled={toggle.isPending}>
             {t(s.enabled ? "sources.disable" : "sources.enable")}
           </Button>
           <Button variant="danger" onClick={() => confirm(t("common.confirmDelete")) && del.mutate()}>{t("common.delete")}</Button>
         </div>
       )}
-      <div className="w-full"><ErrorBanner error={check.error ?? toggle.error ?? del.error} /></div>
+      <div className="w-full"><ErrorBanner error={check.error ?? toggle.error ?? del.error ?? mode.error ?? render.error} /></div>
     </li>
   );
 }

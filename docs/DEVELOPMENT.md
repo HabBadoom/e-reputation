@@ -86,6 +86,16 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_ALERTS_PER_RULE_PER_RUN` | `20` | Flood guard |
 | `REPINTEL_REPORT_RENDER_TIMEOUT_SECONDS` | `60` | PDF rendering timeout |
 | `REPINTEL_REPORT_MAX_BYTES` | `20000000` | Largest stored report |
+| `REPINTEL_BROWSER_ENABLED` | `true` | Hand JavaScript pages to the browser fleet |
+| `REPINTEL_BROWSER_WORKER_MAX_CONTEXTS` | `2` | Isolated contexts per worker process |
+| `REPINTEL_BROWSER_WORKER_NAME` | hostname | Name shown in the fleet view |
+| `REPINTEL_BROWSER_TENANT_CONCURRENCY` | `2` | Missions running at once per organization |
+| `REPINTEL_BROWSER_MISSIONS_PER_RUN` | `20` | Render missions a monitoring run may create |
+| `REPINTEL_BROWSER_HEARTBEAT_SECONDS` / `_STALE_SECONDS` | `10` / `120` | Liveness; silent workers' missions are re-queued |
+| `REPINTEL_BROWSER_MIN_FREE_MEMORY_MB` | `300` | Below this, a worker takes no new mission |
+| `REPINTEL_BROWSER_RESTART_AFTER_MISSIONS` | `100` | Browser recycled periodically |
+| `REPINTEL_BROWSER_RESTRICTED_AFTER_CHALLENGES` | `3` | Challenges in a row before a source is marked restricted |
+| `REPINTEL_BROWSER_EXTRA_ARGS` | `[]` | Extra Chromium flags (e.g. an egress proxy) |
 | `REPINTEL_BACKEND_URL` (frontend, build time) | `http://localhost:8000` | Target of the `/api/*` rewrite |
 
 ## Adding a tenant-scoped table (checklist)

@@ -77,6 +77,20 @@ Conventions: UUIDv4 primary keys, `timestamptz` everywhere, CHECK constraints fo
 
 Daily sentiment and reputation figures are computed on demand from `mentions` + `mention_analysis` (single source of truth) — see `REPUTATION_METHODOLOGY.md`.
 
+## Milestone 6 tables
+
+| Table | Scope | Notes |
+|---|---|---|
+| `browser_workers` | platform (admin read) | heartbeats, capacity, metrics; written via `browser_worker_heartbeat()` |
+| `browser_domain_policies` | platform, read-only | allowed, concurrency, spacing, timeout, skipped resource types; `*` default |
+| `browser_domain_state` | platform (admin read) | cooldown after challenges, consecutive count, last visit (no tenant data) |
+| `browser_missions` | tenant | 11 states (trigger-enforced), kind, priority, params, authorization record, result, attempts, deadline; composite FKs to mention (SET NULL) and source |
+| `browser_sessions` | tenant | one per context: isolation settings, closed, cleanup verified, requests refused |
+| `browser_session_events` | tenant | audit trail (transitions by trigger, validation, navigation, challenge, blocked requests, cleanup) |
+| `captcha_events` | tenant | kind, confidence, signals, via http/browser, state history, response (cooldown, fallback) |
+| `sources` + | tenant | `render_mode`, `challenge_count`, `last_challenge_kind/at` |
+| `mentions` + | tenant | `verified_with` (`http`/`browser`), states `pending_render`, `blocked_by_challenge` |
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

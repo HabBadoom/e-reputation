@@ -130,7 +130,7 @@ export interface PlanUsage {
   plan_key: string; plan_name: string; status: string; trial_ends_at: string | null;
   limits: Record<string, number | null>; usage: Record<string, number>;
 }
-export type Verification = "verified_on_page" | "snippet_only" | "not_found_on_page" | "page_unavailable" | "blocked_by_robots" | "feed_item";
+export type Verification = "verified_on_page" | "snippet_only" | "not_found_on_page" | "page_unavailable" | "blocked_by_robots" | "feed_item" | "pending_render" | "blocked_by_challenge";
 export type Coverage = "AVAILABLE" | "PARTIALLY_AVAILABLE" | "PENDING_AUTHORIZATION" | "RESTRICTED" | "UNAVAILABLE" | "CONNECTOR_ERROR";
 export interface Mention {
   id: string; brand_id: string; brand_name: string; project_id: string | null;
@@ -153,6 +153,8 @@ export interface Source {
   discovered_via: "manual" | "search" | "feed_discovery"; coverage_status: Coverage; restrictions: string;
   mentions_count: number; last_collected_at: string | null; last_checked_at: string | null;
   last_error: string | null; created_at: string;
+  render_mode: "auto" | "static" | "browser"; challenge_count: number;
+  last_challenge_kind: string | null; last_challenge_at: string | null;
 }
 export interface SourceCheck { ok: boolean; detail: string; source: Source; discovered_feeds: Source[] }
 export interface ConnectorInfo {
@@ -242,4 +244,32 @@ export interface Report {
   id: string; kind: ReportKind; format: ReportFormat; locale: "fr" | "ar" | "en"; brand_id: string | null;
   period_start: string; period_end: string; status: "queued" | "running" | "ready" | "failed";
   filename: string | null; size_bytes: number | null; error: string | null; created_at: string; finished_at: string | null;
+}
+// ---- Milestone 6: browser fleet ---------------------------------------------------------------
+export type MissionStatus = "CREATED" | "VALIDATING" | "QUEUED" | "ASSIGNED" | "RUNNING" | "PAUSED"
+  | "WAITING_FOR_HUMAN" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED";
+export interface BrowserMission {
+  id: string; kind: "render_page" | "check_source"; url: string; domain: string; status: MissionStatus;
+  priority: number; mention_id: string | null; source_id: string | null; attempts: number; max_attempts: number;
+  error: string | null; result: Record<string, unknown>; created_at: string; started_at: string | null;
+  finished_at: string | null; deadline_at: string;
+}
+export interface MissionEvent { kind: string; from_status: string | null; to_status: string | null; detail: Record<string, unknown>; created_at: string }
+export interface BrowserSession { id: string; isolation: Record<string, unknown>; opened_at: string; closed_at: string | null; cleanup_verified: boolean; requests_blocked: number }
+export interface Challenge {
+  id: string; mission_id: string | null; source_id: string | null; mention_id: string | null; domain: string;
+  url: string; via: "http" | "browser"; kind: string; confidence: number; signals: string[];
+  state: "DETECTED" | "PAUSED" | "FALLBACK" | "SOURCE_RESTRICTED" | "CANCELLED" | "EXPIRED";
+  history: { state: string; at: string }[]; response: { cooldown_until?: string; fallback?: string }; detected_at: string;
+}
+export interface MissionDetail extends BrowserMission {
+  authorization_record: Record<string, unknown>; events: MissionEvent[]; sessions: BrowserSession[]; challenges: Challenge[];
+}
+export interface MissionPage extends Page<BrowserMission> { by_status: Partial<Record<MissionStatus, number>> }
+export interface ChallengePage extends Page<Challenge> { by_kind: Record<string, number> }
+export interface Fleet {
+  workers: { id: string; name: string; hostname: string; version: string; status: string; max_contexts: number;
+    active_contexts: number; metrics: Record<string, number | null>; started_at: string; last_heartbeat_at: string }[];
+  cooling_domains: { domain: string; cooldown_until: string; consecutive_challenges: number; last_challenge_kind: string }[];
+  capacity: number; busy: number;
 }

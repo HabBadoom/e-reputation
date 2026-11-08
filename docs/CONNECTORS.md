@@ -1,6 +1,6 @@
 # Connectors
 
-Status: Milestone 3. Three connectors are implemented: **Serper** (search), **RSS/Atom** (feeds) and **Web page** (verification and feed discovery). Agent Reach, social networks, review platforms and the browser fleet come later.
+Status: Milestone 6. Four connectors are implemented: **Serper** (search), **RSS/Atom** (feeds), **Web page** (verification and feed discovery) and **Browser** (rendering of JavaScript pages). Agent Reach, social networks and review platforms come later.
 
 ## Interface (`app/connectors/base.py`)
 
@@ -46,7 +46,11 @@ Used to:
 1. **Verify search hits:** fetch the page, check that the brand really appears, store an excerpt around it, and read the publication date from page metadata (`article:published_time`, JSON-LD `datePublished`, `<time>`).
 2. **Check a website and discover its RSS feeds** (`<link rel="alternate" type="application/rss+xml">`). Discovered feeds are created **disabled**.
 
-It honours `robots.txt` (RFC 9309, token `RepIntelBot`). It never logs in, never bypasses paywalls or CAPTCHAs, and runs no JavaScript.
+It honours `robots.txt` (RFC 9309, token `RepIntelBot`). It never logs in, never bypasses paywalls or CAPTCHAs, and runs no JavaScript. Every response goes through the challenge detector; a challenge stops there (see `CAPTCHA_INTERVENTIONS.md`).
+
+## Browser (`browser`)
+
+Headless Chromium rendering of public pages (`BROWSER_FLEET.md`): used when a page's static HTML has no text without JavaScript, for sources set to "Always browser", and for "Check with browser". Same rules as the web reader (robots.txt, honest user agent, no login), plus a fresh isolated context per visit. Its compliance record is `pending_legal_review` and therefore blocked in production until approved.
 
 ## Verification statuses (per mention)
 
@@ -58,6 +62,8 @@ It honours `robots.txt` (RFC 9309, token `RepIntelBot`). It never logs in, never
 | `not_found_on_page` | The page was fetched but the term was not found (possibly JavaScript-rendered or removed) |
 | `page_unavailable` | Fetch failed (HTTP error, timeout, internal address refused) |
 | `blocked_by_robots` | `robots.txt` disallows our crawler; only the provider's snippet is kept |
+| `pending_render` | Handed to the browser fleet; becomes `verified_on_page` / `not_found_on_page` after rendering |
+| `blocked_by_challenge` | The site answered with a CAPTCHA / anti-bot check; the snippet or feed text is kept, nothing bypassed |
 
 ## Source coverage states
 

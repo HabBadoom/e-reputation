@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 — Milestone 6: Browser fleet (2026-11-08)
+
+### Added
+- Migration 0007: `browser_workers`, `browser_domain_policies`, `browser_domain_state`, `browser_missions` (state machine trigger + audit trigger), `browser_sessions`, `browser_session_events`, `captcha_events`; claim, heartbeat, recovery and back-off functions; `sources.render_mode` and challenge counters; mention states `pending_render`, `blocked_by_challenge` and `verified_with`; `browser:read` / `browser:run`; plan quota `max_browser_missions_per_day`; `browser` connector compliance record.
+- Browser worker (`python -m app.browser.worker`, compose `browser-worker`) with Playwright Chromium, isolated contexts, address checks on every request and redirect hop, health and cleanup.
+- Automatic challenge detection on static fetches and rendered pages, autonomous response without bypass.
+- Collection hands JavaScript pages to the fleet; sources can be set to automatic / HTML only / always browser; "check with browser".
+- APIs `/browser/missions`, `/browser/challenges`, `/browser/fleet`, `/sources/{id}/browser-check`; UI "Browser fleet" page, source reading mode and challenge info, plan usage.
+
+### Decided
+- CAPTCHAs and anti-bot checks are never solved or bypassed; no human intervention flow (founder's choice for full autonomy). See `CAPTCHA_INTERVENTIONS.md`.
+
 ## 0.6.0 — Milestone 5: Reputation intelligence (2026-11-08)
 
 ### Added
