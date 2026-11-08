@@ -93,6 +93,19 @@ class Settings(BaseSettings):
     crisis_quiet_hours: int = 48         # a crisis is resolved after this long undetected
     alerts_per_rule_per_run: int = 20    # flood guard
     report_render_timeout_seconds: int = 60
+    # Browser fleet (Milestone 6)
+    browser_enabled: bool = True            # render JavaScript pages when static HTML is empty
+    browser_worker_max_contexts: int = 2    # isolated contexts per worker process
+    browser_worker_name: str = ""           # defaults to the hostname
+    browser_tenant_concurrency: int = 2     # missions running at once per organization
+    browser_missions_per_run: int = 20      # render missions a monitoring run may create
+    browser_heartbeat_seconds: int = 10
+    browser_stale_seconds: int = 120        # silent worker/mission considered lost
+    browser_poll_seconds: float = 2.0
+    browser_min_free_memory_mb: int = 300   # below this, the worker takes no new mission
+    browser_restart_after_missions: int = 100
+    browser_restricted_after_challenges: int = 3
+    browser_extra_args: list[str] = []      # extra Chromium flags (e.g. an egress proxy)
     report_max_bytes: int = 20_000_000
 
     # Plan given to new organizations; empty = the plan flagged is_default in the DB.

@@ -28,7 +28,8 @@ from app.nlp.service import effective
 router = APIRouter(prefix="/mentions", tags=["mentions"])
 
 Verification = Literal["verified_on_page", "snippet_only", "not_found_on_page",
-                       "page_unavailable", "blocked_by_robots", "feed_item"]
+                       "page_unavailable", "blocked_by_robots", "feed_item",
+                       "pending_render", "blocked_by_challenge"]
 
 
 class MentionOut(BaseModel):

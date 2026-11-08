@@ -68,6 +68,19 @@ class _Extractor(HTMLParser):
             self.parts.append(data)
 
 
+_APP_ROOT = re.compile(r'<div[^>]+id=["\'](root|app|__next|__nuxt|svelte)["\'][^>]*>\s*</div>',
+                       re.I)
+_NOSCRIPT_JS = re.compile(r"<noscript[^>]*>[^<]{0,300}(javascript|js)", re.I)
+
+
+def needs_javascript(html: str, text: str) -> bool:
+    """True when the static HTML is an application shell whose text appears only after
+    JavaScript runs (the browser fleet can then render it)."""
+    if len(text) < 400:
+        return True
+    return len(text) < 1500 and bool(_APP_ROOT.search(html) or _NOSCRIPT_JS.search(html))
+
+
 class Page:
     def __init__(self, html: str, url: str) -> None:
         p = _Extractor(url)
@@ -82,6 +95,7 @@ class Page:
         self.meta = p.meta
         self.feed_links = list(dict.fromkeys(p.feeds))
         self._jsonld = p.jsonld
+        self.needs_javascript = needs_javascript(html, self.text)
 
     def published_at(self):  # noqa: ANN201
         for key in _DATE_META:

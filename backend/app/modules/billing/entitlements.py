@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -23,7 +23,7 @@ from app.db.models import (
 )
 
 KEYS = ("max_brands", "max_monitoring_projects", "max_members", "min_frequency_minutes",
-        "max_competitors_per_brand", "max_keywords_per_brand")
+        "max_competitors_per_brand", "max_keywords_per_brand", "max_browser_missions_per_day")
 
 
 class PlanLimitReached(AppError):
@@ -76,6 +76,7 @@ def usage(db: Session, tenant_id: uuid.UUID) -> dict[str, int]:
         + count(Invitation, Invitation.tenant_id == tenant_id,
                 Invitation.accepted_at.is_(None), Invitation.revoked_at.is_(None),
                 Invitation.expires_at > func.now()),
+        "max_browser_missions_per_day": db.scalar(text("SELECT browser_missions_today()")) or 0,
     }
 
 

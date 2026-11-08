@@ -26,6 +26,8 @@ from app.main import create_app  # noqa: E402
 from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
 DATA_TABLES = [
+    "captcha_events", "browser_session_events", "browser_sessions", "browser_missions",
+    "browser_workers", "browser_domain_state",
     "reports", "alerts", "alert_rules", "webhooks", "crisis_events", "trend_events",
     "language_evaluation_runs", "language_annotations", "mention_analysis",
     "mentions", "sources", "jobs", "monitoring_runs", "monitoring_projects", "brand_keywords",

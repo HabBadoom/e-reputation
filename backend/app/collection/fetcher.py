@@ -12,7 +12,7 @@ that blocks private ranges (Milestone 6 network policy).
 
 import ipaddress
 import socket
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from urllib.parse import urljoin, urlsplit
 
@@ -35,6 +35,7 @@ class FetchResult:
     status: int
     content_type: str
     body: bytes
+    headers: dict[str, str] = field(default_factory=dict)   # lower-case names
 
     def text(self) -> str:
         charset = "utf-8"
@@ -114,7 +115,8 @@ def safe_get(url: str, *, max_bytes: int | None = None,
                         raise FetchError("too_large", f">{limit}")
                     chunks.append(chunk)
                 return FetchResult(str(r.url), r.status_code,
-                                   r.headers.get("content-type", ""), b"".join(chunks))
+                                   r.headers.get("content-type", ""), b"".join(chunks),
+                                   {k.lower(): v for k, v in r.headers.items()})
         except httpx.TimeoutException as e:
             raise FetchError("timeout", current) from e
         except httpx.HTTPError as e:

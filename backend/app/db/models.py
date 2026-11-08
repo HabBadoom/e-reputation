@@ -358,6 +358,10 @@ class Source(Base):
     mentions_count: Mapped[int] = mapped_column(default=0)
     last_collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    render_mode: Mapped[str] = mapped_column(String(10), default="auto")
+    challenge_count: Mapped[int] = mapped_column(default=0)
+    last_challenge_kind: Mapped[str | None] = mapped_column(String(30))
+    last_challenge_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
     consecutive_errors: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = _created()
@@ -398,6 +402,7 @@ class Mention(Base):
     collection_method: Mapped[str] = mapped_column(String(30))
     connector: Mapped[str] = mapped_column(String(40))
     connector_version: Mapped[str] = mapped_column(String(20))
+    verified_with: Mapped[str | None] = mapped_column(String(10))
     verification_status: Mapped[str] = mapped_column(String(30))
     content_hash: Mapped[str] = mapped_column(String(64))
     duplicate_of: Mapped[uuid.UUID | None] = mapped_column(
@@ -607,3 +612,88 @@ class Report(Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
     created_at: Mapped[datetime] = _created()
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ---------------------------------------------------------------- Milestone 6
+class BrowserMission(Base):
+    __tablename__ = "browser_missions"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"),
+                      _tenant_fk("mentions", "mention_id", "SET NULL"),
+                      _tenant_fk("sources", "source_id"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    url: Mapped[str] = mapped_column(String(2000))
+    domain: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(20), default="CREATED")
+    priority: Mapped[int] = mapped_column(default=5)
+    mention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    worker_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    attempts: Mapped[int] = mapped_column(default=0)
+    max_attempts: Mapped[int] = mapped_column(default=3)
+    timeout_seconds: Mapped[int] = mapped_column(default=45)
+    run_after: Mapped[datetime] = _created()
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    params: Mapped[dict] = mapped_column(JSONB, default=dict)
+    authorization_record: Mapped[dict] = mapped_column(JSONB, default=dict)
+    result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    error: Mapped[str | None] = mapped_column(String(300))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class BrowserSession(Base):
+    __tablename__ = "browser_sessions"
+    __table_args__ = (_tenant_fk("browser_missions", "mission_id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    mission_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    worker_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    isolation: Mapped[dict] = mapped_column(JSONB, default=dict)
+    opened_at: Mapped[datetime] = _created()
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleanup_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    requests_blocked: Mapped[int] = mapped_column(default=0)
+
+
+class BrowserSessionEvent(Base):
+    __tablename__ = "browser_session_events"
+    __table_args__ = (_tenant_fk("browser_missions", "mission_id"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    mission_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    kind: Mapped[str] = mapped_column(String(20))
+    from_status: Mapped[str | None] = mapped_column(String(20))
+    to_status: Mapped[str | None] = mapped_column(String(20))
+    detail: Mapped[dict] = mapped_column(JSONB, default=dict)
+    worker_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = _created()
+
+
+class CaptchaEvent(Base):
+    __tablename__ = "captcha_events"
+    __table_args__ = (_tenant_fk("browser_missions", "mission_id", "SET NULL"),
+                      _tenant_fk("sources", "source_id", "SET NULL"),
+                      _tenant_fk("mentions", "mention_id", "SET NULL"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    mission_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    mention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    domain: Mapped[str] = mapped_column(String(255))
+    url: Mapped[str] = mapped_column(String(2000))
+    via: Mapped[str] = mapped_column(String(10))
+    kind: Mapped[str] = mapped_column(String(30))
+    confidence: Mapped[float] = mapped_column()
+    signals: Mapped[list] = mapped_column(JSONB, default=list)
+    state: Mapped[str] = mapped_column(String(20), default="DETECTED")
+    history: Mapped[list] = mapped_column(JSONB, default=list)
+    response: Mapped[dict] = mapped_column(JSONB, default=dict)
+    detected_at: Mapped[datetime] = _created()
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

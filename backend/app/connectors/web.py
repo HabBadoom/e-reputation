@@ -3,6 +3,7 @@ Honours robots.txt; never logs in, never bypasses paywalls or anti-bot measures.
 
 from typing import ClassVar
 
+from app.browser.detect import Challenge, Observation, detect
 from app.collection.fetcher import FetchError, check_url, safe_get
 from app.collection.html import Page
 from app.collection.robots import RobotsCache
@@ -14,6 +15,15 @@ class BlockedByRobots(ConnectorError):
         super().__init__("blocked_by_robots", url)
 
 
+class ChallengeDetected(ConnectorError):
+    """The site answered with an anti-bot challenge. We stop there: no retry with another
+    identity, no solving service, no evasion."""
+
+    def __init__(self, url: str, challenge: Challenge) -> None:
+        super().__init__("challenge", f"{challenge.kind} on {url}")
+        self.url, self.challenge = url, challenge
+
+
 class WebPageConnector(Connector):
     key = "web"
     version = "1.0"
@@ -21,7 +31,7 @@ class WebPageConnector(Connector):
     access_method = "public_web_page"
     capabilities: ClassVar[frozenset[str]] = frozenset({"collect", "discover"})
     limitations = (
-        "Static HTML only: content rendered by JavaScript is not seen (browser fleet: M6).",
+        "Static HTML; pages that need JavaScript are handed to the browser fleet.",
         "Pages behind login, paywall or anti-bot challenges are not accessed.",
         "Only an excerpt around the brand mention is stored.",
     )
@@ -40,11 +50,19 @@ class WebPageConnector(Connector):
             r = safe_get(url)
         except FetchError as e:
             raise ConnectorError(e.reason, str(e)) from e
+        is_html = "html" in r.content_type.lower() or not r.content_type
+        html = r.text() if is_html else ""
+        page = Page(html, r.url) if is_html else None
+        challenge = detect(Observation(
+            status=r.status, url=r.url, html=html, title=page.title if page else "",
+            text_length=len(page.text) if page else 0, headers=r.headers, rendered=False))
+        if challenge is not None:
+            raise ChallengeDetected(r.url, challenge)
         if r.status >= 400:
             raise ConnectorError("http_error", f"page returned {r.status}")
-        if "html" not in r.content_type.lower() and r.content_type:
+        if page is None:
             raise ConnectorError("not_html", r.content_type)
-        return Page(r.text(), r.url)
+        return page
 
     def discover(self, homepage: str) -> list[str]:  # type: ignore[override]
         """RSS/Atom feeds advertised by a site's homepage."""

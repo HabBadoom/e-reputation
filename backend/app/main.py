@@ -18,6 +18,7 @@ from app.modules.analytics.router import router as analytics_router
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
+from app.modules.browser.router import router as browser_router
 from app.modules.catalog.router import router as catalog_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.mentions.router import router as mentions_router
@@ -94,7 +95,7 @@ def create_app() -> FastAPI:
     v1 = APIRouter(prefix="/api/v1")
     for r in (auth_router, tenancy_router, brands_router, catalog_router, monitoring_router,
               mentions_router, sources_router, nlp_router, dashboard_router, audit_router,
-              analytics_router, alerts_router, reports_router):
+              analytics_router, alerts_router, reports_router, browser_router):
         v1.include_router(r)
     app.include_router(v1)
     return app

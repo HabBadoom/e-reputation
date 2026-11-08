@@ -23,7 +23,7 @@ from app.collection.urls import canonicalize, domain_of, is_http_url
 from app.connectors.base import ConnectorError, RawItem
 from app.connectors.rss import RssConnector
 from app.connectors.serper import HL, SerperConnector
-from app.connectors.web import BlockedByRobots, WebPageConnector
+from app.connectors.web import BlockedByRobots, ChallengeDetected, WebPageConnector
 from app.core.config import get_settings
 from app.db.models import Mention, MonitoringProject, MonitoringRun, Source
 from app.modules.monitoring.query_plan import QueryGroup, load_query_plan
@@ -52,6 +52,10 @@ class Stats:
     invalid: int = 0
     verified: int = 0
     page_fetches: int = 0
+    challenges: int = 0
+    render_queued: int = 0
+    render_refused: int = 0
+    cooldown_skipped: int = 0
     errors: list[str] = field(default_factory=list)
 
     def error(self, msg: str) -> None:
@@ -183,10 +187,31 @@ class SourceRegistry:
         return src
 
 
+# ---------------------------------------------------------------- browser hand-off
+@dataclass
+class BrowserGate:
+    """Whether pages may be handed to the browser fleet during this run, and how many."""
+    allowed: bool
+    budget: int
+    cooling: dict[str, bool] = field(default_factory=dict)
+
+    def cooling_down(self, db: Session, domain: str) -> bool:
+        if domain not in self.cooling:
+            from app.browser.guard import cooldown_until
+            self.cooling[domain] = cooldown_until(db, domain) is not None
+        return self.cooling[domain]
+
+    def take(self) -> bool:
+        if self.allowed and self.budget > 0:
+            self.budget -= 1
+            return True
+        return False
+
+
 # ---------------------------------------------------------------- processing
 def _process(db: Session, project: MonitoringProject, run: MonitoringRun, c: Candidate,
              web: WebPageConnector, registry: SourceRegistry, stats: Stats,
-             seen: set[str], page_budget: list[int]) -> None:
+             seen: set[str], page_budget: list[int], gate: BrowserGate) -> None:
     s = get_settings()
     it = c.item
     if not is_http_url(it.url):
@@ -218,14 +243,26 @@ def _process(db: Session, project: MonitoringProject, run: MonitoringRun, c: Can
     matched = find_terms(listing_text, terms)
     original, published, published_how = it.snippet, it.published_at, it.published_how
 
+    challenge = None
+    render, fallback = False, "snippet_only"
     if it.method == "rss":
         verification = "feed_item"
         original = excerpt_around(it.snippet, matched) if it.snippet else it.title
+    elif s.verify_pages and gate.cooling_down(db, domain):
+        # The site challenged our crawler recently: don't knock again, keep the snippet.
+        verification = "snippet_only"
+        stats.cooldown_skipped += 1
+    elif s.verify_pages and source.render_mode == "browser" and gate.take():
+        verification, render = "pending_render", True
     elif s.verify_pages and page_budget[0] > 0:
         page_budget[0] -= 1
         stats.page_fetches += 1
         try:
             page = web.fetch_page(it.url)
+        except ChallengeDetected as e:
+            verification, challenge = "blocked_by_challenge", e.challenge
+            gate.cooling[domain] = True
+            stats.challenges += 1
         except BlockedByRobots:
             verification = "blocked_by_robots"
             if source.kind == "website":
@@ -247,6 +284,9 @@ def _process(db: Session, project: MonitoringProject, run: MonitoringRun, c: Can
                 stats.verified += 1
             else:
                 verification = "not_found_on_page"
+                # Text produced by JavaScript is invisible to a plain fetch: render it.
+                if page.needs_javascript and source.render_mode != "static" and gate.take():
+                    verification, render, fallback = "pending_render", True, "not_found_on_page"
             if (d := page.published_at()) is not None:
                 published, published_how = d, "page_metadata"
             if source.kind == "website":
@@ -255,8 +295,9 @@ def _process(db: Session, project: MonitoringProject, run: MonitoringRun, c: Can
     else:
         verification = "snippet_only"
 
-    if not matched and verification in ("snippet_only", "not_found_on_page",
-                                        "page_unavailable", "blocked_by_robots"):
+    if not matched and verification in ("snippet_only", "not_found_on_page", "page_unavailable",
+                                        "blocked_by_robots", "blocked_by_challenge",
+                                        "pending_render"):
         # Neither the listing nor the page shows the brand: keep it, but labelled, because
         # the provider matched it for a reason we could not see (e.g. JavaScript content).
         stats.unconfirmed += 1
@@ -289,6 +330,21 @@ def _process(db: Session, project: MonitoringProject, run: MonitoringRun, c: Can
     source.mentions_count += 1
     source.last_collected_at = now
 
+    if challenge is not None:
+        from app.browser.challenges import handle_challenge
+        handle_challenge(db, project.tenant_id, url=it.url, domain=domain, via="http",
+                         challenge=challenge, source=source, mention=m)
+    if render:
+        from app.browser.missions import create_mission
+        mission = create_mission(db, project.tenant_id, "render_page", it.url, mention_id=m.id,
+                                 source_id=None, priority=6, robots=web.robots,
+                                 params={"terms": terms, "exclude": exclude})
+        if mission.status == "QUEUED":
+            stats.render_queued += 1
+        else:
+            m.verification_status = fallback
+            stats.render_refused += 1
+
 
 def collect_for_project(db: Session, project: MonitoringProject, run: MonitoringRun
                         ) -> tuple[str, dict[str, Any]]:
@@ -309,11 +365,15 @@ def collect_for_project(db: Session, project: MonitoringProject, run: Monitoring
     else:
         verification_mode = "enabled"
     registry = SourceRegistry(db, project.tenant_id)
+    from app.connectors.browser import BrowserConnector
+    gate = BrowserGate(allowed=(verification_mode == "enabled" and s.browser_enabled
+                                and BrowserConnector().check_permissions(db).allowed),
+                       budget=s.browser_missions_per_run)
     seen: set[str] = set()
     budget = [s.max_page_fetches_per_run if verification_mode == "enabled" else 0]
     for c in candidates:
         try:
-            _process(db, project, run, c, web, registry, stats, seen, budget)
+            _process(db, project, run, c, web, registry, stats, seen, budget, gate)
         except Exception as e:  # noqa: BLE001 — one bad item must not sink the run
             log.exception("candidate_failed", extra={"url": c.item.url})
             stats.error(f"{type(e).__name__} on {c.item.url[:120]}")
@@ -332,6 +392,10 @@ def collect_for_project(db: Session, project: MonitoringProject, run: Monitoring
         "verified_on_page": stats.verified,
         "page_fetches": stats.page_fetches,
         "page_verification": verification_mode,
+        "browser": {"enabled": gate.allowed, "render_queued": stats.render_queued,
+                    "render_refused": stats.render_refused},
+        "challenges": stats.challenges,
+        "cooldown_skipped": stats.cooldown_skipped,
         "invalid": stats.invalid,
         "errors": stats.errors,
     }

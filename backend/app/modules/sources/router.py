@@ -14,9 +14,10 @@ from app.api.deps import AuthContext, require
 from app.collection.robots import RobotsCache
 from app.collection.urls import domain_of, is_http_url
 from app.connectors.base import ConnectorError
+from app.connectors.browser import BrowserConnector
 from app.connectors.rss import RssConnector
 from app.connectors.serper import SerperConnector
-from app.connectors.web import BlockedByRobots, WebPageConnector
+from app.connectors.web import BlockedByRobots, ChallengeDetected, WebPageConnector
 from app.core.errors import AppError, Conflict, NotFound
 from app.core.rate_limit import get_limiter
 from app.db.models import ConnectorPolicy, Source
@@ -41,6 +42,7 @@ class SourceIn(BaseModel):
 
 class SourcePatch(BaseModel):
     enabled: bool | None = None
+    render_mode: Literal["auto", "static", "browser"] | None = None
     name: str | None = Field(default=None, max_length=200)
     category: Category | None = None
     language: str | None = Field(default=None, pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
@@ -64,6 +66,10 @@ class SourceOut(BaseModel):
     last_collected_at: datetime | None
     last_checked_at: datetime | None
     last_error: str | None
+    render_mode: str
+    challenge_count: int
+    last_challenge_kind: str | None
+    last_challenge_at: datetime | None
     created_at: datetime
 
 
@@ -94,7 +100,9 @@ def _out(s: Source) -> SourceOut:
                      coverage_status=s.coverage_status, restrictions=s.restrictions,
                      mentions_count=s.mentions_count, last_collected_at=s.last_collected_at,
                      last_checked_at=s.last_checked_at, last_error=s.last_error,
-                     created_at=s.created_at)
+                     render_mode=s.render_mode or "auto", challenge_count=s.challenge_count or 0,
+                     last_challenge_kind=s.last_challenge_kind,
+                     last_challenge_at=s.last_challenge_at, created_at=s.created_at)
 
 
 def _get(db: Session, ctx: AuthContext, source_id: uuid.UUID) -> Source:
@@ -121,9 +129,19 @@ def _check(db: Session, ctx: AuthContext, src: Source) -> CheckOut:
             src.name = title[:200]
         return CheckOut(ok=True, detail=f"{len(items)} items", source=_out(src))
 
+    from app.browser.guard import cooldown_until
+    if (until := cooldown_until(db, src.domain)) is not None:
+        # The site challenged our crawler recently: no new visit before the pause ends.
+        return CheckOut(ok=False, detail=f"domain_cooling_down:{until.isoformat()}",
+                        source=_out(src))
     web = WebPageConnector(RobotsCache())
     try:
         page = web.fetch_page(src.url)
+    except ChallengeDetected as e:
+        from app.browser.challenges import handle_challenge
+        handle_challenge(db, ctx.tenant_id, url=src.url, domain=src.domain, via="http",
+                         challenge=e.challenge, source=src)
+        return CheckOut(ok=False, detail=f"challenge:{e.challenge.kind}", source=_out(src))
     except BlockedByRobots:
         src.coverage_status, src.restrictions = "RESTRICTED", "robots.txt disallows our crawler"
         return CheckOut(ok=False, detail="blocked_by_robots", source=_out(src))
@@ -210,6 +228,26 @@ def check_source(source_id: uuid.UUID, ctx: AuthContext = Depends(require("sourc
     return result
 
 
+@router.post("/sources/{source_id}/browser-check", status_code=202)
+def browser_check_source(source_id: uuid.UUID, request: Request,
+                         ctx: AuthContext = Depends(require("browser:run")),
+                         db: Session = Depends(get_db)) -> dict[str, object]:
+    """Render the source's page in the browser fleet (JavaScript sites). Returns the mission;
+    it is refused (status FAILED with the reason) when the visit is not authorized."""
+    from app.browser.missions import create_mission
+    src = _get(db, ctx, source_id)
+    if src.kind != "website":
+        raise AppError("Only websites can be rendered", code="invalid_kind", status_code=422)
+    get_limiter().hit(f"browser:check:{ctx.tenant_id}", 60, 3600)
+    m = create_mission(db, ctx.tenant_id, "check_source", src.url, source_id=src.id,
+                       priority=7, created_by=ctx.user_id)
+    record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id,
+           action="browser.mission_requested", target_type="source", target_id=src.id,
+           meta={"mission_id": str(m.id), "status": m.status}, request=request)
+    db.commit()
+    return {"mission_id": str(m.id), "status": m.status, "error": m.error}
+
+
 @router.patch("/sources/{source_id}", response_model=SourceOut)
 def update_source(source_id: uuid.UUID, body: SourcePatch, request: Request,
                   ctx: AuthContext = Depends(require("sources:write")),
@@ -262,7 +300,7 @@ def list_connectors(_: AuthContext = Depends(require("sources:read")),
     out = []
     serper = SerperConnector()
     for conn, configured in ((serper, serper.configured), (RssConnector(), True),
-                             (WebPageConnector(), True)):
+                             (WebPageConnector(), True), (BrowserConnector(), True)):
         pol = db.get(ConnectorPolicy, conn.key)
         perm = conn.check_permissions(db)
         d = conn.describe()

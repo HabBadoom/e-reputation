@@ -85,6 +85,25 @@ services:
       migrate: { condition: service_completed_successfully }
     restart: unless-stopped
 
+  browser-worker:   # headless Chromium fleet (scale with: docker compose up --scale browser-worker=N)
+    build: ./backend
+    command: ["python", "-m", "app.browser.worker"]
+    environment:
+      <<: *backend-env
+      REPINTEL_BROWSER_WORKER_MAX_CONTEXTS: "2"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+    shm_size: "1gb"
+    mem_limit: "2g"
+    cpus: 2
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    # Production: put this service on its own network whose egress firewall drops RFC 1918,
+    # link-local (169.254.0.0/16, cloud metadata) and loopback ranges — the in-code checks are
+    # the first layer, the network policy is the one DNS rebinding cannot defeat.
+
   web:
     build: ./frontend
     environment: { REPINTEL_BACKEND_URL: http://api:8000 }

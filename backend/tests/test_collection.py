@@ -133,7 +133,8 @@ def test_full_collection_run(make_user, internet):
     assert tsa["published_at"].startswith("2026-11-05T07:30")
     assert tsa["analysed"] is False                           # no invented sentiment
     assert by_domain["blocked.dz"]["verification_status"] == "blocked_by_robots"
-    assert by_domain["ghost.dz"]["verification_status"] == "not_found_on_page"
+    # Almost empty static page without the brand: handed to the browser fleet for rendering.
+    assert by_domain["ghost.dz"]["verification_status"] == "pending_render"
     aps = by_domain["aps.dz"]
     assert aps["verification_status"] == "feed_item" and aps["collection_method"] == "rss"
     assert aps["published_at_source"] == "feed"
