@@ -100,6 +100,21 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | GET | `/ai/approvals` | `ai:read` | Actions waiting for approval (expired ones are closed) |
 | POST | `/ai/actions/{id}/approve`, `/reject` | `ai:approve` | `{comment?, reply?}` — `reply` edits a draft before approval; 409 if not pending |
 | PATCH | `/brands/{id}` | `brands:write` | now also `response_tone`, `response_guidelines` |
+| GET | `/billing` | `billing:read` | Plan, status, limits, usage (counters + this month), public plans with prices, pending request, issued invoices, billing details and what is missing |
+| PUT | `/billing/account` | `billing:manage` | Billing details (RC, NIF, NIS, article d'imposition…) |
+| POST / DELETE | `/billing/plan-request` | `billing:manage` | `{plan_key, billing_interval: month\|year, message?}`; 409 if one is pending; notifies `REPINTEL_PLATFORM_NOTIFY_EMAILS` |
+| GET | `/billing/invoices/{id}/pdf` | `billing:read` | Issued / paid / void invoices only |
+| GET | `/admin/stats`, `/admin/tenants`, `/admin/tenants/{id}` | platform admin + MFA | Platform figures; organisations with plan, usage, open invoices; one organisation's subscription, billing details, usage, invoices, requests |
+| PATCH | `/admin/tenants/{id}/subscription` | 〃 | `{plan_key?, status?, trial_ends_at?, current_period_start?, current_period_end?, billing_interval?, currency?, notes?}`; audited in the organisation; closes matching requests |
+| POST | `/admin/tenants/{id}/requests/{rid}` | 〃 | `{status: done\|declined}` |
+| POST / PUT | `/admin/tenants/{id}/invoices[/{iid}]` | 〃 | Draft `{lines: [{description, quantity, unit_minor}], currency, tax_rate?, stamp_duty_minor?, locale, period_start?, period_end?, notes}` or `{from_subscription: true}` (needs an active price) |
+| POST | `/admin/tenants/{id}/invoices/{iid}/issue`, `/paid`, `/void` | 〃 | issue needs seller identity + buyer identifiers (422 otherwise); paid `{method, reference?, paid_at?}`; void `{reason}` (a draft is deleted) |
+| GET | `/admin/tenants/{id}/invoices/{iid}/pdf` | 〃 | Drafts too (marked as such) |
+| GET / PATCH | `/admin/plans`, `/admin/plans/{key}` | 〃 | name, description, active, public, order |
+| PUT | `/admin/plans/{key}/entitlements` | 〃 | `{key: int\|null}`; unknown keys or negatives → 422 |
+| POST / DELETE | `/admin/plans/{key}/prices[/{id}]` | 〃 | `{currency, billing_interval, amount_minor}` replaces the active price |
+| GET / PATCH | `/admin/connectors[/{key}]` | 〃 | `{review_status, review_notes}` — record of the legal review |
+| GET | `/metrics` | bearer `REPINTEL_METRICS_TOKEN` | Prometheus text, aggregates only; 404 when disabled or wrong token |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
 ## Example (API client)

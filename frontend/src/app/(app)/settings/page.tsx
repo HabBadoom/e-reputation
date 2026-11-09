@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { MessageKey } from "@/lib/i18n";
 import { useI18n } from "@/components/providers";
@@ -14,6 +15,7 @@ const USAGE_KEYS = ["max_brands", "max_monitoring_projects", "max_members", "max
 
 function PlanCard() {
   const { t, fmtDate } = useI18n();
+  const canBilling = useCan("billing:read");
   const q = useQuery({ queryKey: ["plan"], queryFn: () => api.get<PlanUsage>("/organization/plan") });
   if (!q.data) return <ErrorBanner error={q.error} />;
   const p = q.data;
@@ -50,7 +52,9 @@ function PlanCard() {
           <span className="text-ink-soft">{freq ? frequencyLabel(freq, t) : t("plan.unlimited")}</span>
         </li>
       </ul>
-      <p className="mt-4 text-xs text-ink-mute">{t("plan.contact")}</p>
+      <p className="mt-4 text-xs text-ink-mute">
+        {canBilling ? <Link href="/billing" className="text-brand hover:underline">{t("plan.manage")}</Link> : t("plan.contact")}
+      </p>
     </Card>
   );
 }

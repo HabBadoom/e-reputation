@@ -128,6 +128,9 @@ class Api:
     def post(self, url, **kw):
         return self.c.post(url, headers=self._h(), **kw)
 
+    def put(self, url, **kw):
+        return self.c.put(url, headers=self._h(), **kw)
+
     def patch(self, url, **kw):
         return self.c.patch(url, headers=self._h(), **kw)
 

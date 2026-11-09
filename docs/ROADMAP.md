@@ -13,20 +13,21 @@ Each milestone ends with passing tests, migrations, docs and a recorded list of 
 | **5 — Reputation intelligence** | Sentiment analytics and reputation index, trends and emerging topics, crisis lifecycle, competitor share of voice, alert rules (in-app, e-mail digest, signed webhooks), PDF/XLSX/CSV/HTML reports in fr/ar/en with rule-based recommendations | ✅ Done (scheduled report delivery by e-mail, entity resolution beyond aliases → later) |
 | **6 — Browser fleet** | Worker registry and heartbeats, resource-aware scheduler, 11-state mission machine enforced in the database, isolated contexts, request and redirect-hop address checks, automatic challenge detection with autonomous response (no bypass, domain back-off, source restriction), JavaScript page rendering in collection | ✅ Done (no human intervention by decision; network egress firewall is a deployment task) |
 | **7 — Multi-agent** | Orchestrator + 13 agents over typed service interfaces (tool allowlists, permission ceiling, timeouts, versions), compliance policy and human approvals, reply drafts, prompt-injection evaluation suite | ✅ Done (in-house orchestrator instead of LangGraph; nothing is published automatically) |
-| **8 — Commercialisation** | Billing provider abstraction, plans/entitlements, usage metering, admin console, production deployment | Planned |
+| **8 — Commercialisation** | Plan catalogue (tiers, prices, entitlements edited in the admin console), monthly quotas and usage metering, manual invoicing (Algerian identifiers, gapless numbering, immutable issued invoices, PDF fr/ar/en), plan requests, trial expiry, retention jobs, platform admin console, `/metrics` and Sentry, production stack (Caddy TLS, isolated networks, egress firewall, backups with CI restore test, GHCR release images) | ✅ Done (no payment gateway by decision; tier limits and prices to be set by you; legal and accounting validations pending) |
 
 ## Decisions (2026-11-05)
 
 | Topic | Decision | Consequence for the build |
 |---|---|---|
 | Search provider | **Deferred** | M3 ships the `SearchProvider` interface + RSS/website connectors; no search vendor is wired in until chosen. |
-| Hosting | **EU region** | Requires a legal opinion on cross-border transfer under Law 18-07 (and possibly ANPDP authorisation) **before** real customer data is stored. Pick EU cloud region in M8. |
+| Hosting | **EU region** | Requires a legal opinion on cross-border transfer under Law 18-07 (and possibly ANPDP authorisation) **before** real customer data is stored. Production stack is provider-neutral (any EU region); see DEPLOYMENT. |
 | Billing | **Manual invoicing** | M8 builds plans, entitlements, usage metering and invoice records (PDF, bank transfer / purchase order). No payment-gateway integration for now; provider interface kept for later. |
 | NLP annotation | **Automatic by the SaaS** (revised 2026-11-05) | M4 builds an auto-annotation pipeline: several independent LLM "annotators" (different models/prompts) label each text; agreement → accepted label with confidence, disagreement → automatic arbitration or `UNCERTAIN`. Corrections users make on mentions feed back into the corpus. A small human-verified **gold set** is still required to measure accuracy (the benchmark can't be graded by the same models it evaluates); verified by the founder (target 300–500 texts, one-click confirm/correct UI). |
 
 ## Open questions (remaining)
 
-0. **Plan limits** — only a `trial` plan (placeholder limits: 2 brands, 2 projects, 3 members, every 6 h) and an internal `unlimited` plan exist. Real tiers (Starter → Enterprise) and their limits need to be defined.
+0. **Plan limits and prices** — tiers Starter → Enterprise exist (inactive, trial limits copied, no price). Their limits and DZD/EUR prices must be decided and entered in the admin console; nothing is invented.
+0b. **Invoice template** — mandatory mentions, VAT rate (19 % default), stamp duty and amount in words to be validated by an Algerian accountant before the first invoice.
 
 1. **Search provider** — Serper chosen (2026-11-06). **Legal review of Serper / Google-derived results is required before production** (blocked there until `connector_policies` is approved).
 2. **Legal review** of EU hosting under Law 18-07 (transfer conditions, ANPDP formalities).

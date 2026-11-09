@@ -1,0 +1,140 @@
+# Production stack for a single EU host (see docs/DEPLOYMENT.md).
+#   cp .env.production.example .env.production   # fill in, keep out of git (chmod 600)
+#   sudo scripts/egress-firewall.sh               # once per boot, before starting the stack
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+# Images come from GHCR (built by .github/workflows/release.yml); pin a release tag.
+name: repintel
+
+x-backend: &backend
+  image: ghcr.io/${GHCR_OWNER:?set GHCR_OWNER}/repintel-backend:${REPINTEL_VERSION:?set REPINTEL_VERSION}
+  env_file: [.env.production]
+  environment:
+    REPINTEL_ENV: production
+    REPINTEL_COOKIE_SECURE: "true"
+    REPINTEL_DATABASE_URL: postgresql+psycopg://repintel_app:${REPINTEL_APP_DB_PASSWORD:?}@postgres:5432/repintel
+    REPINTEL_REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
+    REPINTEL_APP_BASE_URL: https://${REPINTEL_DOMAIN:?set REPINTEL_DOMAIN}
+    HOME: /tmp
+  restart: unless-stopped
+  read_only: true
+  tmpfs: ["/tmp"]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  logging: { driver: json-file, options: { max-size: "20m", max-file: "5" } }
+
+services:
+  caddy:   # TLS (Let's Encrypt), HTTP/3, security headers; the only published ports
+    image: caddy:2.8-alpine
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment: { REPINTEL_DOMAIN: "${REPINTEL_DOMAIN}", ACME_EMAIL: "${ACME_EMAIL:?set ACME_EMAIL}" }
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: { edge: { ipv4_address: 172.30.0.10 } }
+    depends_on: [web, api]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      REPINTEL_OWNER_DB_PASSWORD: ${REPINTEL_OWNER_DB_PASSWORD:?}
+      REPINTEL_APP_DB_PASSWORD: ${REPINTEL_APP_DB_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/prod-init.sh:/docker-entrypoint-initdb.d/00-prod-init.sh:ro
+      - ./infra/postgres/create-db.sh:/opt/repintel/create-db.sh:ro
+      - ./backups:/backups
+    command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_connections=200",
+              "-c", "log_min_duration_statement=2000", "-c", "password_encryption=scram-sha-256"]
+    networks: [data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U postgres -d repintel"], interval: 5s, retries: 30 }
+    restart: unless-stopped
+    shm_size: "256mb"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?}"]
+    volumes: [redisdata:/data]
+    networks: [data]
+    healthcheck: { test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping"], interval: 5s, retries: 20 }
+    environment: { REDIS_PASSWORD: "${REDIS_PASSWORD}" }
+    restart: unless-stopped
+
+  migrate:   # runs as the owner role; the only service that gets owner credentials
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      REPINTEL_ENV: production
+      REPINTEL_MIGRATION_DATABASE_URL: postgresql+psycopg://repintel_owner:${REPINTEL_OWNER_DB_PASSWORD:?}@postgres:5432/repintel
+      REPINTEL_DATABASE_URL: postgresql+psycopg://repintel_app:${REPINTEL_APP_DB_PASSWORD:?}@postgres:5432/repintel
+    restart: "no"
+    networks: [data]
+    depends_on: { postgres: { condition: service_healthy } }
+
+  api:
+    <<: *backend
+    # Only Caddy's fixed address may set X-Forwarded-For (rate limits use the client IP).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers",
+              "--forwarded-allow-ips", "172.30.0.10", "--workers", "${API_WORKERS:-3}"]
+    networks: [edge, data, egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/readyz')"]
+      interval: 10s
+      retries: 10
+
+  worker:   # jobs, schedulers, collection, NLP, reports, daily maintenance
+    <<: *backend
+    command: ["python", "-m", "app.jobs.worker"]
+    networks: [data, egress]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    shm_size: "512mb"     # Chromium for PDF reports
+
+  browser-worker:   # isolated: own egress network, filtered by scripts/egress-firewall.sh
+    <<: *backend
+    command: ["python", "-m", "app.browser.worker"]
+    environment:
+      REPINTEL_ENV: production
+      REPINTEL_DATABASE_URL: postgresql+psycopg://repintel_app:${REPINTEL_APP_DB_PASSWORD:?}@postgres:5432/repintel
+      REPINTEL_REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
+      REPINTEL_BROWSER_WORKER_MAX_CONTEXTS: ${BROWSER_MAX_CONTEXTS:-2}
+    networks: [data, browser]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    shm_size: "1gb"
+    mem_limit: "2g"
+    cpus: 2
+
+  web:
+    image: ghcr.io/${GHCR_OWNER}/repintel-frontend:${REPINTEL_VERSION}
+    networks: [edge]
+    depends_on: { api: { condition: service_healthy } }
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+networks:
+  edge:      # caddy ↔ web ↔ api
+    ipam: { config: [{ subnet: 172.30.0.0/24 }] }
+  data:      # postgres and redis: no route to the Internet
+    internal: true
+    ipam: { config: [{ subnet: 172.30.1.0/24 }] }
+  egress:    # api and worker outbound calls (Serper, OpenAI, Brevo, public pages)
+    ipam: { config: [{ subnet: 172.30.2.0/24 }] }
+    driver_opts: { com.docker.network.bridge.name: ri-egress }
+  browser:   # the browser fleet only
+    ipam: { config: [{ subnet: 172.30.3.0/24 }] }
+    driver_opts: { com.docker.network.bridge.name: ri-browser }
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

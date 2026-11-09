@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useI18n } from "@/components/providers";
-import { Badge, LangSwitcher, Spinner } from "@/components/ui";
+import { LangSwitcher, Spinner } from "@/components/ui";
 import { api, ApiError, type AlertSummary } from "@/lib/api";
 import type { MessageKey } from "@/lib/i18n";
 import { useMe } from "@/lib/session";
@@ -24,12 +24,9 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
   { href: "/nlp", key: "nav.nlp" },
   { href: "/team", key: "nav.team" },
   { href: "/audit", key: "nav.audit", perm: "audit:read" },
+  { href: "/billing", key: "nav.billing", perm: "billing:read" },
   { href: "/settings", key: "nav.settings" },
   { href: "/account", key: "nav.account" },
-];
-// Shown disabled so users can see what's coming without being shown fake screens.
-const UPCOMING: { key: MessageKey; milestone: number }[] = [
-  { key: "nav.billing", milestone: 8 },
 ];
 
 /** Open alerts counter, refreshed every minute. */
@@ -129,12 +126,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
-          <p className="px-2 pb-1 pt-5 text-[11px] font-medium uppercase tracking-wider text-ink-mute">{t("nav.upcoming")}</p>
-          {UPCOMING.map((n) => (
-            <div key={n.key} aria-disabled className="flex items-center justify-between px-2 py-1.5 text-sm text-ink-mute">
-              {t(n.key)} <Badge>{t("nav.milestone", { n: n.milestone })}</Badge>
-            </div>
-          ))}
+          {u.is_platform_admin && (
+            <Link href="/admin" aria-current={path.startsWith("/admin") ? "page" : undefined}
+                  className={`mt-4 block rounded border-t border-line px-2 pb-1.5 pt-3 text-sm ${path.startsWith("/admin") ? "font-medium text-brand-strong" : "text-ink-soft hover:bg-paper-sunk"}`}>
+              {t("nav.admin")}
+            </Link>
+          )}
         </nav>
         <div className="space-y-3 border-t border-line p-3">
           <LangSwitcher />

@@ -101,9 +101,24 @@ Daily sentiment and reputation figures are computed on demand from `mentions` + 
 | `approval_requests` | tenant | one per sensitive action; pending/approved/rejected/expired; decider must hold `ai:approve`; final once decided |
 | `brands` + | tenant | `response_tone`, `response_guidelines` |
 
+## Milestone 8 tables
+
+| Table | Scope | Notes |
+|---|---|---|
+| `plans` + | global | `description`, `is_public`, `sort_order`; tiers starter → enterprise created inactive, without prices. Readable by all, writable by platform admins only |
+| `plan_entitlements` + | global | new keys `max_mentions_per_month`, `max_ai_calls_per_month`, `max_reports_per_month`, `max_webhooks`, `max_concurrent_browser_missions`, `max_retention_days` (NULL = unlimited) |
+| `plan_prices` | global | plan × currency × month/year, amount in minor units; replaced prices kept inactive (history) |
+| `subscriptions` + | tenant | status adds `expired`; `billing_interval`, `currency`, `current_period_start`, `canceled_at`, `notes`; writable by platform admins only (trigger) |
+| `billing_accounts` | tenant | legal name, address, RC, NIF, NIS, article d'imposition, VAT number, e-mail, currency |
+| `invoices` | tenant | draft → issued → paid / void; number `PREFIX-YEAR-00001` assigned at issue (gapless, `invoice_counters`); seller and buyer snapshots; subtotal, VAT, stamp duty, total, amount in words; immutable once issued |
+| `invoice_lines` | tenant | composite FK to the invoice; immutable once issued |
+| `usage_events` | tenant | metric (`mentions_collected`, `search_queries`, `ai_calls`, `ai_tokens`, `browser_missions`, `reports_generated`, `agent_tasks`, `emails_sent`), quantity, reference; recorded in the same transaction as the work; monthly sums in Algiers time (`usage_this_month`) |
+| `plan_change_requests` | tenant | one pending at a time; done / declined / cancelled |
+| `connector_policies` + | global | `review_notes`; review recorded by platform admins |
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:
-source_health_checks / collection_events history, mention_entities (M5) · mention_analysis, sentiment_history, trend_events, crisis_events, reputation_metrics, competitor_analysis, notifications, reports (M5) · browser_* , captcha_events, human_interventions (M6) · ai_tasks, ai_actions, agent_runs, approval_requests (M7) · invoices, usage metering (M8).
+source_health_checks / collection_events history, mention_entities (M5) · mention_analysis, sentiment_history, trend_events, crisis_events, reputation_metrics, competitor_analysis, notifications, reports (M5) · browser_* , captcha_events, human_interventions (M6) · ai_tasks, ai_actions, agent_runs, approval_requests (M7) · ~~invoices, usage metering (M8)~~ done.
 
 `mentions` will keep `original_text` immutable alongside `normalized_text`, `content_hash`, `source_url`, `collection_method`, `connector_version`, `published_at` (nullable — never invented) and `collected_at`.

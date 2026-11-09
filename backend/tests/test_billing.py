@@ -84,6 +84,9 @@ def test_invoice_lifecycle(make_user, platform_admin, seller, owner_engine):
     assert customer.get("/api/v1/billing").json()["invoices"] == []
     assert customer.get(f"/api/v1/billing/invoices/{draft['id']}/pdf").status_code == 404
 
+    preview = admin.get(f"{base}/{draft['id']}/pdf")          # admins can preview drafts
+    assert preview.status_code == 200 and preview.content[:5] == b"%PDF-"
+
     # Issuing needs the customer's legal identifiers
     r = admin.post(f"{base}/{draft['id']}/issue")
     assert r.status_code == 422 and r.json()["error"]["code"] == "billing_account_incomplete"
@@ -282,7 +285,8 @@ def test_webhook_limit(make_user, custom_plan, hooks):  # noqa: F811
 
 def test_ai_quota_stops_analysis_without_inventing(make_user, custom_plan, openai):  # noqa: F811
     api = make_user()
-    custom_plan(api, max_ai_calls_per_month=3)
+    # A mention needs room for 3 annotators + a possible arbiter (4 calls) before it starts.
+    custom_plan(api, max_ai_calls_per_month=5)
     b = _brand(api)
     first = _mention(api, b, "", "réseau Djezzy en panne")
     second = _mention(api, b, "", "Djezzy mlih")

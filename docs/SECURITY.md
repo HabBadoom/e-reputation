@@ -88,9 +88,13 @@ Pre-authentication lookups (login by email, refresh token, invitation token) use
 - Prompt injection: capability separation (the agent reading untrusted text can only draft; the agent that chooses can only see the member's request and an enum), escaped `<data>` framing, strict schemas, output validation, action kinds fixed in code; CI evaluation suite in French, Darija/Arabizi and Arabic.
 - Sending text to the AI provider stays gated by its compliance record (blocked in production until approved).
 
-## Plans
+## Plans, billing and the admin console (Milestone 8)
 
-Limits are read from `plans`/`plan_entitlements` and enforced server-side (HTTP 402 `plan_limit_reached`). Tenants can read but not change their subscription.
+- Limits are read from `plans`/`plan_entitlements` and enforced server-side (HTTP 402 `plan_limit_reached`); monthly quotas (mentions, AI calls, reports) from metered `usage_events`. An expired or cancelled subscription stops new work (402 `subscription_inactive`) while existing data stays readable.
+- Tenants can read but never change their subscription, plans, prices, entitlements or invoices: RLS policies allow writes only when `app_is_platform_admin()`, and triggers refuse the application role otherwise. Issued invoices are immutable (only `paid`/`void` transitions); numbering is gapless per year (`next_invoice_number`, admin only); a draft deleted consumes no number.
+- The platform admin flag is set by an operator in the database (the app role cannot change it). The `/admin` console requires it **and** two-step verification (`REPINTEL_ADMIN_REQUIRE_MFA`). Cross-tenant listings go through `SECURITY DEFINER` functions that re-check the flag; acting on an organisation switches the DB context to it and writes the change to **that organisation's** audit log.
+- `/metrics` is disabled unless `REPINTEL_METRICS_TOKEN` is set, compares the token in constant time, returns only aggregates and is not routed by the edge proxy.
+- Retention: a daily job deletes each organisation's mentions, reports, resolved alerts and browser traces beyond its plan's retention (capped by `REPINTEL_RETENTION_MAX_DAYS`).
 
 ## RBAC
 
@@ -111,10 +115,11 @@ Roles `owner (100) > admin (80) > analyst (50) > viewer (10)`; permissions are r
 |---|---|
 | Optional org policy "MFA required for all members" | 3 |
 | Separate DB role for the worker (today it shares the API role and calls the queue functions) | 6 |
-| Secret manager integration (Vault / cloud KMS) | 8 |
-| Network egress firewall for browser workers (code checks done) | deployment (8) |
+| Secret manager integration (Vault / cloud KMS) — today an env file rendered by the operator | after launch |
 | Red-team evaluation of a real model on the injection corpus (beyond CI simulations) | before production |
-| Encryption at rest, backups, retention jobs | deployment (8) |
+| Point-in-time recovery (WAL archiving); today nightly logical dumps + disk snapshots | after launch |
+
+Done in Milestone 8: egress firewall for the fetching containers (`scripts/egress-firewall.sh`), backups with a CI restore test, retention jobs, encrypted disks (provider) and encrypted off-site dumps (age). See DEPLOYMENT.
 
 ## Legal
 

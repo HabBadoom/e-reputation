@@ -100,6 +100,17 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_AGENT_STEP_TIMEOUT_SECONDS` / `_TASK_TIMEOUT_SECONDS` | `60` / `600` | Agent deadlines |
 | `REPINTEL_AGENT_MAX_RESPONSE_DRAFTS` | `3` | Drafts per crisis task |
 | `REPINTEL_AI_APPROVAL_EXPIRY_HOURS` | `72` | Pending approvals expire after this |
+| `REPINTEL_DEFAULT_PLAN` / `REPINTEL_TRIAL_DAYS` | DB default (`trial`) / `14` | Plan and trial length for new organisations |
+| `REPINTEL_BILLING_PROVIDER` | `manual` | Manual invoicing (no payment gateway) |
+| `REPINTEL_BILLING_INVOICE_PREFIX` | `FAC` | Invoice numbers `FAC-2026-00001` |
+| `REPINTEL_BILLING_PAYMENT_TERMS_DAYS` | `30` | Due date after issue |
+| `REPINTEL_BILLING_DEFAULT_TAX_RATE` | `19.0` | VAT % on new drafts (confirm with your accountant) |
+| `REPINTEL_BILLING_SELLER_*` | empty | `NAME`, `ADDRESS`, `RC`, `NIF`, `NIS`, `ARTICLE_IMPOSITION`, `BANK`, `EMAIL`, `PHONE` printed on invoices; issuing refuses without name and NIF |
+| `REPINTEL_PLATFORM_NOTIFY_EMAILS` | `[]` | Who receives plan-change requests |
+| `REPINTEL_RETENTION_MAX_DAYS` | `730` | Ceiling on any plan's retention |
+| `REPINTEL_ADMIN_REQUIRE_MFA` | `true` | Admin console needs two-step verification |
+| `REPINTEL_METRICS_TOKEN` | empty | Enables `/metrics` (bearer token) |
+| `REPINTEL_SENTRY_DSN` | empty | Optional error tracking |
 | `REPINTEL_BACKEND_URL` (frontend, build time) | `http://localhost:8000` | Target of the `/api/*` rewrite |
 
 ## Adding a tenant-scoped table (checklist)

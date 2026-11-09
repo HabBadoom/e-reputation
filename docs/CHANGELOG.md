@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.0 — Milestone 8: Commercialisation and production readiness (2026-11-09)
+
+### Added
+- Migration 0009: plan catalogue (`description`, `is_public`, `sort_order`; tiers starter, professional, business, agency, enterprise created **inactive and without prices**), `plan_prices`, new entitlements (monthly mentions, AI calls, reports; webhooks; concurrent browser missions; retention days), `billing_accounts` with Algerian identifiers (RC, NIF, NIS, article d'imposition), `invoices` / `invoice_lines` with gapless yearly numbering and immutable issued invoices, `usage_events`, `plan_change_requests`, subscription status `expired`; admin-only writes enforced by RLS and triggers; `admin_tenants()`, `admin_platform_stats()`, `platform_metrics()`, `expire_trials()`, daily maintenance scheduling; browser concurrency per organisation from the plan; permission `billing:read`.
+- Usage metering in the same transaction as the work (mentions, search queries, AI calls and tokens, reports, browser missions, agent tasks, e-mails) and monthly quotas: collection stops storing at the mention quota, AI analysis leaves mentions pending at the AI quota, reports refused at the report quota; webhook limit. Expired or cancelled subscriptions stop new work (402) while data stays readable.
+- Manual invoicing: drafts (free lines or from the subscription's price), issue with seller/buyer snapshots, VAT and stamp duty, amount in words in French, paid / void, PDF in French, Arabic (RTL) or English via headless Chromium.
+- Customer **Billing** page: plan and usage bars, plan catalogue with prices or "price on request", plan change request (e-mailed to the platform team), billing details, invoices with PDF.
+- Platform **Administration** console (platform admins with two-step verification): platform figures, organisations, subscription editor, plan requests, invoices, plan limits and prices, connector legal reviews; every change audited in the organisation's own log.
+- Daily maintenance job: trial expiry with e-mail to owners, retention purge per plan (ceiling `REPINTEL_RETENTION_MAX_DAYS`), usage history pruning.
+- `/metrics` (Prometheus, token-protected, aggregates only) and optional Sentry.
+- Production deployment: `docker-compose.prod.yml` (Caddy TLS, internal data network, separate egress networks), `scripts/egress-firewall.sh`, `scripts/backup.sh` / `restore.sh` (verified, optional age encryption), `infra/postgres/prod-init.sh`, `.env.production.example`, release workflow building images to GHCR with SBOM and provenance; CI backup → restore round-trip.
+
+### Changed
+- Settings links to Billing; the "upcoming" navigation section is gone (all milestones delivered).
+- Collection, NLP, agents, reports and browser missions check the subscription and quotas before starting.
+
+### Needs human validation
+- Invoice template and VAT/stamp duty (accountant); EU hosting under law 18-07 and connector approvals (lawyer); tier limits and prices (you).
+
 ## 0.8.0 — Milestone 7: Multi-agent system (2026-11-09)
 
 ### Added

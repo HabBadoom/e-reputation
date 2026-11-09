@@ -63,6 +63,7 @@ export const api = {
   get: <T>(p: string) => request<T>("GET", p),
   post: <T>(p: string, b?: unknown) => request<T>("POST", p, b ?? {}),
   patch: <T>(p: string, b: unknown) => request<T>("PATCH", p, b),
+  put: <T>(p: string, b: unknown) => request<T>("PUT", p, b),
   del: (p: string) => request<void>("DELETE", p),
 };
 
@@ -309,4 +310,66 @@ export interface AgentCatalog {
   playbooks: Record<string, string[]>;
   actions: { kind: string; permission: string; risk: string; requires_approval: boolean }[];
   permission_ceiling: string[];
+}
+
+// ---- Milestone 8: billing and platform administration -----------------------------------------
+export type Limits = Record<string, number | null>;
+export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "expired";
+export interface BillingAccount {
+  legal_name: string; address: string; city: string; postal_code: string; country: string;
+  email: string; phone: string; rc: string; nif: string; nis: string; article_imposition: string;
+  vat_number: string; currency: string;
+}
+export interface PlanPriceOut { id?: string; currency: string; billing_interval: "month" | "year"; amount_minor: number }
+export interface PublicPlan { key: string; name: string; description: string; limits: Limits; prices: PlanPriceOut[] }
+export type InvoiceStatus = "draft" | "issued" | "paid" | "void";
+export interface InvoiceSummary {
+  id: string; number: string | null; status: InvoiceStatus; currency: string; issue_date: string | null;
+  due_date: string | null; total_minor: number; paid_at: string | null;
+}
+export interface BillingOverview {
+  plan: { key: string; name: string; status: SubscriptionStatus; active: boolean; trial_ends_at: string | null; limits: Limits };
+  usage: Record<string, number>; usage_month: Record<string, number>; provider: string;
+  account: BillingAccount; missing_fields: string[]; plans: PublicPlan[];
+  pending_request: { plan_key: string; billing_interval: string; created_at: string } | null;
+  invoices: InvoiceSummary[];
+}
+export interface PlatformStats {
+  tenants: number; users: number; pending_requests: number;
+  subscriptions: Record<string, number> | null; invoices: Record<string, number> | null;
+  outstanding: Record<string, number> | null; paid_last_30d: Record<string, number> | null;
+  usage_month: Record<string, number> | null;
+}
+export interface AdminTenantRow {
+  tenant_id: string; name: string; slug: string; created_at: string; plan_key: string; plan_name: string;
+  status: SubscriptionStatus; trial_ends_at: string | null; members: number; brands: number;
+  mentions_month: number; ai_calls_month: number; open_invoices: number; pending_request: boolean;
+}
+export interface InvoiceLineOut { description: string; quantity: number; unit_minor: number; amount_minor: number }
+export interface AdminInvoice extends InvoiceSummary {
+  locale: string; period_start: string | null; period_end: string | null; subtotal_minor: number;
+  tax_rate: number; tax_minor: number; stamp_duty_minor: number; amount_in_words: string | null;
+  notes: string; payment_method: string | null; payment_reference: string | null;
+  void_reason: string | null; voided_at: string | null; created_at: string; lines: InvoiceLineOut[];
+}
+export interface AdminSubscription {
+  plan_key: string; plan_name: string; status: SubscriptionStatus; trial_ends_at: string | null;
+  current_period_start: string | null; current_period_end: string | null;
+  billing_interval: "month" | "year" | null; currency: string | null; notes: string;
+}
+export interface AdminTenantDetail {
+  id: string; name: string; slug: string; created_at: string; subscription: AdminSubscription;
+  billing_account: Partial<BillingAccount>; missing_billing_fields: string[];
+  usage_month: Record<string, number>; invoices: AdminInvoice[];
+  requests: { id: string; plan_key: string; billing_interval: string; message: string; status: string; created_at: string }[];
+}
+export interface AdminPlan {
+  key: string; name: string; description: string; is_active: boolean; is_public: boolean;
+  is_default: boolean; sort_order: number; entitlements: Limits; unset: string[]; prices: PlanPriceOut[];
+}
+export interface ConnectorReview {
+  key: string; name: string; access_method: string; legal_basis: string; data_categories: string[] | string;
+  restrictions: string; retention_days: number | null;
+  review_status: "pending_legal_review" | "approved" | "rejected";
+  reviewed_by: string | null; reviewed_at: string | null; review_notes: string;
 }

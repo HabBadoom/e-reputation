@@ -25,16 +25,25 @@
                 │  brands · audit · (sources,  │
                 │  collection, nlp, analysis,  │
                 │  alerts, reports, billing)   │
-                └──┬──────────┬──────────┬─────┘
-                   │          │          │ publish jobs (planned)
-           ┌───────▼──┐  ┌────▼───┐  ┌───▼──────┐      ┌───────────────────┐
-           │PostgreSQL│  │ Redis  │  │ RabbitMQ │────► │ Workers (planned) │
-           │ + RLS    │  │ limits │  └──────────┘      │ collection · NLP  │
-           │(pgvector)│  │ cache  │                    │ browser fleet     │
-           └──────────┘  └────────┘                    └─────────┬─────────┘
-                                                                 │
-                                      OpenSearch (planned) ◄─────┘ Object storage (planned)
+                └──┬──────────┬────────────────┘
+                   │          │
+           ┌───────▼──────────┐  ┌▼───────┐      ┌──────────────────────────────┐
+           │ PostgreSQL + RLS │  │ Redis  │      │ worker: jobs outbox (`jobs`), │
+           │ (pgvector)       │◄─┤ limits │      │ schedulers, collection, NLP,  │
+           │ jobs outbox,     │  └────────┘      │ reports, agents, daily        │
+           │ usage metering   │◄─────────────────┤ maintenance (trials, retention)│
+           └────────▲─────────┘                  └──────────────────────────────┘
+                    │                            ┌──────────────────────────────┐
+                    └────────────────────────────┤ browser-worker × N (Chromium)│
+                                                 │ isolated egress network      │
+                                                 └──────────────────────────────┘
 ```
+
+Production (Milestone 8, `docker-compose.prod.yml`): Caddy terminates TLS and is the only
+published service; Postgres and Redis sit on an internal network with no Internet route; the
+API/worker and the browser fleet each get an egress network filtered by
+`scripts/egress-firewall.sh`. RabbitMQ and OpenSearch from the original plan were not needed:
+the Postgres outbox and indexes cover current volumes. See DEPLOYMENT.
 
 One deployable API process plus independently deployable workers. Modules talk through service functions, never through each other's tables. Workers are separate processes because collection, NLP and browser work have different scaling and isolation needs from the API.
 
@@ -50,7 +59,9 @@ backend/app/
     brands/    brands + aliases
     catalog/   products, competitors, keywords (per brand)
     monitoring/ projects, runs, query plan, run executor
-    billing/   plans & entitlements (limits from the database)
+    billing/   plans, entitlements, quotas, customer billing API (+ app/billing: usage
+               metering, invoices and PDF, daily maintenance)
+    admin/     platform administration console API (platform admins + MFA)
     notifications/ email providers (Brevo) and templates
     audit/     append-only audit log
   api/v1/      router assembly
