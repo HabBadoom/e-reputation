@@ -64,8 +64,9 @@ def test_billing_permissions(make_user, client):
     assert r.status_code == 200
     body = r.json()
     assert body["provider"] == "manual" and body["plan"]["active"] is True
-    assert set(body["missing_fields"]) == {"legal_name", "address", "rc", "nif", "nis",
-                                           "article_imposition"}
+    # The organisation's name is prefilled as legal name; legal identifiers are not invented.
+    assert body["account"]["legal_name"] == "Org"
+    assert set(body["missing_fields"]) == {"address", "rc", "nif", "nis", "article_imposition"}
     assert body["usage_month"]["mentions_collected"] == 0 and body["invoices"] == []
 
 
@@ -215,7 +216,7 @@ def test_plan_catalogue_requests_and_subscription_change(make_user, platform_adm
     assert billing["plan"]["key"] == target and billing["pending_request"] is None
     assert billing["plan"]["limits"]["max_brands"] == 7
     with owner_engine.begin() as c:
-        meta = c.execute(text("SELECT meta FROM audit_logs WHERE tenant_id = :t AND action = "
+        meta = c.execute(text("SELECT metadata FROM audit_logs WHERE tenant_id = :t AND action = "
                               "'platform.subscription_changed'"),
                          {"t": customer.tenant_id}).scalar_one()
     assert meta["before"]["plan_key"] == current and meta["after"]["plan_key"] == target
