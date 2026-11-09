@@ -13,6 +13,40 @@ const SCRIPTS = ["latin", "arabic", "arabizi", "tifinagh", "other"] as const;
 const KINDS = ["alias", "misspelling", "transliteration", "product", "abbreviation"] as const;
 const STATUSES = ["active", "paused", "archived"] as const;
 
+function ResponseToneCard({ b, canWrite }: { b: Brand; canWrite: boolean }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const [tone, setTone] = useState(b.response_tone);
+  const [guide, setGuide] = useState(b.response_guidelines);
+  const save = useMutation({
+    mutationFn: () => api.patch<Brand>(`/brands/${b.id}`, { response_tone: tone, response_guidelines: guide }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["brand", b.id] }),
+  });
+  return (
+    <Card title={t("brands.responseTitle")}>
+      <p className="mb-3 text-sm text-ink-soft">{t("brands.responseHelp")}</p>
+      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+        <fieldset disabled={!canWrite} className="space-y-3">
+          <label className="block"><span className="label">{t("brands.tone")}</span>
+            <select className="field max-w-xs" value={tone} onChange={(e) => setTone(e.target.value as Brand["response_tone"])}>
+              {(["neutral", "formal", "friendly"] as const).map((x) => <option key={x} value={x}>{t(`brands.tone.${x}`)}</option>)}
+            </select>
+          </label>
+          <label className="block"><span className="label">{t("brands.guidelines")}</span>
+            <textarea className="field min-h-24" dir="auto" maxLength={2000} value={guide} onChange={(e) => setGuide(e.target.value)}
+                      placeholder={t("brands.guidelinesPlaceholder")} />
+          </label>
+        </fieldset>
+        <div className="flex items-center gap-3">
+          {canWrite && <Button type="submit" disabled={save.isPending}>{t("common.save")}</Button>}
+          {save.isSuccess && <span className="text-sm text-signal-pos">{t("common.saved")}</span>}
+          <ErrorBanner error={save.error} />
+        </div>
+      </form>
+    </Card>
+  );
+}
+
 export default function BrandDetail() {
   const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
@@ -104,6 +138,7 @@ export default function BrandDetail() {
         <NamedListCard brandId={id} kind="competitors" canWrite={canWrite} />
       </div>
       <KeywordsCard brandId={id} canWrite={canWrite} />
+      {q.data && <ResponseToneCard key={q.data.updated_at} b={q.data} canWrite={canWrite} />}
 
       <Card title={t("nav.settings")}>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>

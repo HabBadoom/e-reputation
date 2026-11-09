@@ -80,6 +80,14 @@ Pre-authentication lookups (login by email, refresh token, invitation token) use
 - Worker functions are SECURITY DEFINER with fixed `search_path`; workers write tenant data only inside the tenant's RLS context.
 - Fleet tables are readable by platform admins only; domain state contains no tenant data.
 
+## AI agents (Milestone 7)
+
+- Agents reach data only through allowlisted tools (service wrappers) in the tenant's RLS context; no DB session, shell, network client or arbitrary command.
+- Effective rights = requesting member's current role ∩ a fixed ceiling (no members, billing, settings, approvals, platform administration); re-evaluated when the task runs.
+- Sensitive actions require a human approval by `ai:approve`; enforced in code **and** by database triggers; re-checked at execution; approvals expire; every decision is audited.
+- Prompt injection: capability separation (the agent reading untrusted text can only draft; the agent that chooses can only see the member's request and an enum), escaped `<data>` framing, strict schemas, output validation, action kinds fixed in code; CI evaluation suite in French, Darija/Arabizi and Arabic.
+- Sending text to the AI provider stays gated by its compliance record (blocked in production until approved).
+
 ## Plans
 
 Limits are read from `plans`/`plan_entitlements` and enforced server-side (HTTP 402 `plan_limit_reached`). Tenants can read but not change their subscription.
@@ -105,7 +113,7 @@ Roles `owner (100) > admin (80) > analyst (50) > viewer (10)`; permissions are r
 | Separate DB role for the worker (today it shares the API role and calls the queue functions) | 6 |
 | Secret manager integration (Vault / cloud KMS) | 8 |
 | Network egress firewall for browser workers (code checks done) | deployment (8) |
-| Prompt-injection defences for agents | 7 |
+| Red-team evaluation of a real model on the injection corpus (beyond CI simulations) | before production |
 | Encryption at rest, backups, retention jobs | deployment (8) |
 
 ## Legal

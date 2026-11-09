@@ -94,6 +94,12 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | GET | `/browser/fleet` | platform admin | Workers, capacity, domains cooling down |
 | POST | `/sources/{id}/browser-check` | `browser:run` | 202 `{mission_id, status, error}`; refused missions come back `FAILED` with the reason |
 | PATCH | `/sources/{id}` | `sources:write` | now also `render_mode: auto\|static\|browser` |
+| GET | `/ai/agents` | `ai:read` | Agent catalog (responsibility, tools, timeout, version), playbooks, action policy, permission ceiling |
+| POST | `/ai/tasks` | `ai:run` | 202 `{kind: brand_health\|crisis_response\|competitor_review\|source_discovery\|respond_to_mention\|report\|ask, brand_id?, goal?, mention_id?, report_format?, report_kind?, locale}`; 402 when the daily quota is reached |
+| GET | `/ai/tasks`, `/ai/tasks/{id}` | `ai:read` | Detail: plan, agent runs, findings, actions with approval state |
+| GET | `/ai/approvals` | `ai:read` | Actions waiting for approval (expired ones are closed) |
+| POST | `/ai/actions/{id}/approve`, `/reject` | `ai:approve` | `{comment?, reply?}` — `reply` edits a draft before approval; 409 if not pending |
+| PATCH | `/brands/{id}` | `brands:write` | now also `response_tone`, `response_guidelines` |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
 ## Example (API client)

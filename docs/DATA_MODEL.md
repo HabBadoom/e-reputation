@@ -91,6 +91,16 @@ Daily sentiment and reputation figures are computed on demand from `mentions` + 
 | `sources` + | tenant | `render_mode`, `challenge_count`, `last_challenge_kind/at` |
 | `mentions` + | tenant | `verified_with` (`http`/`browser`), states `pending_render`, `blocked_by_challenge` |
 
+## Milestone 7 tables
+
+| Table | Scope | Notes |
+|---|---|---|
+| `ai_tasks` | tenant | kind / resolved kind, goal, brand, params, locale, status, plan, result (findings, step statuses, action counts), orchestrator version |
+| `agent_runs` | tenant | one per step: agent + version, input, typed output, tools used, model calls / id / prompt version, status, error, duration |
+| `ai_actions` | tenant | kind (allowlisted), validated params, rationale, risk, requires_approval, status, compliance record at proposal and execution, result |
+| `approval_requests` | tenant | one per sensitive action; pending/approved/rejected/expired; decider must hold `ai:approve`; final once decided |
+| `brands` + | tenant | `response_tone`, `response_guidelines` |
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

@@ -96,6 +96,10 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_BROWSER_RESTART_AFTER_MISSIONS` | `100` | Browser recycled periodically |
 | `REPINTEL_BROWSER_RESTRICTED_AFTER_CHALLENGES` | `3` | Challenges in a row before a source is marked restricted |
 | `REPINTEL_BROWSER_EXTRA_ARGS` | `[]` | Extra Chromium flags (e.g. an egress proxy) |
+| `REPINTEL_AGENT_MODEL` | first of `REPINTEL_NLP_MODELS` | Model for the Response agent and request routing |
+| `REPINTEL_AGENT_STEP_TIMEOUT_SECONDS` / `_TASK_TIMEOUT_SECONDS` | `60` / `600` | Agent deadlines |
+| `REPINTEL_AGENT_MAX_RESPONSE_DRAFTS` | `3` | Drafts per crisis task |
+| `REPINTEL_AI_APPROVAL_EXPIRY_HOURS` | `72` | Pending approvals expire after this |
 | `REPINTEL_BACKEND_URL` (frontend, build time) | `http://localhost:8000` | Target of the `/api/*` rewrite |
 
 ## Adding a tenant-scoped table (checklist)

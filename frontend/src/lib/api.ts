@@ -78,6 +78,7 @@ export interface Alias { id: string; alias: string; script: string; kind: string
 export interface Brand {
   id: string; name: string; description: string; website: string | null; country: string;
   primary_language: string; status: "active" | "paused" | "archived";
+  response_tone: "neutral" | "formal" | "friendly"; response_guidelines: string;
   created_at: string; updated_at: string; aliases: Alias[];
 }
 export interface Page<T> { items: T[]; total: number; limit: number; offset: number }
@@ -272,4 +273,40 @@ export interface Fleet {
     active_contexts: number; metrics: Record<string, number | null>; started_at: string; last_heartbeat_at: string }[];
   cooling_domains: { domain: string; cooldown_until: string; consecutive_challenges: number; last_challenge_kind: string }[];
   capacity: number; busy: number;
+}
+// ---- Milestone 7: AI agents ------------------------------------------------------------------
+export type TaskKind = "brand_health" | "crisis_response" | "competitor_review" | "source_discovery"
+  | "respond_to_mention" | "report" | "ask";
+export type AiTaskStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled";
+export type ActionStatus = "proposed" | "rejected_by_policy" | "pending_approval" | "approved" | "rejected"
+  | "executed" | "failed" | "expired";
+export interface AgentFinding {
+  agent: string; code: string; kind: "fact" | "inference" | "limitation"; level: "info" | "warning" | "critical";
+  values: Record<string, unknown>;
+}
+export interface AiTask {
+  id: string; kind: TaskKind; resolved_kind: TaskKind | null; goal: string; brand_id: string | null;
+  status: AiTaskStatus; error: string | null; plan: { agent: string; version: string }[];
+  result: { findings?: AgentFinding[]; steps?: Record<string, string>; actions?: Partial<Record<ActionStatus, number>> };
+  locale: string; created_at: string; finished_at: string | null;
+}
+export interface AgentRunOut {
+  id: string; position: number; agent: string; agent_version: string;
+  status: "running" | "completed" | "failed" | "timeout" | "skipped"; output: Record<string, unknown>;
+  tools_used: string[]; llm_calls: number; llm_model: string | null; prompt_version: string | null;
+  error: string | null; duration_ms: number | null;
+}
+export interface AiActionOut {
+  id: string; task_id: string; kind: string; params: Record<string, unknown>; rationale: Record<string, unknown>;
+  risk: "low" | "medium" | "high"; requires_approval: boolean; status: ActionStatus;
+  compliance: Record<string, unknown>; result: Record<string, unknown>; error: string | null;
+  created_at: string; executed_at: string | null;
+  approval: { id: string; status: string; expires_at: string; decided_at: string | null; comment: string } | null;
+}
+export interface AiTaskDetail extends AiTask { runs: AgentRunOut[]; actions: AiActionOut[] }
+export interface AgentCatalog {
+  agents: { name: string; version: string; responsibility: string; tools: string[]; timeout_seconds: number }[];
+  playbooks: Record<string, string[]>;
+  actions: { kind: string; permission: string; risk: string; requires_approval: boolean }[];
+  permission_ceiling: string[];
 }

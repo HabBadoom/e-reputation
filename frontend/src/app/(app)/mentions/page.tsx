@@ -1,6 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { Fragment, useState } from "react";
 import { AnalysisBadges, AnalysisDetails, CorrectionForm, langLabel, SENTIMENTS } from "@/components/analysis";
 import { useI18n } from "@/components/providers";
@@ -61,6 +62,12 @@ function Provenance({ id }: { id: string }) {
 function MentionCard({ m }: { m: Mention }) {
   const { t } = useI18n();
   const canCorrect = useCan("nlp:correct");
+  const canAi = useCan("ai:run");
+  const router = useRouter();
+  const draft = useMutation({
+    mutationFn: () => api.post<{ id: string }>("/ai/tasks", { kind: "respond_to_mention", mention_id: m.id }),
+    onSuccess: (task) => router.push(`/ai-agents?task=${task.id}`),
+  });
   const [open, setOpen] = useState(false);
   const [correcting, setCorrecting] = useState(false);
   return (
@@ -79,6 +86,9 @@ function MentionCard({ m }: { m: Mention }) {
         {m.is_repost && <Badge tone="warn">{t("mentions.repost")}</Badge>}
         <AnalysisBadges a={m.analysis} />
         <span className="ms-auto flex gap-3">
+          {canAi && (
+            <button className="text-xs text-brand hover:underline" disabled={draft.isPending} onClick={() => draft.mutate()}>{t("ai.draftReply")}</button>
+          )}
           {canCorrect && m.analysis.status === "done" && (
             <button className="text-xs text-brand hover:underline" onClick={() => setCorrecting(!correcting)}>{t("nlp.correct")}</button>
           )}

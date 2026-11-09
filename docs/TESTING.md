@@ -29,6 +29,8 @@
 | `backend/tests/sql/test_rls_browser.sql` | Missions/events/challenges isolated, no cross-tenant source, missions must start CREATED, illegal transitions refused, every transition audited, fleet tables admin-read-only, resource-aware claim (priority, one per domain, cooldown), exponential back-off, recovery (requeue / fail / expire) | `make test-sql` |
 | `backend/tests/test_browser_detect.py` | Each challenge family detected; ordinary pages (invisible reCAPTCHA, static JS shell, article about CAPTCHAs, 404) are not | `make test-api` |
 | `backend/tests/test_browser.py` | **Real Chromium** vs local server: JS page rendered and verified, internal requests refused, cleanup verified; static challenge → fallback, cooldown, no re-knock, restriction after 3; challenge in the browser stops the mission; redirect to an internal address blocked; permissions, isolation, cancel, fleet view; transitions identical in code and DB | 〃 |
+| `backend/tests/sql/test_rls_agents.sql` | Tasks/runs/actions/approvals isolated; approval-required actions cannot execute without approval; viewers cannot approve; decisions are final | `make test-sql` |
+| `backend/tests/test_agents.py` | All agents on seeded data (tool allowlists respected, no model for analysis), autonomous low-risk action, drafts wait for approval (RBAC, edit, reject, expiry), sensitive actions re-checked, honest degradation without AI provider, permission ceiling; **prompt-injection suite** | `make test-api` |
 | `backend/tests/test_brands.py` | Brand CRUD, multi-script aliases, duplicates, LIKE escaping, pagination, script heuristic | 〃 |
 
 Tests use a real PostgreSQL (no SQLite, no mocks of RLS). Each test truncates data tables via the owner role.

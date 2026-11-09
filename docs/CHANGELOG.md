@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0 — Milestone 7: Multi-agent system (2026-11-09)
+
+### Added
+- Migration 0008: `ai_tasks`, `agent_runs`, `ai_actions`, `approval_requests` (RLS); triggers that refuse executing approval-required actions without an approval decided by an allowed member, and decided approvals from changing; `brands.response_tone` / `response_guidelines`; `ai:read`, `ai:run`, `ai:approve`; plan quota `max_ai_tasks_per_day`.
+- Orchestrator and 13 agents (monitoring, collection, discovery, language, entity, sentiment, reputation, trend, crisis, competitor, response, reporting, compliance) with typed outputs, tool allowlists, permission ceiling, timeouts and versions; findings labelled fact / inference / limitation.
+- Compliance policy for actions: low-risk actions run within the member's rights, sensitive ones wait for human approval and are re-checked at execution.
+- Response agent drafting replies in Darija (Arabic or Latin script), Arabic, French or English in the brand's tone; output validation; never published.
+- Free-text requests routed to an allowlisted playbook only.
+- API `/ai/*`, worker job `ai.task`; UI "AI agents" (tasks, steps, findings, actions, approvals with editable reply drafts, agent catalog and rules), "Draft a reply" on mentions, brand reply tone and guidelines.
+- Prompt-injection evaluation suite (French, Darija/Arabizi, Arabic, mixed; compromised-model simulations).
+
+### Changed
+- "Run now" for monitoring projects shares one service function with the Monitoring agent.
+
 ## 0.7.0 — Milestone 6: Browser fleet (2026-11-08)
 
 ### Added

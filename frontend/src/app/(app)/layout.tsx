@@ -19,6 +19,7 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
   { href: "/alerts", key: "nav.alerts", perm: "alerts:read" },
   { href: "/reports", key: "nav.reports", perm: "reports:read" },
   { href: "/browser", key: "nav.browser", perm: "browser:read" },
+  { href: "/ai-agents", key: "nav.agents", perm: "ai:read" },
   { href: "/sources", key: "nav.sources", perm: "sources:read" },
   { href: "/nlp", key: "nav.nlp" },
   { href: "/team", key: "nav.team" },
@@ -28,7 +29,7 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
 ];
 // Shown disabled so users can see what's coming without being shown fake screens.
 const UPCOMING: { key: MessageKey; milestone: number }[] = [
-  { key: "nav.agents", milestone: 7 },
+  { key: "nav.billing", milestone: 8 },
 ];
 
 /** Open alerts counter, refreshed every minute. */
