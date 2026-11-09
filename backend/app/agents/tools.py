@@ -89,14 +89,14 @@ def monitoring_projects(ctx: AgentContext, brand_id: uuid.UUID | None) -> list[d
     out = []
     for p in ctx.db.scalars(stmt.limit(50)):
         last = ctx.db.scalars(select(MonitoringRun).where(MonitoringRun.project_id == p.id)
-                              .order_by(MonitoringRun.created_at.desc()).limit(1)).one_or_none()
+                              .order_by(MonitoringRun.queued_at.desc()).limit(1)).one_or_none()
         failed = ctx.db.scalar(select(func.count()).select_from(MonitoringRun).where(
             MonitoringRun.project_id == p.id, MonitoringRun.status == "failed",
-            MonitoringRun.created_at > datetime.now(UTC) - timedelta(days=7))) or 0
+            MonitoringRun.queued_at > datetime.now(UTC) - timedelta(days=7))) or 0
         out.append({"id": p.id, "name": p.name, "status": p.status,
                     "frequency_minutes": p.frequency_minutes,
                     "last_run_status": last.status if last else None,
-                    "last_run_at": last.created_at if last else None, "failed_7d": failed})
+                    "last_run_at": last.queued_at if last else None, "failed_7d": failed})
     return out
 
 
