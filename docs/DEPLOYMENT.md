@@ -135,7 +135,7 @@ Check it from inside: `docker compose … exec browser-worker python -c "import 
 
 ## 7. Backups and restore
 
-- **Logical backups** with `scripts/backup.sh` (pg_dump custom format, verified with
+- **Logical backups** with `scripts/backup.sh` (pg_dump custom format with the server's own major version, verified with
   `pg_restore --list`, SHA-256 alongside, local pruning after `BACKUP_KEEP_DAYS`).
   Set `BACKUP_AGE_RECIPIENT` to encrypt with [age](https://age-encryption.org) before the
   file leaves the host, then copy it to EU object storage in another region/provider

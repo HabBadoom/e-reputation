@@ -19,6 +19,15 @@ umask 077
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="$DIR/repintel-$STAMP.dump"
 
+# A newer pg_dump writes archives an older server cannot restore (e.g. settings it does not
+# know); run the server's own major version — in production, inside the postgres container.
+client=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
+server=$(psql -XtA -d "$DB" -c "SHOW server_version_num" | cut -c1-2)
+if [ "$client" != "$server" ]; then
+  echo "pg_dump major version $client differs from the server's $server: use the server's tools" >&2
+  exit 1
+fi
+
 pg_dump --dbname="$DB" --format=custom --compress=6 --no-comments --file="$OUT.partial"
 pg_restore --list "$OUT.partial" >/dev/null          # the archive is readable
 mv "$OUT.partial" "$OUT"

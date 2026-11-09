@@ -82,18 +82,21 @@ jobs:
         run: uv run playwright install --with-deps chromium
       - name: API tests
         run: uv run pytest -v
-      - name: Backup and restore round-trip
+      - name: Backup and restore round-trip (server's PostgreSQL 16 tools, as in production)
+        working-directory: .
         run: |
-          pg_dump --version
-          f=$(BACKUP_DIR=$RUNNER_TEMP/backups PGDATABASE=repintel ../scripts/backup.sh)
-          ../scripts/restore.sh "$f" repintel_restore
+          docker run --rm --network host -v "$PWD:/w" -w /w -e PGHOST -e PGUSER -e PGPASSWORD \
+            pgvector/pgvector:pg16 bash -euo pipefail -c '
+              f=$(BACKUP_DIR=/tmp/backups PGDATABASE=repintel scripts/backup.sh)
+              scripts/restore.sh "$f" repintel_restore
+              ! scripts/restore.sh "$f" repintel_restore     # refuses a non-empty target
+            '
           q="SELECT (SELECT count(*) FROM pg_tables WHERE schemaname='public'),
                     (SELECT count(*) FROM pg_class WHERE relforcerowsecurity),
                     (SELECT count(*) FROM pg_policies), (SELECT version_num FROM alembic_version),
                     (SELECT count(*) FROM plans), (SELECT count(*) FROM connector_policies)"
           a=$(psql -XtA -d repintel -c "$q"); b=$(psql -XtA -d repintel_restore -c "$q")
           echo "source:   $a"; echo "restored: $b"; test "$a" = "$b"
-          ! ../scripts/restore.sh "$f" repintel_restore    # refuses a non-empty target
           PGPASSWORD=repintel_app psql -XtA -h localhost -U repintel_app -d repintel_restore \
             -c "SELECT count(*) FROM plans" | grep -qx 7
 
