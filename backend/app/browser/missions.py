@@ -61,6 +61,8 @@ def create_mission(db: Session, tenant_id: uuid.UUID, kind: str, url: str, *,
                        deadline_at=datetime.now(UTC) + timedelta(hours=deadline_hours))
     db.add(m)
     db.flush()
+    from app.billing import usage
+    usage.record(db, tenant_id, "browser_missions", 1, mission=m.id)
     transition(m, "VALIDATING")
     db.flush()
     auth = authorize(db, tenant_id, url, robots=robots)

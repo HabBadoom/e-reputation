@@ -220,7 +220,11 @@ class Plan(Base):
     name: Mapped[str] = mapped_column(String(100))
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
 
 
 class PlanEntitlement(Base):
@@ -237,7 +241,12 @@ class Subscription(Base):
     plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id"))
     status: Mapped[str] = mapped_column(String(20), default="trialing")
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    billing_interval: Mapped[str | None] = mapped_column(String(10))
+    currency: Mapped[str | None] = mapped_column(String(3))
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
 
@@ -337,6 +346,7 @@ class ConnectorPolicy(Base):
     review_status: Mapped[str] = mapped_column(String(30))
     reviewed_by: Mapped[str | None] = mapped_column(Text)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = _created()
 
 
@@ -780,3 +790,104 @@ class ApprovalRequest(Base):
     comment: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = _created()
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+# ---------------------------------------------------------------- Milestone 8
+class PlanPrice(Base):
+    __tablename__ = "plan_prices"
+    id: Mapped[uuid.UUID] = _pk()
+    plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id", ondelete="CASCADE"))
+    currency: Mapped[str] = mapped_column(String(3))
+    billing_interval: Mapped[str] = mapped_column(String(10))
+    amount_minor: Mapped[int] = mapped_column(BigInteger)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = _created()
+
+
+class BillingAccount(Base):
+    __tablename__ = "billing_accounts"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"),
+                                                 primary_key=True)
+    legal_name: Mapped[str] = mapped_column(String(200), default="")
+    address: Mapped[str] = mapped_column(Text, default="")
+    city: Mapped[str] = mapped_column(String(100), default="")
+    postal_code: Mapped[str] = mapped_column(String(20), default="")
+    country: Mapped[str] = mapped_column(String(2), default="DZ")
+    email: Mapped[str] = mapped_column(String(320), default="")
+    phone: Mapped[str] = mapped_column(String(40), default="")
+    rc: Mapped[str] = mapped_column(String(40), default="")
+    nif: Mapped[str] = mapped_column(String(40), default="")
+    nis: Mapped[str] = mapped_column(String(40), default="")
+    article_imposition: Mapped[str] = mapped_column(String(40), default="")
+    vat_number: Mapped[str] = mapped_column(String(40), default="")
+    currency: Mapped[str] = mapped_column(String(3), default="DZD")
+    updated_at: Mapped[datetime] = _created()
+
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="RESTRICT"))
+    number: Mapped[str | None] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(10), default="draft")
+    currency: Mapped[str] = mapped_column(String(3))
+    locale: Mapped[str] = mapped_column(String(5), default="fr")
+    period_start: Mapped[date | None] = mapped_column(Date)
+    period_end: Mapped[date | None] = mapped_column(Date)
+    issue_date: Mapped[date | None] = mapped_column(Date)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    subtotal_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    tax_rate: Mapped[float] = mapped_column(default=0)
+    tax_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    stamp_duty_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    total_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    amount_in_words: Mapped[str] = mapped_column(Text, default="")
+    seller: Mapped[dict] = mapped_column(JSONB, default=dict)
+    buyer: Mapped[dict] = mapped_column(JSONB, default=dict)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    payment_method: Mapped[str | None] = mapped_column(String(30))
+    payment_reference: Mapped[str] = mapped_column(String(200), default="")
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    void_reason: Mapped[str] = mapped_column(String(300), default="")
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class InvoiceLine(Base):
+    __tablename__ = "invoice_lines"
+    __table_args__ = (_tenant_fk("invoices", "invoice_id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    invoice_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    position: Mapped[int] = mapped_column()
+    description: Mapped[str] = mapped_column(String(500))
+    quantity: Mapped[float] = mapped_column()
+    unit_minor: Mapped[int] = mapped_column(BigInteger)
+    amount_minor: Mapped[int] = mapped_column(BigInteger)
+
+
+class UsageEvent(Base):
+    __tablename__ = "usage_events"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    metric: Mapped[str] = mapped_column(String(30))
+    quantity: Mapped[int] = mapped_column(BigInteger)
+    ref: Mapped[dict] = mapped_column(JSONB, default=dict)
+    occurred_at: Mapped[datetime] = _created()
+
+
+class PlanChangeRequest(Base):
+    __tablename__ = "plan_change_requests"
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id"))
+    billing_interval: Mapped[str] = mapped_column(String(10))
+    message: Mapped[str] = mapped_column(String(1000), default="")
+    status: Mapped[str] = mapped_column(String(10), default="pending")
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    handled_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()

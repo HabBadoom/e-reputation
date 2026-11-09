@@ -239,6 +239,8 @@ def browser_check_source(source_id: uuid.UUID, request: Request,
     if src.kind != "website":
         raise AppError("Only websites can be rendered", code="invalid_kind", status_code=422)
     get_limiter().hit(f"browser:check:{ctx.tenant_id}", 60, 3600)
+    from app.modules.billing.entitlements import ensure_active
+    ensure_active(db, ctx.tenant_id)
     m = create_mission(db, ctx.tenant_id, "check_source", src.url, source_id=src.id,
                        priority=7, created_by=ctx.user_id)
     record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id,

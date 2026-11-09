@@ -26,6 +26,8 @@ from app.main import create_app  # noqa: E402
 from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
 DATA_TABLES = [
+    "usage_events", "plan_change_requests", "invoice_lines", "invoices", "billing_accounts",
+    "invoice_counters",
     "approval_requests", "ai_actions", "agent_runs", "ai_tasks",
     "captcha_events", "browser_session_events", "browser_sessions", "browser_missions",
     "browser_workers", "browser_domain_state",
@@ -166,4 +168,54 @@ def join(owner: Api, member: Api, role: str) -> Api:
 def make_user(client):
     def _make(**kw) -> Api:
         return register(client, **kw)
+    return _make
+
+
+@pytest.fixture
+def custom_plan(owner_engine):
+    """`custom_plan(api, **limits)` moves the organization to a throw-away plan that copies the
+    unlimited plan's entitlements with `limits` overriding them (None = unlimited). Removed
+    afterwards, so tests never alter the seeded plans."""
+    created: list[str] = []
+
+    def _make(api: Api, *, status: str = "trialing", **limits) -> str:
+        key = f"t_{uuid.uuid4().hex[:10]}"
+        with owner_engine.begin() as c:
+            pid = c.execute(text("INSERT INTO plans (id, key, name, is_active) VALUES "
+                                 "(gen_random_uuid(), :k, :k, true) RETURNING id"),
+                            {"k": key}).scalar_one()
+            c.execute(text("INSERT INTO plan_entitlements (plan_id, key, value) "
+                           "SELECT :p, e.key, e.value FROM plan_entitlements e "
+                           "JOIN plans p ON p.id = e.plan_id WHERE p.key = 'unlimited'"),
+                      {"p": pid})
+            for k, v in limits.items():
+                c.execute(text("INSERT INTO plan_entitlements (plan_id, key, value) "
+                               "VALUES (:p, :k, :v) ON CONFLICT (plan_id, key) "
+                               "DO UPDATE SET value = EXCLUDED.value"), {"p": pid, "k": k, "v": v})
+            c.execute(text("UPDATE subscriptions SET plan_id = :p, status = :s "
+                           "WHERE tenant_id = :t"), {"p": pid, "s": status, "t": api.tenant_id})
+        created.append(key)
+        return key
+
+    yield _make
+    with owner_engine.begin() as c:
+        for key in created:
+            c.execute(text("TRUNCATE plan_change_requests"))
+            c.execute(text("DELETE FROM subscriptions WHERE plan_id = "
+                           "(SELECT id FROM plans WHERE key = :k)"), {"k": key})
+            c.execute(text("DELETE FROM plans WHERE key = :k"), {"k": key})
+
+
+@pytest.fixture
+def platform_admin(owner_engine, monkeypatch):
+    """`platform_admin(api)` flags the user as a platform administrator (an operator action).
+    MFA for the console is disabled here; test_billing checks it separately."""
+    from app.core.config import get_settings
+    monkeypatch.setattr(get_settings(), "admin_require_mfa", False)
+
+    def _make(api: Api) -> Api:
+        with owner_engine.begin() as c:
+            c.execute(text("UPDATE users SET is_platform_admin = true WHERE email = :e"),
+                      {"e": api.email})
+        return api
     return _make

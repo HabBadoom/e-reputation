@@ -40,6 +40,8 @@ def send_email(db: Session, job: Job) -> None:
         get_email_provider().send(msg)
     except EmailDeliveryError:
         raise  # transient: retried with backoff
+    from app.billing import usage
+    usage.record(db, job.tenant_id, "emails_sent", 1)
 
 
 @handler("monitoring.run")
@@ -170,3 +172,9 @@ def ai_task(db: Session, job: Job) -> None:
         if task is not None:
             task.status, task.error = "failed", f"internal_error:{type(e).__name__}"
         return
+
+
+@handler("platform.daily")
+def platform_daily(db: Session, job: Job) -> None:
+    from app.billing.maintenance import run_daily
+    run_daily()

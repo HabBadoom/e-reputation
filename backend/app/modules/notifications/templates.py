@@ -152,3 +152,32 @@ def alert_digest_email(to_email: str, name: str, locale: str,
         f"\n\n{cta}: {link}\n\n{foot}\n"
     return EmailMessage(to_email=to_email, to_name=name, subject=subject, html=html, text=text,
                         tags=("alert",))
+
+
+_TRIAL = {
+    "fr": ("Votre période d'essai est terminée", "Bonjour {name},",
+           "La période d'essai de « {org} » est terminée. La collecte est suspendue ; vos données "
+           "restent consultables et exportables. Contactez-nous pour choisir une offre.",
+           "Voir les offres"),
+    "ar": ("انتهت الفترة التجريبية", "مرحبًا {name}،",
+           "انتهت الفترة التجريبية لـ «{org}». تم تعليق الجمع؛ وتبقى بياناتكم متاحة للاطلاع "
+           "والتصدير. تواصلوا معنا لاختيار عرض.", "عرض العروض"),
+    "en": ("Your trial has ended", "Hello {name},",
+           "The trial of “{org}” has ended. Collection is paused; your data stays available to "
+           "view and export. Contact us to choose a plan.", "See plans"),
+}
+
+
+def trial_expired_email(to_email: str, name: str, locale: str, org: str) -> EmailMessage:
+    s = get_settings()
+    lang = locale if locale in _TRIAL else "fr"
+    subject, greet, body, cta = _TRIAL[lang]
+    greet, body = greet.format(name=name), body.format(org=org)
+    link = f"{s.app_base_url.rstrip('/')}/billing"
+    d = "rtl" if lang == "ar" else "ltr"
+    html = (f'<!doctype html><html lang="{lang}" dir="{d}"><body style="font-family:Arial,'
+            f'sans-serif;color:#0f1f1c"><p>{escape(greet)}</p><p>{escape(body)}</p>'
+            f'<p><a href="{escape(link, quote=True)}">{escape(cta)}</a></p></body></html>')
+    return EmailMessage(to_email=to_email, to_name=name, subject=f"[{s.email_from_name}] {subject}",
+                        html=html, text=f"{greet}\n\n{body}\n\n{cta}: {link}\n",
+                        tags=("trial_expired",))

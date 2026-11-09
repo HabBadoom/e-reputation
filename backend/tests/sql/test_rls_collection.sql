@@ -50,10 +50,11 @@ DO $$ BEGIN
               'feed_item', repeat('1', 64));
     RAISE EXCEPTION 'cross-tenant source link';
   EXCEPTION WHEN foreign_key_violation THEN NULL; END;
-  BEGIN
-    UPDATE connector_policies SET review_status = 'approved';
-    RAISE EXCEPTION 'tenant approved a connector';
-  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  -- Since 0009 platform administrators may update connector reviews; for anyone else the
+  -- row-level policy makes the update a no-op.
+  UPDATE connector_policies SET review_status = 'approved';
+  ASSERT (SELECT count(*) FROM connector_policies WHERE review_status = 'approved') = 0,
+    'tenant approved a connector';
 END $$;
 SELECT 'PASS 2: no cross-tenant links; tenants cannot approve connectors';
 

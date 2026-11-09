@@ -63,12 +63,25 @@ def _gate(db: Session) -> tuple[str | None, str]:
 def analyze_mentions(db: Session, tenant_id: uuid.UUID, mention_ids: list[uuid.UUID]) -> dict:
     rows = db.execute(select(Mention, Brand.name).join(Brand, Brand.id == Mention.brand_id)
                       .where(Mention.tenant_id == tenant_id, Mention.id.in_(mention_ids))).all()
+    from app.billing import usage
+    from app.billing.usage import CountingProvider
+    from app.modules.billing.entitlements import remaining_this_month
+
     blocked, note = _gate(db)
     ensemble = None if blocked else make_ensemble()
+    meter = None
+    if ensemble is not None:
+        meter = CountingProvider(ensemble.provider)
+        ensemble.provider = meter
     stats: dict[str, Any] = {"mentions": len(rows), "done": 0, "failed": 0, "skipped": 0,
                              "note": note}
     stop: str | None = None
     for m, brand_name in rows:
+        if not blocked and not stop:
+            left = remaining_this_month(db, tenant_id, "max_ai_calls_per_month")
+            assert ensemble is not None
+            if left is not None and left < len(ensemble.annotators) + 1:
+                stop = "ai_quota_reached"      # plan's monthly AI budget used up
         a = db.get(MentionAnalysis, m.id) or MentionAnalysis(mention_id=m.id, tenant_id=tenant_id)
         db.add(a)
         body = m.original_text or m.snippet or ""
@@ -82,9 +95,14 @@ def analyze_mentions(db: Session, tenant_id: uuid.UUID, mention_ids: list[uuid.U
             stats["skipped"] += 1
             continue
         try:
-            assert ensemble is not None
-            res = ensemble.run(target=m.entity_name, target_type=m.entity_type, brand=brand_name,
-                               title=m.title, text=body)
+            assert ensemble is not None and meter is not None
+            before = (meter.calls, meter.tokens)
+            try:
+                res = ensemble.run(target=m.entity_name, target_type=m.entity_type,
+                                   brand=brand_name, title=m.title, text=body)
+            finally:
+                usage.record(db, tenant_id, "ai_calls", meter.calls - before[0], mention=m.id)
+                usage.record(db, tenant_id, "ai_tokens", meter.tokens - before[1], mention=m.id)
         except LLMError as e:
             a.status, a.error = "failed", e.reason
             stats["failed"] += 1

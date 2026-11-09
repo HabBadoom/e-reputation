@@ -20,16 +20,28 @@ from app.db.models import (
     Plan,
     PlanEntitlement,
     Subscription,
+    Webhook,
 )
 
 KEYS = ("max_brands", "max_monitoring_projects", "max_members", "min_frequency_minutes",
         "max_competitors_per_brand", "max_keywords_per_brand", "max_browser_missions_per_day",
-        "max_ai_tasks_per_day")
+        "max_ai_tasks_per_day", "max_mentions_per_month", "max_ai_calls_per_month",
+        "max_reports_per_month", "max_webhooks", "max_concurrent_browser_missions",
+        "max_retention_days")
+# Monthly entitlements and the usage metric they cap.
+MONTHLY = {"max_mentions_per_month": "mentions_collected", "max_ai_calls_per_month": "ai_calls",
+           "max_reports_per_month": "reports_generated"}
+ACTIVE_STATUSES = ("trialing", "active", "past_due")
 
 
 class PlanLimitReached(AppError):
     status_code = 402
     code = "plan_limit_reached"
+
+
+class SubscriptionInactive(AppError):
+    status_code = 402
+    code = "subscription_inactive"
 
 
 @dataclass(frozen=True)
@@ -40,6 +52,15 @@ class PlanInfo:
     trial_ends_at: datetime | None
     limits: dict[str, int | None]
 
+    @property
+    def active(self) -> bool:
+        """Collection and new work are allowed. An expired trial is inactive even before the
+        daily job marks it expired."""
+        if self.status not in ACTIVE_STATUSES:
+            return False
+        return not (self.status == "trialing" and self.trial_ends_at is not None
+                    and self.trial_ends_at < datetime.now(UTC))
+
 
 def create_subscription(db: Session, tenant_id: uuid.UUID) -> None:
     s = get_settings()
@@ -48,6 +69,9 @@ def create_subscription(db: Session, tenant_id: uuid.UUID) -> None:
     plan = db.scalars(q).one()
     db.add(Subscription(tenant_id=tenant_id, plan_id=plan.id, status="trialing",
                         trial_ends_at=datetime.now(UTC) + timedelta(days=s.trial_days)))
+    from app.db.models import BillingAccount, Tenant
+    t = db.get(Tenant, tenant_id)
+    db.add(BillingAccount(tenant_id=tenant_id, legal_name=t.name if t else ""))
     db.flush()
 
 
@@ -79,6 +103,9 @@ def usage(db: Session, tenant_id: uuid.UUID) -> dict[str, int]:
                 Invitation.expires_at > func.now()),
         "max_browser_missions_per_day": db.scalar(text("SELECT browser_missions_today()")) or 0,
         "max_ai_tasks_per_day": db.scalar(text("SELECT ai_tasks_today()")) or 0,
+        "max_webhooks": count(Webhook, Webhook.tenant_id == tenant_id),
+        **{k: int(db.scalar(text("SELECT usage_this_month(:m)"), {"m": m}) or 0)
+           for k, m in MONTHLY.items()},
     }
 
 
@@ -108,3 +135,25 @@ def ensure_frequency(db: Session, tenant_id: uuid.UUID, minutes: int) -> None:
     floor = _limit(db, tenant_id, "min_frequency_minutes")
     if floor is not None and minutes < floor:
         raise PlanLimitReached(f"Your plan allows monitoring every {floor} minutes at most.")
+
+
+def ensure_active(db: Session, tenant_id: uuid.UUID) -> None:
+    """New work (collection, reports, AI tasks, new brands…) needs an active subscription.
+    Existing data stays readable and exportable."""
+    if not plan_info(db, tenant_id).active:
+        raise SubscriptionInactive("Your subscription is not active. Contact us to renew it.")
+
+
+def remaining_this_month(db: Session, tenant_id: uuid.UUID, key: str) -> int | None:
+    """How many more units the plan allows this month (None = unlimited)."""
+    limit = _limit(db, tenant_id, key)
+    if limit is None:
+        return None
+    used = int(db.scalar(text("SELECT usage_this_month(:m)"), {"m": MONTHLY[key]}) or 0)
+    return max(0, limit - used)
+
+
+def ensure_monthly(db: Session, tenant_id: uuid.UUID, key: str, amount: int = 1) -> None:
+    left = remaining_this_month(db, tenant_id, key)
+    if left is not None and left < amount:
+        raise PlanLimitReached(f"Monthly limit reached ({key}). Contact us to upgrade.")

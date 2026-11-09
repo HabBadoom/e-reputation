@@ -52,6 +52,55 @@ ENTITLEMENT = "max_browser_missions_per_day"
 PLAN_LIMITS = {"trial": 200, "unlimited": None}
 
 
+CLAIM_FN = """
+    CREATE OR REPLACE FUNCTION browser_claim_missions(p_worker uuid, p_limit int, p_tenant_concurrency int)
+      RETURNS TABLE (mission_id uuid, mission_tenant uuid)
+      LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+      DECLARE
+        cap int; r record; pol record; st record; dom_running int; ten_running int;
+      BEGIN
+        SELECT greatest(0, least(p_limit, w.max_contexts - (
+                 SELECT count(*) FROM browser_missions m WHERE m.worker_id = w.id
+                   AND m.status IN ('ASSIGNED','RUNNING'))))
+          INTO cap FROM browser_workers w WHERE w.id = p_worker AND w.status = 'online';
+        IF cap IS NULL OR cap <= 0 THEN RETURN; END IF;
+        FOR r IN SELECT m.id, m.tenant_id, m.domain FROM browser_missions m
+                 WHERE m.status = 'QUEUED' AND m.run_after <= now() AND m.deadline_at > now()
+                 ORDER BY m.priority DESC, m.created_at LIMIT 200
+                 FOR UPDATE SKIP LOCKED LOOP
+          EXIT WHEN cap <= 0;
+          SELECT * INTO pol FROM browser_domain_policies
+            WHERE domain IN (r.domain, '*') ORDER BY (domain = '*') LIMIT 1;
+          IF NOT pol.allowed THEN CONTINUE; END IF;
+          SELECT * INTO st FROM browser_domain_state WHERE domain = r.domain;
+          IF st.cooldown_until IS NOT NULL AND st.cooldown_until > now() THEN CONTINUE; END IF;
+          IF st.last_visit_at IS NOT NULL
+             AND st.last_visit_at > now() - make_interval(secs => pol.min_interval_seconds)
+          THEN CONTINUE; END IF;
+          SELECT count(*) INTO dom_running FROM browser_missions
+            WHERE domain = r.domain AND status IN ('ASSIGNED','RUNNING');
+          IF dom_running >= pol.max_concurrency THEN CONTINUE; END IF;
+          SELECT count(*) INTO ten_running FROM browser_missions
+            WHERE tenant_id = r.tenant_id AND status IN ('ASSIGNED','RUNNING');
+          IF ten_running >= {tenant_limit} THEN CONTINUE; END IF;
+          UPDATE browser_missions SET status = 'ASSIGNED', worker_id = p_worker,
+                 assigned_at = now(), heartbeat_at = now(), attempts = attempts + 1
+            WHERE id = r.id;
+          INSERT INTO browser_domain_state (domain, last_visit_at) VALUES (r.domain, now())
+            ON CONFLICT (domain) DO UPDATE SET last_visit_at = now();
+          cap := cap - 1;
+          mission_id := r.id; mission_tenant := r.tenant_id;
+          RETURN NEXT;
+        END LOOP;
+      END $$;
+"""
+
+
+def claim_function(tenant_limit: str = "p_tenant_concurrency") -> str:
+    """Shared with later migrations that change how the per-tenant limit is computed."""
+    return CLAIM_FN.replace("{tenant_limit}", tenant_limit).strip()
+
+
 def _id(kind: str, key: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"repintel:{kind}:{key}")
 
@@ -302,46 +351,7 @@ def upgrade() -> None:
 
     -- Resource-aware assignment: worker free slots, per-domain concurrency and spacing,
     -- domain cooldown after challenges, per-tenant concurrency, priority then age.
-    CREATE FUNCTION browser_claim_missions(p_worker uuid, p_limit int, p_tenant_concurrency int)
-      RETURNS TABLE (mission_id uuid, mission_tenant uuid)
-      LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-      DECLARE
-        cap int; r record; pol record; st record; dom_running int; ten_running int;
-      BEGIN
-        SELECT greatest(0, least(p_limit, w.max_contexts - (
-                 SELECT count(*) FROM browser_missions m WHERE m.worker_id = w.id
-                   AND m.status IN ('ASSIGNED','RUNNING'))))
-          INTO cap FROM browser_workers w WHERE w.id = p_worker AND w.status = 'online';
-        IF cap IS NULL OR cap <= 0 THEN RETURN; END IF;
-        FOR r IN SELECT m.id, m.tenant_id, m.domain FROM browser_missions m
-                 WHERE m.status = 'QUEUED' AND m.run_after <= now() AND m.deadline_at > now()
-                 ORDER BY m.priority DESC, m.created_at LIMIT 200
-                 FOR UPDATE SKIP LOCKED LOOP
-          EXIT WHEN cap <= 0;
-          SELECT * INTO pol FROM browser_domain_policies
-            WHERE domain IN (r.domain, '*') ORDER BY (domain = '*') LIMIT 1;
-          IF NOT pol.allowed THEN CONTINUE; END IF;
-          SELECT * INTO st FROM browser_domain_state WHERE domain = r.domain;
-          IF st.cooldown_until IS NOT NULL AND st.cooldown_until > now() THEN CONTINUE; END IF;
-          IF st.last_visit_at IS NOT NULL
-             AND st.last_visit_at > now() - make_interval(secs => pol.min_interval_seconds)
-          THEN CONTINUE; END IF;
-          SELECT count(*) INTO dom_running FROM browser_missions
-            WHERE domain = r.domain AND status IN ('ASSIGNED','RUNNING');
-          IF dom_running >= pol.max_concurrency THEN CONTINUE; END IF;
-          SELECT count(*) INTO ten_running FROM browser_missions
-            WHERE tenant_id = r.tenant_id AND status IN ('ASSIGNED','RUNNING');
-          IF ten_running >= p_tenant_concurrency THEN CONTINUE; END IF;
-          UPDATE browser_missions SET status = 'ASSIGNED', worker_id = p_worker,
-                 assigned_at = now(), heartbeat_at = now(), attempts = attempts + 1
-            WHERE id = r.id;
-          INSERT INTO browser_domain_state (domain, last_visit_at) VALUES (r.domain, now())
-            ON CONFLICT (domain) DO UPDATE SET last_visit_at = now();
-          cap := cap - 1;
-          mission_id := r.id; mission_tenant := r.tenant_id;
-          RETURN NEXT;
-        END LOOP;
-      END $$;
+    {claim_function()}
 
     -- Failure recovery: silent workers go offline, their missions are retried or failed,
     -- queued/paused missions past their deadline expire.

@@ -409,6 +409,8 @@ def create_webhook(body: WebhookIn, request: Request,
         Webhook.tenant_id == ctx.tenant_id)) or 0
     if n >= 10:
         raise AppError("Too many webhooks", code="limit_reached", status_code=409)
+    from app.modules.billing.entitlements import ensure_capacity
+    ensure_capacity(db, ctx.tenant_id, "max_webhooks")
     _validate_target(body.url)
     secret = new_secret()
     h = Webhook(id=uuid.uuid4(), tenant_id=ctx.tenant_id, name=body.name.strip(), url=body.url,

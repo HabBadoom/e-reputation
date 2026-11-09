@@ -60,10 +60,11 @@ END $$;
 SELECT 'PASS 2: composite FKs block cross-tenant links';
 
 -- 3. subscriptions: app can read its own but not change its plan
-DO $$ BEGIN
+DO $$ DECLARE n int; BEGIN
   BEGIN
     UPDATE subscriptions SET plan_id = plan_id;
-    RAISE EXCEPTION 'subscription update allowed';
+    GET DIAGNOSTICS n = ROW_COUNT;
+    IF n > 0 THEN RAISE EXCEPTION 'subscription update allowed'; END IF;
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   BEGIN
     INSERT INTO plan_entitlements SELECT id, 'x', 1 FROM plans LIMIT 1;

@@ -165,3 +165,5 @@ def generate(db: Session, report: Report) -> None:
     report.size_bytes = len(content)
     report.status, report.error = "ready", None
     report.finished_at = datetime.now(UTC)
+    from app.billing import usage
+    usage.record(db, report.tenant_id, "reports_generated", 1, report=report.id)

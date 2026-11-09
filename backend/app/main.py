@@ -3,7 +3,7 @@ import re
 import time
 import uuid
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -12,12 +12,15 @@ from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging, request_id_var, tenant_id_var
 from app.core.rate_limit import RedisLimiter, get_limiter
+from app.core.security import constant_time_eq
 from app.db.session import session_scope
+from app.modules.admin.router import router as admin_router
 from app.modules.ai.router import router as ai_router
 from app.modules.alerts.router import router as alerts_router
 from app.modules.analytics.router import router as analytics_router
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
+from app.modules.billing.router import router as billing_router
 from app.modules.brands.router import router as brands_router
 from app.modules.browser.router import router as browser_router
 from app.modules.catalog.router import router as catalog_router
@@ -33,9 +36,40 @@ log = logging.getLogger("repintel.http")
 _RID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
+def render_metrics(m: dict) -> str:
+    out = []
+
+    def g(name: str, value: object, labels: str = "") -> None:
+        out.append(f"repintel_{name}{{{labels}}} {float(value or 0)}" if labels
+                   else f"repintel_{name} {float(value or 0)}")
+    for key in ("tenants", "jobs_oldest_pending_seconds", "browser_workers_online",
+                "browser_capacity", "ai_tasks_running", "approvals_pending",
+                "invoices_outstanding", "invoices_overdue"):
+        g(key, m.get(key))
+    for group in ("subscriptions", "jobs", "browser_missions"):
+        for status, n in (m.get(group) or {}).items():
+            g(group, n, f'status="{status}"')
+    return "\n".join(out) + "\n"
+
+
+def _init_error_tracking(dsn: str, env: str) -> None:
+    """Optional Sentry error tracking (REPINTEL_SENTRY_DSN). No request bodies or personal
+    data are sent."""
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+    except ImportError:  # pragma: no cover - dependency declared
+        log.warning("sentry_sdk_missing")
+        return
+    sentry_sdk.init(dsn=dsn, environment=env, send_default_pii=False, traces_sample_rate=0.0,
+                    max_request_body_size="never")
+
+
 def create_app() -> FastAPI:
     s = get_settings()
     configure_logging(s.log_level)
+    _init_error_tracking(s.sentry_dsn.get_secret_value(), s.env)
     app = FastAPI(
         title=f"{s.app_name} API",
         version="0.1.0",
@@ -93,10 +127,23 @@ def create_app() -> FastAPI:
         ok = all(checks.values())
         return JSONResponse({"ready": ok, "checks": checks}, status_code=200 if ok else 503)
 
+    @app.get("/metrics", include_in_schema=False)
+    def metrics(request: Request) -> Response:
+        """Prometheus text format. Enabled only when REPINTEL_METRICS_TOKEN is set; scraped
+        with `Authorization: Bearer <token>`. Aggregates only, no tenant data."""
+        token = s.metrics_token.get_secret_value()
+        given = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        if not token or not constant_time_eq(given, token):
+            return Response(status_code=404)
+        with session_scope() as db:
+            m = db.execute(text("SELECT platform_metrics()")).scalar_one()
+        return Response(render_metrics(m), media_type="text/plain; version=0.0.4")
+
     v1 = APIRouter(prefix="/api/v1")
     for r in (auth_router, tenancy_router, brands_router, catalog_router, monitoring_router,
               mentions_router, sources_router, nlp_router, dashboard_router, audit_router,
-              analytics_router, alerts_router, reports_router, browser_router, ai_router):
+              analytics_router, alerts_router, reports_router, browser_router, ai_router,
+              billing_router, admin_router):
         v1.include_router(r)
     app.include_router(v1)
     return app

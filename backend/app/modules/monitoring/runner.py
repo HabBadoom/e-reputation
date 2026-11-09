@@ -34,8 +34,11 @@ def execute_run(db: Session, job: Job) -> None:
     run.status, run.started_at = "running", datetime.now(UTC)
     db.flush()
 
+    from app.modules.billing.entitlements import plan_info
     brand = db.get(Brand, project.brand_id)
-    if brand is None or brand.status != "active":
+    if not plan_info(db, project.tenant_id).active:
+        run.status, run.summary = "skipped", {"reason": "subscription_inactive"}
+    elif brand is None or brand.status != "active":
         run.status, run.summary = "skipped", {"reason": "brand_not_active"}
     else:
         try:

@@ -112,6 +112,25 @@ class Settings(BaseSettings):
     agent_task_timeout_seconds: int = 600
     agent_max_response_drafts: int = 3
     ai_approval_expiry_hours: int = 72
+    # Commercialization (Milestone 8). Seller identity printed on invoices — set per deployment.
+    billing_provider: str = "manual"        # manual invoicing; a payment provider can be added
+    billing_invoice_prefix: str = "FAC"
+    billing_payment_terms_days: int = 30
+    billing_default_tax_rate: float = 19.0  # Algerian standard VAT rate; confirm with accountant
+    billing_seller_name: str = ""
+    billing_seller_address: str = ""
+    billing_seller_rc: str = ""
+    billing_seller_nif: str = ""
+    billing_seller_nis: str = ""
+    billing_seller_article_imposition: str = ""
+    billing_seller_bank: str = ""           # RIB / IBAN shown on invoices
+    billing_seller_email: str = ""
+    billing_seller_phone: str = ""
+    platform_notify_emails: list[str] = []  # receive plan-change requests
+    retention_max_days: int = 730           # absolute ceiling whatever the plan says
+    admin_require_mfa: bool = True          # platform admin console needs 2-step verification
+    metrics_token: SecretStr = SecretStr("")  # bearer token for /metrics (disabled if empty)
+    sentry_dsn: SecretStr = SecretStr("")
     report_max_bytes: int = 20_000_000
 
     # Plan given to new organizations; empty = the plan flagged is_default in the DB.

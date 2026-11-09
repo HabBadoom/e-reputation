@@ -37,6 +37,11 @@ def llm_json(ctx: AgentContext, *, system: str, user: str, schema: dict[str, Any
     perm = OpenAIPolicy().check_permissions(ctx.db)
     if not perm.allowed:
         raise NotConfigured("ai_provider_not_authorized")
+    from app.billing import usage
+    from app.modules.billing.entitlements import remaining_this_month
+    left = remaining_this_month(ctx.db, ctx.tenant_id, "max_ai_calls_per_month")
+    if left is not None and left < 1:
+        raise NotConfigured("ai_quota_reached")
     model = s.agent_model or s.nlp_models[0]
     ctx.check_time()
     try:
@@ -44,6 +49,9 @@ def llm_json(ctx: AgentContext, *, system: str, user: str, schema: dict[str, Any
                                            schema=schema, schema_name=name)
     except LLMError as e:
         raise AgentError(f"llm_{e.reason}") from e
+    usage.record(ctx.db, ctx.tenant_id, "ai_calls", 1, agent_task=ctx.task_id)
+    usage.record(ctx.db, ctx.tenant_id, "ai_tokens", res.input_tokens + res.output_tokens,
+                 agent_task=ctx.task_id)
     ctx.llm_calls += 1
     ctx.llm_model, ctx.prompt_version = res.model, prompt_version
     ctx.check_time()

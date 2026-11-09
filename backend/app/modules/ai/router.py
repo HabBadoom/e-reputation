@@ -14,13 +14,14 @@ from app.agents.base import AGENT_PERMISSION_CEILING
 from app.agents.orchestrator import PLAYBOOKS, finalize
 from app.agents.policy import ACTIONS, ResponseParams, execute
 from app.api.deps import AuthContext, require
+from app.billing import usage
 from app.core.errors import AppError, NotFound
 from app.core.rate_limit import get_limiter
 from app.db.models import AgentRun, AiAction, AiTask, ApprovalRequest, Brand, Mention
 from app.db.session import get_db
 from app.jobs.queue import enqueue
 from app.modules.audit.service import record
-from app.modules.billing.entitlements import plan_info
+from app.modules.billing.entitlements import ensure_active, plan_info
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -161,6 +162,7 @@ def agent_catalog(_: AuthContext = Depends(require("ai:read"))) -> dict[str, Any
 def create_task(body: TaskIn, request: Request, ctx: AuthContext = Depends(require("ai:run")),
                 db: Session = Depends(get_db)) -> TaskOut:
     get_limiter().hit(f"ai:tasks:{ctx.tenant_id}", 60, 3600)
+    ensure_active(db, ctx.tenant_id)
     if body.brand_id and db.scalar(select(Brand.id).where(
             Brand.id == body.brand_id, Brand.tenant_id == ctx.tenant_id)) is None:
         raise NotFound("Brand not found")
@@ -188,6 +190,7 @@ def create_task(body: TaskIn, request: Request, ctx: AuthContext = Depends(requi
     db.add(t)
     db.flush()
     enqueue(db, "ai.task", {"task_id": str(t.id)}, tenant_id=ctx.tenant_id, max_attempts=1)
+    usage.record(db, ctx.tenant_id, "agent_tasks", 1, task=t.id, kind=body.kind)
     record(db, tenant_id=ctx.tenant_id, actor_user_id=ctx.user_id, action="ai.task_requested",
            target_type="ai_task", target_id=t.id, meta={"kind": body.kind}, request=request)
     db.commit()

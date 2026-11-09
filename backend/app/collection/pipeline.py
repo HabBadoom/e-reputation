@@ -371,15 +371,27 @@ def collect_for_project(db: Session, project: MonitoringProject, run: Monitoring
                        budget=s.browser_missions_per_run)
     seen: set[str] = set()
     budget = [s.max_page_fetches_per_run if verification_mode == "enabled" else 0]
+    from app.billing import usage
+    from app.modules.billing.entitlements import remaining_this_month
+    allowance = remaining_this_month(db, project.tenant_id, "max_mentions_per_month")
+    quota_reached = False
     for c in candidates:
+        if allowance is not None and stats.new_mentions >= allowance:
+            quota_reached = True        # plan's monthly mention volume reached: stop storing
+            break
         try:
             _process(db, project, run, c, web, registry, stats, seen, budget, gate)
         except Exception as e:  # noqa: BLE001 — one bad item must not sink the run
             log.exception("candidate_failed", extra={"url": c.item.url})
             stats.error(f"{type(e).__name__} on {c.item.url[:120]}")
 
+    usage.record(db, project.tenant_id, "mentions_collected", stats.new_mentions, run=run.id)
+    usage.record(db, project.tenant_id, "search_queries",
+                 sum(int(v.get("queries", 0) or 0) for v in stats.connectors.values()),
+                 run=run.id)
     ran = [k for k, v in stats.connectors.items() if v.get("status") == "ok"]
     summary: dict[str, Any] = {
+        "mention_quota_reached": quota_reached,
         "query_groups": len(plan),
         "search_terms": sum(len(g.terms) for g in plan),
         "connectors": stats.connectors,

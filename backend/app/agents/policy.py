@@ -183,7 +183,10 @@ def _browser_check(db: Session, tenant_id: uuid.UUID, p: SourceParams, user: Any
 def _create_report(db: Session, tenant_id: uuid.UUID, p: ReportParams, user: Any
                    ) -> dict[str, Any]:
     from app.jobs.queue import enqueue
+    from app.modules.billing.entitlements import ensure_active, ensure_monthly
     from app.reports.data import default_period
+    ensure_active(db, tenant_id)
+    ensure_monthly(db, tenant_id, "max_reports_per_month")
     start, end = default_period(p.kind, datetime.now(UTC))
     r = Report(id=uuid.uuid4(), tenant_id=tenant_id, kind=p.kind, brand_id=p.brand_id,
                period_start=start, period_end=end, format=p.format, locale=p.locale,

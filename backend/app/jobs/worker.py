@@ -11,6 +11,8 @@ import signal
 import socket
 import time
 
+from sqlalchemy import text
+
 from app.core.config import get_settings
 from app.core.logging import configure_logging, tenant_id_var
 from app.db.session import session_scope, set_context
@@ -57,6 +59,7 @@ def run_once(batch: int = 20, *, schedule: bool = True) -> int:
             n = queue.schedule_alert_evaluations(db, get_settings().alert_eval_every_minutes)
             if n:
                 log.info("alert_evaluations_scheduled", extra={"count": n})
+            db.execute(text("SELECT schedule_daily_maintenance()"))
     with session_scope() as db:
         jobs = queue.claim(db, WORKER_ID, batch)
     for job in jobs:

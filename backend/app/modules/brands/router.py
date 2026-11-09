@@ -15,7 +15,7 @@ from app.core.errors import Conflict, NotFound
 from app.db.models import Brand, BrandAlias
 from app.db.session import get_db
 from app.modules.audit.service import record
-from app.modules.billing.entitlements import ensure_capacity
+from app.modules.billing.entitlements import ensure_active, ensure_capacity
 from app.modules.brands.scripts import guess_script
 
 router = APIRouter(prefix="/brands", tags=["brands"])
@@ -163,6 +163,7 @@ def list_brands(
 def create_brand(body: BrandIn, request: Request,
                  ctx: AuthContext = Depends(require("brands:write")),
                  db: Session = Depends(get_db)) -> BrandOut:
+    ensure_active(db, ctx.tenant_id)
     ensure_capacity(db, ctx.tenant_id, "max_brands")
     b = Brand(tenant_id=ctx.tenant_id, name=body.name, description=body.description,
               website=str(body.website) if body.website else None, country=body.country,

@@ -17,6 +17,7 @@ from app.db.models import Brand, Report
 from app.db.session import get_db
 from app.jobs.queue import enqueue
 from app.modules.audit.service import record
+from app.modules.billing.entitlements import ensure_active, ensure_monthly
 from app.reports.data import default_period
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -97,6 +98,8 @@ def create_report(body: ReportIn, request: Request,
                   ctx: AuthContext = Depends(require("reports:create")),
                   db: Session = Depends(get_db)) -> ReportOut:
     get_limiter().hit(f"reports:create:{ctx.tenant_id}", 30, 3600)
+    ensure_active(db, ctx.tenant_id)
+    ensure_monthly(db, ctx.tenant_id, "max_reports_per_month")
     if body.brand_id and db.scalar(select(Brand.id).where(
             Brand.id == body.brand_id, Brand.tenant_id == ctx.tenant_id)) is None:
         raise NotFound("Brand not found")

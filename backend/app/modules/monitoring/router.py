@@ -16,7 +16,7 @@ from app.core.rate_limit import get_limiter
 from app.db.models import Brand, MonitoringProject, MonitoringRun
 from app.db.session import get_db
 from app.modules.audit.service import record
-from app.modules.billing.entitlements import ensure_capacity, ensure_frequency
+from app.modules.billing.entitlements import ensure_active, ensure_capacity, ensure_frequency
 from app.modules.monitoring.query_plan import load_query_plan
 from app.modules.monitoring.runner import RunInProgress, queue_manual_run
 
@@ -151,6 +151,7 @@ def create_project(body: ProjectIn, request: Request,
                                            Brand.tenant_id == ctx.tenant_id)).one_or_none()
     if brand is None:
         raise NotFound("Brand not found")
+    ensure_active(db, ctx.tenant_id)
     ensure_capacity(db, ctx.tenant_id, "max_monitoring_projects")
     ensure_frequency(db, ctx.tenant_id, body.frequency_minutes)
     p = MonitoringProject(
@@ -214,6 +215,7 @@ def run_now(project_id: uuid.UUID, request: Request,
             db: Session = Depends(get_db)) -> RunOut:
     p, _ = _get(db, ctx, project_id)
     get_limiter().hit(f"monitoring:manual:{p.id}", 10, 3600)
+    ensure_active(db, ctx.tenant_id)
     try:
         run = queue_manual_run(db, ctx.tenant_id, p)
     except RunInProgress as e:
