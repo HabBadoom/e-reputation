@@ -70,6 +70,10 @@ jobs:
                 -v ON_ERROR_STOP=1 -f tests/sql/test_rls_browser.sql)
           echo "$out"
           echo "$out" | grep -q "ALL BROWSER RLS TESTS PASSED"
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_agents.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL AGENT RLS TESTS PASSED"
       - name: Headless Chromium for PDF reports
         run: uv run playwright install --with-deps chromium
       - name: API tests

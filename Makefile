@@ -26,6 +26,8 @@ test-sql:
 	  -X -v ON_ERROR_STOP=1 -f tests/sql/test_rls_intelligence.sql | grep -E "PASS|FAIL|ERROR"
 	cd backend && psql "$${APP_DB_URL:-postgresql://repintel_app:repintel_app@localhost:5432/repintel}" \
 	  -X -v ON_ERROR_STOP=1 -f tests/sql/test_rls_browser.sql | grep -E "PASS|FAIL|ERROR"
+	cd backend && psql "$${APP_DB_URL:-postgresql://repintel_app:repintel_app@localhost:5432/repintel}" \
+	  -X -v ON_ERROR_STOP=1 -f tests/sql/test_rls_agents.sql | grep -E "PASS|FAIL|ERROR"
 
 test-api:
 	cd backend && uv run pytest -v

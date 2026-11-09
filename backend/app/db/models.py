@@ -188,6 +188,8 @@ class Brand(Base):
     country: Mapped[str] = mapped_column(String(2), default="DZ")
     primary_language: Mapped[str] = mapped_column(String(10), default="fr")
     status: Mapped[str] = mapped_column(String(20), default="active")
+    response_tone: Mapped[str] = mapped_column(String(20), default="neutral")
+    response_guidelines: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
@@ -697,3 +699,84 @@ class CaptchaEvent(Base):
     response: Mapped[dict] = mapped_column(JSONB, default=dict)
     detected_at: Mapped[datetime] = _created()
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ---------------------------------------------------------------- Milestone 7
+class AiTask(Base):
+    __tablename__ = "ai_tasks"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"), _tenant_fk("brands", "brand_id"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(30))
+    resolved_kind: Mapped[str | None] = mapped_column(String(30))
+    goal: Mapped[str] = mapped_column(Text, default="")
+    brand_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    params: Mapped[dict] = mapped_column(JSONB, default=dict)
+    locale: Mapped[str] = mapped_column(String(5), default="fr")
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    plan: Mapped[list] = mapped_column(JSONB, default=list)
+    result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    error: Mapped[str | None] = mapped_column(String(300))
+    orchestrator_version: Mapped[str] = mapped_column(String(20), default="")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    created_at: Mapped[datetime] = _created()
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AgentRun(Base):
+    __tablename__ = "agent_runs"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"), _tenant_fk("ai_tasks", "task_id"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    position: Mapped[int] = mapped_column()
+    agent: Mapped[str] = mapped_column(String(30))
+    agent_version: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    input: Mapped[dict] = mapped_column(JSONB, default=dict)
+    output: Mapped[dict] = mapped_column(JSONB, default=dict)
+    tools_used: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    llm_calls: Mapped[int] = mapped_column(default=0)
+    llm_model: Mapped[str | None] = mapped_column(String(100))
+    prompt_version: Mapped[str | None] = mapped_column(String(20))
+    error: Mapped[str | None] = mapped_column(String(300))
+    started_at: Mapped[datetime] = _created()
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_ms: Mapped[int | None] = mapped_column()
+
+
+class AiAction(Base):
+    __tablename__ = "ai_actions"
+    __table_args__ = (UniqueConstraint("tenant_id", "id"), _tenant_fk("ai_tasks", "task_id"),
+                      _tenant_fk("agent_runs", "agent_run_id", "SET NULL"))
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    kind: Mapped[str] = mapped_column(String(40))
+    params: Mapped[dict] = mapped_column(JSONB, default=dict)
+    rationale: Mapped[dict] = mapped_column(JSONB, default=dict)
+    risk: Mapped[str] = mapped_column(String(10))
+    requires_approval: Mapped[bool] = mapped_column(Boolean)
+    status: Mapped[str] = mapped_column(String(20))
+    compliance: Mapped[dict] = mapped_column(JSONB, default=dict)
+    result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    error: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = _created()
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ApprovalRequest(Base):
+    __tablename__ = "approval_requests"
+    __table_args__ = (_tenant_fk("ai_actions", "action_id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    action_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    comment: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

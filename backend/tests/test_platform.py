@@ -184,7 +184,7 @@ def test_plan_limits_are_enforced(make_user, owner_engine):
 
     usage = api.get("/api/v1/organization/plan").json()["usage"]
     assert usage == {"max_brands": 2, "max_monitoring_projects": 1, "max_members": 3,
-                     "max_browser_missions_per_day": 0}
+                     "max_browser_missions_per_day": 0, "max_ai_tasks_per_day": 0}
 
 
 def test_new_organizations_get_a_subscription(client, owner_engine):

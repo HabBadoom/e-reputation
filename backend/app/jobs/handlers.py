@@ -149,3 +149,24 @@ def report_generate(db: Session, job: Job) -> None:
             if r2 is not None:
                 r2.status, r2.error = "failed", f"{type(e).__name__}: generation failed"
         raise PermanentJobError("report generation failed") from e
+
+
+@handler("ai.task")
+def ai_task(db: Session, job: Job) -> None:
+    import uuid
+
+    from app.agents.orchestrator import run_task
+    try:
+        task_id = uuid.UUID(job.payload["task_id"])
+    except (KeyError, ValueError, TypeError) as e:
+        raise PermanentJobError("ai.task needs task_id") from e
+    try:
+        with db.begin_nested():
+            run_task(db, task_id)
+    except Exception as e:
+        log.exception("ai_task_crashed", extra={"task_id": str(task_id)})
+        from app.db.models import AiTask
+        task = db.get(AiTask, task_id)
+        if task is not None:
+            task.status, task.error = "failed", f"internal_error:{type(e).__name__}"
+        return

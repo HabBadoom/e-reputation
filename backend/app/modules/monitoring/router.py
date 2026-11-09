@@ -15,10 +15,10 @@ from app.core.errors import Conflict, NotFound
 from app.core.rate_limit import get_limiter
 from app.db.models import Brand, MonitoringProject, MonitoringRun
 from app.db.session import get_db
-from app.jobs.queue import enqueue
 from app.modules.audit.service import record
 from app.modules.billing.entitlements import ensure_capacity, ensure_frequency
 from app.modules.monitoring.query_plan import load_query_plan
+from app.modules.monitoring.runner import RunInProgress, queue_manual_run
 
 router = APIRouter(prefix="/monitoring-projects", tags=["monitoring"])
 
@@ -214,17 +214,10 @@ def run_now(project_id: uuid.UUID, request: Request,
             db: Session = Depends(get_db)) -> RunOut:
     p, _ = _get(db, ctx, project_id)
     get_limiter().hit(f"monitoring:manual:{p.id}", 10, 3600)
-    busy = db.scalar(select(func.count()).select_from(MonitoringRun)
-                     .where(MonitoringRun.project_id == p.id,
-                            MonitoringRun.status.in_(["queued", "running"])))
-    if busy:
-        raise Conflict("A run is already queued or in progress", code="run_in_progress")
-    run = MonitoringRun(tenant_id=ctx.tenant_id, project_id=p.id, trigger="manual")
-    db.add(run)
-    db.flush()
-    enqueue(db, "monitoring.run",
-            {"project_id": str(p.id), "run_id": str(run.id), "trigger": "manual"},
-            tenant_id=ctx.tenant_id, max_attempts=3)
+    try:
+        run = queue_manual_run(db, ctx.tenant_id, p)
+    except RunInProgress as e:
+        raise Conflict("A run is already queued or in progress", code="run_in_progress") from e
     _audit(db, ctx, request, "monitoring_project.run_requested", p)
     db.commit()
     return _run_out(run)

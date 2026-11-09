@@ -13,6 +13,7 @@ from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging, request_id_var, tenant_id_var
 from app.core.rate_limit import RedisLimiter, get_limiter
 from app.db.session import session_scope
+from app.modules.ai.router import router as ai_router
 from app.modules.alerts.router import router as alerts_router
 from app.modules.analytics.router import router as analytics_router
 from app.modules.audit.router import router as audit_router
@@ -95,7 +96,7 @@ def create_app() -> FastAPI:
     v1 = APIRouter(prefix="/api/v1")
     for r in (auth_router, tenancy_router, brands_router, catalog_router, monitoring_router,
               mentions_router, sources_router, nlp_router, dashboard_router, audit_router,
-              analytics_router, alerts_router, reports_router, browser_router):
+              analytics_router, alerts_router, reports_router, browser_router, ai_router):
         v1.include_router(r)
     app.include_router(v1)
     return app

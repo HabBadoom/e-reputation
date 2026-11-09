@@ -66,3 +66,27 @@ def _enqueue_analysis(db: Session, project: MonitoringProject, run: MonitoringRu
     for i in range(0, len(ids), size):
         enqueue(db, "nlp.analyze", {"mention_ids": ids[i:i + size]},
                 tenant_id=project.tenant_id, max_attempts=3)
+
+
+class RunInProgress(Exception):
+    pass
+
+
+def queue_manual_run(db: Session, tenant_id: uuid.UUID, project: MonitoringProject
+                     ) -> MonitoringRun:
+    """Queue a run now (API "run now" and the Monitoring agent). Raises RunInProgress."""
+    from sqlalchemy import func, select
+
+    from app.jobs.queue import enqueue
+    busy = db.scalar(select(func.count()).select_from(MonitoringRun)
+                     .where(MonitoringRun.project_id == project.id,
+                            MonitoringRun.status.in_(["queued", "running"])))
+    if busy:
+        raise RunInProgress(str(project.id))
+    run = MonitoringRun(tenant_id=tenant_id, project_id=project.id, trigger="manual")
+    db.add(run)
+    db.flush()
+    enqueue(db, "monitoring.run",
+            {"project_id": str(project.id), "run_id": str(run.id), "trigger": "manual"},
+            tenant_id=tenant_id, max_attempts=3)
+    return run

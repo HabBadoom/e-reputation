@@ -70,6 +70,8 @@ class BrandPatch(BaseModel):
     country: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
     primary_language: str | None = Field(default=None, pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
     status: BrandStatus | None = None
+    response_tone: Literal["neutral", "formal", "friendly"] | None = None
+    response_guidelines: str | None = Field(default=None, max_length=2000)
 
 
 class BrandOut(BaseModel):
@@ -80,6 +82,8 @@ class BrandOut(BaseModel):
     country: str
     primary_language: str
     status: str
+    response_tone: str
+    response_guidelines: str
     created_at: datetime
     updated_at: datetime
     aliases: list[AliasOut]
@@ -95,7 +99,9 @@ class BrandPage(BaseModel):
 def _out(b: Brand, aliases: list[BrandAlias]) -> BrandOut:
     return BrandOut(
         id=b.id, name=b.name, description=b.description, website=b.website, country=b.country,
-        primary_language=b.primary_language, status=b.status, created_at=b.created_at,
+        primary_language=b.primary_language, status=b.status,
+        response_tone=b.response_tone or "neutral", response_guidelines=b.response_guidelines or "",
+        created_at=b.created_at,
         updated_at=b.updated_at,
         aliases=[AliasOut(id=a.id, alias=a.alias, script=a.script, kind=a.kind,
                           created_at=a.created_at) for a in aliases],

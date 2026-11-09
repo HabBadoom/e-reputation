@@ -106,6 +106,12 @@ class Settings(BaseSettings):
     browser_restart_after_missions: int = 100
     browser_restricted_after_challenges: int = 3
     browser_extra_args: list[str] = []      # extra Chromium flags (e.g. an egress proxy)
+    # AI agents (Milestone 7)
+    agent_model: str = ""                   # default: first of nlp_models
+    agent_step_timeout_seconds: int = 60
+    agent_task_timeout_seconds: int = 600
+    agent_max_response_drafts: int = 3
+    ai_approval_expiry_hours: int = 72
     report_max_bytes: int = 20_000_000
 
     # Plan given to new organizations; empty = the plan flagged is_default in the DB.

@@ -23,7 +23,8 @@ from app.db.models import (
 )
 
 KEYS = ("max_brands", "max_monitoring_projects", "max_members", "min_frequency_minutes",
-        "max_competitors_per_brand", "max_keywords_per_brand", "max_browser_missions_per_day")
+        "max_competitors_per_brand", "max_keywords_per_brand", "max_browser_missions_per_day",
+        "max_ai_tasks_per_day")
 
 
 class PlanLimitReached(AppError):
@@ -77,6 +78,7 @@ def usage(db: Session, tenant_id: uuid.UUID) -> dict[str, int]:
                 Invitation.accepted_at.is_(None), Invitation.revoked_at.is_(None),
                 Invitation.expires_at > func.now()),
         "max_browser_missions_per_day": db.scalar(text("SELECT browser_missions_today()")) or 0,
+        "max_ai_tasks_per_day": db.scalar(text("SELECT ai_tasks_today()")) or 0,
     }
 
 
