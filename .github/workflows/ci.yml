@@ -111,3 +111,30 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+
+  images:
+    # The production images build on every push (not pushed anywhere), so a broken
+    # Dockerfile is caught before a release.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.component }}
+          push: false
+          load: ${{ matrix.component == 'backend' }}
+          tags: repintel-${{ matrix.component }}:ci
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+      - name: Chromium starts inside the backend image
+        if: matrix.component == 'backend'
+        run: |
+          docker run --rm --shm-size=256m repintel-backend:ci python -c "
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              b = p.chromium.launch(); pg = b.new_page()
+              pg.set_content('<p dir=rtl>مرحبا</p>'); print(len(pg.pdf())); b.close()"
