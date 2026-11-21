@@ -25,6 +25,7 @@ from app.modules.brands.router import router as brands_router
 from app.modules.browser.router import router as browser_router
 from app.modules.catalog.router import router as catalog_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.integrations.scanner import router as scanner_integration_router
 from app.modules.mentions.router import router as mentions_router
 from app.modules.monitoring.router import router as monitoring_router
 from app.modules.nlp.router import router as nlp_router
@@ -148,6 +149,7 @@ def create_app() -> FastAPI:
         v1.include_router(r)
     if s.scanner_enabled:
         v1.include_router(scanner_router)
+        v1.include_router(scanner_integration_router)
     app.include_router(v1)
     return app
 

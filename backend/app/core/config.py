@@ -144,6 +144,13 @@ class Settings(BaseSettings):
     scanner_base_url: str = "http://localhost:3001"
     scanner_cookie_domain: str | None = None   # host-only cookies by default
     scanner_max_items_per_session: int = Field(default=200, ge=1, le=2000)
+    scanner_link_request_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    # Shared secret for HMAC-signed Scanner → AnyPulse integration calls (>= 32 chars).
+    # Required in staging/production when Scanner is enabled; development and tests derive
+    # one from the JWT secret when it is left empty.
+    scanner_integration_secret: SecretStr = SecretStr("")
+    # Where Scanner's integration client reaches the AnyPulse API (same process today).
+    anypulse_api_url: str = "http://localhost:8000"
 
     @field_validator("jwt_secret")
     @classmethod
@@ -174,6 +181,29 @@ class Settings(BaseSettings):
         if self.env in ("staging", "production") and self.email_provider != "brevo":
             raise ValueError("A real email provider is required in staging/production")
         return self
+
+    @model_validator(mode="after")
+    def _scanner_config(self) -> "Settings":
+        secret = self.scanner_integration_secret.get_secret_value()
+        if secret and len(secret) < 32:
+            raise ValueError("REPINTEL_SCANNER_INTEGRATION_SECRET must be at least 32 characters")
+        if self.scanner_enabled and self.env in ("staging", "production") and not secret:
+            raise ValueError("REPINTEL_SCANNER_INTEGRATION_SECRET is required when Scanner is "
+                             "enabled in staging/production")
+        return self
+
+    @property
+    def scanner_integration_key(self) -> bytes:
+        """Key for signed Scanner → AnyPulse calls. Outside staging/production an empty
+        setting falls back to a key derived from the JWT secret (never used in production:
+        the validator above requires an explicit secret there)."""
+        secret = self.scanner_integration_secret.get_secret_value()
+        if secret:
+            return secret.encode()
+        import hashlib
+        import hmac
+        return hmac.new(self.jwt_secret.get_secret_value().encode(),
+                        b"aynpulse-scanner-integration", hashlib.sha256).digest()
 
     @property
     def is_production(self) -> bool:

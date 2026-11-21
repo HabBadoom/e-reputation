@@ -57,6 +57,16 @@ class CountersOut(BaseModel):
     failed: int
 
 
+class DestinationOut(BaseModel):
+    """Where the collection will be sent: an AnyPulse organization (through a link) and one
+    of its brands. Names are snapshots; Scanner cannot read AnyPulse data."""
+    link_id: uuid.UUID
+    organization_name: str
+    link_active: bool
+    brand_id: uuid.UUID | None
+    brand_name: str | None
+
+
 class CollectionSessionOut(BaseModel):
     id: uuid.UUID
     status: str
@@ -67,6 +77,7 @@ class CollectionSessionOut(BaseModel):
     anypulse_collection_id: uuid.UUID | None
     is_open: bool
     counters: CountersOut
+    destination: DestinationOut | None
 
 
 class CollectionSessionPage(BaseModel):
@@ -77,9 +88,31 @@ class CollectionSessionPage(BaseModel):
 
 
 class CollectionSessionPatch(BaseModel):
-    title: str = Field(max_length=200)
+    """Fields left out are unchanged. `link_id: null` clears the destination."""
+    title: str | None = Field(default=None, max_length=200)
+    link_id: uuid.UUID | None = None
+    brand_id: uuid.UUID | None = None
 
     @field_validator("title")
     @classmethod
-    def _strip(cls, v: str) -> str:
-        return v.strip()
+    def _strip(cls, v: str | None) -> str | None:
+        return v.strip() if v is not None else v
+
+
+class LinkStartOut(BaseModel):
+    authorize_url: str
+    expires_at: datetime
+
+
+class LinkOut(BaseModel):
+    id: uuid.UUID
+    organization_name: str
+    status: str
+    created_at: datetime
+    revoked_at: datetime | None
+    revoked_by: str | None
+
+
+class BrandOut(BaseModel):
+    id: uuid.UUID
+    name: str

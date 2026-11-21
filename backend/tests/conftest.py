@@ -27,7 +27,8 @@ from app.main import create_app  # noqa: E402
 from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
 DATA_TABLES = [
-    "scanner_audit_logs", "scanner_collection_items", "scanner_collection_sessions",
+    "scanner_link_requests", "scanner_audit_logs", "scanner_collection_items",
+    "scanner_collection_sessions", "scanner_links",
     "scanner_refresh_tokens", "scanner_accounts",
     "usage_events", "plan_change_requests", "invoice_lines", "invoices", "billing_accounts",
     "invoice_counters",

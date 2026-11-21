@@ -105,3 +105,34 @@ def counters(db: Session, session_ids: list[uuid.UUID]) -> dict[uuid.UUID, Count
     for r in rows:
         out[r[0]] = Counters(*r[1:])
     return out
+
+
+def set_destination(db: Session, s: ScannerCollectionSession, *, link_id: uuid.UUID | None,
+                    brand_id: uuid.UUID | None) -> ScannerCollectionSession:
+    """Point an open collection at an AnyPulse organization (link) and brand.
+
+    The brand is checked against the organization's current brands through the signed
+    integration client, and again by a database trigger (scanner_sessions_destination_check).
+    """
+    from app.scanner import links  # local import: links imports the integration client
+
+    if s.status not in OPEN_STATUSES:
+        raise Conflict("Only an open collection can change destination", code="session_not_open")
+    if link_id is None:
+        if brand_id is not None:
+            raise Conflict("Choose an AnyPulse organization before a brand",
+                           code="invalid_destination")
+        s.link_id = s.anypulse_brand_id = s.anypulse_brand_name = None
+    else:
+        link = links.require_active(links.get(db, link_id))
+        name = None
+        if brand_id is not None:
+            match = [b for b in links.brands(link) if b["id"] == str(brand_id)]
+            if not match:
+                raise Conflict("This brand is not an active brand of the linked organization",
+                               code="invalid_destination")
+            name = match[0]["name"]
+        s.link_id, s.anypulse_brand_id, s.anypulse_brand_name = link.id, brand_id, name
+    s.updated_at = datetime.now(UTC)
+    db.flush()
+    return s

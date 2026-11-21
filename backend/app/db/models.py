@@ -934,6 +934,10 @@ class ScannerCollectionSession(Base):
     updated_at: Mapped[datetime] = _created()
     transmitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     anypulse_collection_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    # Destination (0011): an active link of this account and a brand of its organization.
+    link_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    anypulse_brand_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    anypulse_brand_name: Mapped[str | None] = mapped_column(String(200))
 
 
 class ScannerCollectionItem(Base):
@@ -969,3 +973,41 @@ class ScannerAuditLog(Base):
     ip: Mapped[str | None] = mapped_column(INET)
     request_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = _created()
+
+
+# ---------------------------------------------------------------- Scanner links (0011)
+class ScannerLink(Base):
+    """A Scanner account authorised (by a member holding scanner:link) to send collections
+    to one AnyPulse organization. Visible to both parties; created only by
+    scanner_link_approve(); either side may revoke it, for good."""
+    __tablename__ = "scanner_links"
+    __table_args__ = (UniqueConstraint("account_id", "id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"))
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    account_email: Mapped[str] = mapped_column(String(320))
+    account_name: Mapped[str] = mapped_column(String(200))
+    tenant_name: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(10), default="active")
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    created_at: Mapped[datetime] = _created()
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[str | None] = mapped_column(String(10))
+
+
+class ScannerLinkRequest(Base):
+    __tablename__ = "scanner_link_requests"
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    status: Mapped[str] = mapped_column(String(10), default="pending")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="SET NULL"))
+    link_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("scanner_links.id", ondelete="SET NULL"))

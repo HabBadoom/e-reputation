@@ -8,20 +8,26 @@ import dataclasses
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip
 from app.core.config import get_settings
-from app.core.errors import Unauthorized
+from app.core.errors import Conflict, Unauthorized
 from app.core.rate_limit import get_limiter
 from app.core.security import new_csrf_token
-from app.db.models import ScannerAccount, ScannerCollectionSession
+from app.db.models import ScannerAccount, ScannerCollectionSession, ScannerLink
 from app.db.session import get_db
 from app.modules.scanner.schemas import (
+    BrandOut,
     CollectionSessionOut,
     CollectionSessionPage,
     CollectionSessionPatch,
     CountersOut,
+    DestinationOut,
+    LinkOut,
+    LinkStartOut,
     ScannerLoginIn,
     ScannerMeOut,
     ScannerRefreshIn,
@@ -29,7 +35,7 @@ from app.modules.scanner.schemas import (
     ScannerTokenOut,
 )
 from app.scanner import auth as service
-from app.scanner import sessions
+from app.scanner import links, sessions
 from app.scanner.audit import record
 from app.scanner.deps import (
     ACCESS_COOKIE,
@@ -138,17 +144,30 @@ def me(ctx: ScannerContext = Depends(get_scanner_auth),
 
 
 # ---- collection sessions ---------------------------------------------------------------------
-def _out(s: ScannerCollectionSession, c: sessions.Counters) -> CollectionSessionOut:
+def _out(s: ScannerCollectionSession, c: sessions.Counters,
+         link: ScannerLink | None) -> CollectionSessionOut:
+    dest = None
+    if s.link_id is not None and link is not None:
+        dest = DestinationOut(link_id=link.id, organization_name=link.tenant_name,
+                              link_active=link.status == "active", brand_id=s.anypulse_brand_id,
+                              brand_name=s.anypulse_brand_name)
     return CollectionSessionOut(
         id=s.id, status=s.status, title=s.title, created_at=s.created_at,
         updated_at=s.updated_at, transmitted_at=s.transmitted_at,
         anypulse_collection_id=s.anypulse_collection_id,
         is_open=s.status in sessions.OPEN_STATUSES,
-        counters=CountersOut(**dataclasses.asdict(c)))
+        counters=CountersOut(**dataclasses.asdict(c)), destination=dest)
+
+
+def _links_by_id(db: Session, rows: list[ScannerCollectionSession]) -> dict:
+    ids = {r.link_id for r in rows if r.link_id}
+    if not ids:
+        return {}
+    return {lk.id: lk for lk in db.scalars(select(ScannerLink).where(ScannerLink.id.in_(ids)))}
 
 
 def _one(db: Session, s: ScannerCollectionSession) -> CollectionSessionOut:
-    return _out(s, sessions.counters(db, [s.id])[s.id])
+    return _out(s, sessions.counters(db, [s.id])[s.id], _links_by_id(db, [s]).get(s.link_id))
 
 
 @router.get("/sessions/current", response_model=CollectionSessionOut)
@@ -170,8 +189,9 @@ def list_sessions(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, g
                   db: Session = Depends(get_db)) -> CollectionSessionPage:
     rows, total = sessions.list_sessions(db, limit=limit, offset=offset)
     c = sessions.counters(db, [r.id for r in rows])
-    return CollectionSessionPage(items=[_out(r, c[r.id]) for r in rows], total=total,
-                                 limit=limit, offset=offset)
+    lk = _links_by_id(db, rows)
+    return CollectionSessionPage(items=[_out(r, c[r.id], lk.get(r.link_id)) for r in rows],
+                                 total=total, limit=limit, offset=offset)
 
 
 @router.get("/sessions/{session_id}", response_model=CollectionSessionOut)
@@ -181,10 +201,27 @@ def get_session(session_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner
 
 
 @router.patch("/sessions/{session_id}", response_model=CollectionSessionOut)
-def rename_session(session_id: uuid.UUID, body: CollectionSessionPatch,
+def update_session(session_id: uuid.UUID, body: CollectionSessionPatch, request: Request,
                    ctx: ScannerContext = Depends(get_scanner_auth),
                    db: Session = Depends(get_db)) -> CollectionSessionOut:
-    s = sessions.rename(db, sessions.get(db, session_id), body.title)
+    s = sessions.get(db, session_id)
+    if body.title is not None:
+        sessions.rename(db, s, body.title)
+    if {"link_id", "brand_id"} & body.model_fields_set:
+        link_id = body.link_id if "link_id" in body.model_fields_set else s.link_id
+        try:
+            sessions.set_destination(db, s, link_id=link_id, brand_id=body.brand_id)
+        except DBAPIError as e:   # the DB trigger disagreed (e.g. brand archived meanwhile)
+            if getattr(e.orig, "sqlstate", None) != "23514":
+                raise
+            db.rollback()
+            raise Conflict("Invalid destination for this collection",
+                           code="invalid_destination") from e
+        record(db, account_id=ctx.account_id, action="session.destination_set",
+               target_type="collection_session", target_id=s.id,
+               meta={"link_id": str(s.link_id) if s.link_id else None,
+                     "brand_id": str(s.anypulse_brand_id) if s.anypulse_brand_id else None},
+               request=request)
     db.commit()
     return _one(db, s)
 
@@ -198,6 +235,49 @@ def cancel_session(session_id: uuid.UUID, request: Request,
            target_type="collection_session", target_id=s.id, request=request)
     db.commit()
     return _one(db, s)
+
+
+# ---- links to AnyPulse organizations ---------------------------------------------------------
+def _link_out(lk: ScannerLink) -> LinkOut:
+    return LinkOut(id=lk.id, organization_name=lk.tenant_name, status=lk.status,
+                   created_at=lk.created_at, revoked_at=lk.revoked_at, revoked_by=lk.revoked_by)
+
+
+@router.post("/links/start", response_model=LinkStartOut, status_code=201)
+def start_link(request: Request, ctx: ScannerContext = Depends(get_scanner_auth),
+               db: Session = Depends(get_db)) -> LinkStartOut:
+    """Create a link request. The returned AnyPulse URL is opened by a member of the
+    organization (owner or admin), who approves it there."""
+    get_limiter().hit(f"scanner:link-start:{ctx.account_id}", 10, 3600)
+    req, url = links.start(db, ctx.account_id)
+    record(db, account_id=ctx.account_id, action="link.requested", target_type="link_request",
+           target_id=req.id, request=request)
+    db.commit()
+    return LinkStartOut(authorize_url=url, expires_at=req.expires_at)
+
+
+@router.get("/links", response_model=list[LinkOut])
+def list_links(ctx: ScannerContext = Depends(get_scanner_auth),
+               db: Session = Depends(get_db)) -> list[LinkOut]:
+    return [_link_out(lk) for lk in links.list_links(db)]
+
+
+@router.post("/links/{link_id}/revoke", response_model=LinkOut)
+def revoke_link(link_id: uuid.UUID, request: Request,
+                ctx: ScannerContext = Depends(get_scanner_auth),
+                db: Session = Depends(get_db)) -> LinkOut:
+    lk = links.revoke(db, links.get(db, link_id))
+    record(db, account_id=ctx.account_id, action="link.revoked", target_type="link",
+           target_id=lk.id, request=request)
+    db.commit()
+    db.refresh(lk)
+    return _link_out(lk)
+
+
+@router.get("/links/{link_id}/brands", response_model=list[BrandOut])
+def link_brands(link_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner_auth),
+                db: Session = Depends(get_db)) -> list[BrandOut]:
+    return [BrandOut(**b) for b in links.brands(links.get(db, link_id))]
 
 
 @router.get("/health", include_in_schema=False)
