@@ -10,7 +10,7 @@ export function middleware(req: NextRequest) {
   if (!isPublic && !maybeSignedIn) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
-    url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname)}`;
+    url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + req.nextUrl.search)}`;
     return NextResponse.redirect(url);
   }
   return NextResponse.next();

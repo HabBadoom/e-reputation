@@ -127,8 +127,12 @@ Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Brow
 | GET | `/scanner/auth/me` | Scanner account |
 | GET | `/scanner/sessions/current` | Open collection, created on first use |
 | GET | `/scanner/sessions`, `/scanner/sessions/{id}` | History / one collection, with collection counters |
-| PATCH | `/scanner/sessions/{id}` | `{title}` |
+| PATCH | `/scanner/sessions/{id}` | `{title?, link_id?, brand_id?}` (destination) |
 | POST | `/scanner/sessions/{id}/cancel` | 409 `session_not_open` |
+| POST / GET | `/scanner/links/start`, `/scanner/links`; POST `/scanner/links/{id}/revoke`; GET `/scanner/links/{id}/brands` | Links to AnyPulse organizations and their brands |
+| POST | `/integrations/scanner/link-requests/inspect`, `/approve`, `/decline` | AnyPulse members; approve/decline need `scanner:link` |
+| GET / POST | `/integrations/scanner/links`, `/integrations/scanner/links/{id}/revoke` | `tenant:read` / `scanner:link` |
+| GET | `/integrations/scanner/links/{id}/brands` | HMAC-signed Scanner call only (no AnyPulse session) |
 
 ## Example (API client)
 

@@ -10,6 +10,7 @@ import { api, type ScannerMe } from "@/lib/api";
 const NAV = [
   { href: "/collect", key: "nav.collect" },
   { href: "/history", key: "nav.history" },
+  { href: "/links", key: "nav.links" },
 ] as const;
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased — Aynpulse Scanner, Phase 1: foundation
+## Unreleased — Aynpulse Scanner, Phase 2: links to AnyPulse
+
+### Added
+- Migration 0011: `scanner_links`, `scanner_link_requests`, collection destination (`link_id`, `anypulse_brand_id`, `anypulse_brand_name`) with a database check; `scanner_link_approve()` / `scanner_link_decline()` / `scanner_link_request_peek()` / `integration_scanner_link()`; permission `scanner:link` (owner, admin).
+- Signed Scanner → AnyPulse integration (`app/integrations/anypulse/`, HMAC-SHA256) and AnyPulse endpoints `/api/v1/integrations/scanner/*` (consent, links, brands).
+- AnyPulse page **Scanner** (`/connect/scanner`): consent screen and linked accounts. Scanner page **Organisations AnyPulse** and destination picker on the collection screen.
+- Tests: `tests/sql/test_rls_scanner_links.sql`, `tests/test_scanner_links.py`.
+
+### Changed
+- AnyPulse sign-in keeps the query string when redirecting back after login (needed for consent links).
+- Scanner accounts: one account type for everyone (no individual/professional).
+
+## Aynpulse Scanner, Phase 1: foundation
 
 ### Added
 - Migration 0010: `scanner_accounts` (separate from AnyPulse users; one account type), `scanner_refresh_tokens`, `scanner_collection_sessions` (one open session per account), `scanner_collection_items`, append-only `scanner_audit_logs`; RLS forced on all of them, keyed on `app.scanner_account_id`; narrow `scanner_auth_find_*` lookups.

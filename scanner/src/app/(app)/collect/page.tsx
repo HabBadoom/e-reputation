@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/components/providers";
+import { DestinationPicker } from "@/components/destination";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { api, type CollectionSession } from "@/lib/api";
 import type { MessageKey } from "@/lib/i18n";
@@ -82,6 +83,9 @@ export default function CollectPage() {
               </div>
             ))}
           </dl>
+          <div className="mt-5 border-t border-line pt-4">
+            <DestinationPicker session={s} />
+          </div>
           <div className="mt-5 border-t border-line pt-4">
             <Button className="w-full sm:w-auto" disabled aria-describedby="send-not-yet">{t("collect.send")}</Button>
             <p id="send-not-yet" className="mt-2 text-xs text-ink-mute">{t("collect.sendNotYet")}</p>
