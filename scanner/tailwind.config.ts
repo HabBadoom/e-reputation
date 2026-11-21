@@ -13,8 +13,9 @@ export default {
         signal: { pos: "#1f7a4d", neg: "#b4372f", warn: "#a86a10", info: "#2d5d8a" },
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "var(--font-arabic)", "system-ui", "sans-serif"],
-        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        sans: ["system-ui", "-apple-system", "Segoe UI", "Roboto", "Noto Sans", "Noto Sans Arabic",
+               "Tahoma", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
       borderRadius: { DEFAULT: "8px" },
     },
