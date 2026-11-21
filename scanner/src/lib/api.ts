@@ -110,3 +110,5 @@ export interface AnyPulseAccess {
   revoked_at: string | null;
   revoke_reason: string | null;
 }
+
+export interface Page<T> { items: T[]; total: number; limit: number; offset: number }
