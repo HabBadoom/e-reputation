@@ -2,8 +2,9 @@
 
 Every Scanner account is linked automatically to its own AnyPulse organization: provisioning
 runs right after sign-up and, if AnyPulse was unreachable then, again the next time the account
-looks at its AnyPulse status. Only platform administrators revoke the access. Everything
-Scanner asks of AnyPulse goes through the signed integration client.
+looks at its AnyPulse status. Only platform administrators revoke the access. Scanner users
+are collection agents: they never read AnyPulse data. Everything Scanner asks of AnyPulse goes
+through the signed integration client.
 """
 
 import logging
@@ -17,11 +18,6 @@ from app.db.models import ScannerLink
 from app.integrations.anypulse.client import AnyPulseClient, AnyPulseRejected, AnyPulseUnavailable
 
 log = logging.getLogger("repintel.scanner.anypulse")
-
-
-class AnyPulseUnavailableError(AppError):
-    status_code = 503
-    code = "anypulse_unavailable"
 
 
 class AccessRevoked(AppError):
@@ -63,26 +59,3 @@ def active_link(db: Session, account_id: uuid.UUID) -> ScannerLink:
     if link.status != "active":
         raise AccessRevoked("Access to AnyPulse has been revoked by an administrator")
     return link
-
-
-def _call(fn):  # noqa: ANN001, ANN202
-    try:
-        return fn()
-    except AnyPulseUnavailable as e:
-        raise AnyPulseUnavailableError("AnyPulse is not reachable right now; try again") from e
-    except AnyPulseRejected as e:
-        # Pass AnyPulse's own answer through (plan limit, duplicate, revoked access…).
-        raise AppError(str(e), code=e.code, status_code=e.status) from e
-
-
-def brands(link: ScannerLink) -> list[dict]:
-    return _call(AnyPulseClient(account_id=link.account_id, link_id=link.id).list_brands)
-
-
-def create_brand(link: ScannerLink, name: str) -> dict:
-    return _call(lambda: AnyPulseClient(account_id=link.account_id,
-                                        link_id=link.id).create_brand(name))
-
-
-def resend_invitation(link: ScannerLink) -> dict:
-    return _call(AnyPulseClient(account_id=link.account_id, link_id=link.id).resend_invitation)

@@ -67,13 +67,3 @@ class AnyPulseClient:
     def provision(self) -> dict:
         """Create (once) the AnyPulse organization of this Scanner account and link it."""
         return self._request("POST", "/api/v1/integrations/scanner/provision")
-
-    def list_brands(self) -> list[dict]:
-        """Active brands of the account's organization: [{id, name}]."""
-        return list(self._request("GET", "/api/v1/integrations/scanner/brands")["items"])
-
-    def create_brand(self, name: str) -> dict:
-        return self._request("POST", "/api/v1/integrations/scanner/brands", {"name": name})
-
-    def resend_invitation(self) -> dict:
-        return self._request("POST", "/api/v1/integrations/scanner/invitation")

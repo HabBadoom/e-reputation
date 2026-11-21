@@ -133,7 +133,6 @@ Migration 0011 (automatic link to AnyPulse):
 | Table | Scope | Notes |
 |---|---|---|
 | `scanner_links` | **both parties**: the Scanner account and its organization | one per account and per organization; inserted only with both contexts set and only for a brand-new organization (trigger); status changed only by `admin_scanner_set_access()` (platform admins), with `revoked_by`, `revoke_reason`; `tenant_name` snapshot |
-| `scanner_collection_sessions` + | account | `link_id` (composite FK to the own link, SET NULL on deletion), `anypulse_brand_id` (FK brands), `anypulse_brand_name`; trigger: active own link and an active brand of that organization |
 
 ## Planned (per master prompt §14)
 

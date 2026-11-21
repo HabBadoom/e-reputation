@@ -934,10 +934,6 @@ class ScannerCollectionSession(Base):
     updated_at: Mapped[datetime] = _created()
     transmitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     anypulse_collection_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    # Destination (0011): an active link of this account and a brand of its organization.
-    link_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    anypulse_brand_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    anypulse_brand_name: Mapped[str | None] = mapped_column(String(200))
 
 
 class ScannerCollectionItem(Base):

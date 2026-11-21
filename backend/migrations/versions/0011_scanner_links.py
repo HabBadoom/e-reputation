@@ -1,6 +1,5 @@
 """Aynpulse Scanner, phase 2: every Scanner account is linked automatically to its own AnyPulse
-organization, for as long as a platform administrator does not revoke it; each collection gets
-a destination brand in that organization.
+organization, for as long as a platform administrator does not revoke it.
 
 Revision ID: 0011_scanner_links
 Revises: 0010_scanner_foundation
@@ -8,6 +7,8 @@ Create Date: 2026-11-21
 
 Decisions (2026-11-21): no consent step; one organization per Scanner account, created when
 the account is created; only platform administrators revoke (and may restore) the access.
+Scanner users are collection agents: they never see analyses and never choose a brand (brand
+attribution is done later by RepIntel's AI).
 
   * `scanner_links` holds the pair (Scanner account, organization). One per account and one
     per organization. It can only be inserted in the provisioning context — the Scanner account
@@ -16,11 +17,9 @@ the account is created; only platform administrators revoke (and may restore) th
     customer organization.
   * Both parties can read the link; nobody but a platform administrator changes its status,
     through `admin_scanner_set_access()`.
-  * The collection destination (link + brand) is checked by a trigger: the account's own active
-    link and an active brand of its organization.
 
-A link lets Scanner list and create brands of its organization and, from phase 7, send
-collections to it. It gives no read access to mentions, analyses or reports.
+From phase 7 a link lets Scanner send collections to its organization. It gives no read access
+to anything in AnyPulse.
 """
 
 import os
@@ -53,16 +52,6 @@ def upgrade() -> None:
       CHECK ((status = 'active') = (revoked_at IS NULL))
     );
 
-    -- Collection destination. ON DELETE SET NULL (link_id) keeps account_id when the link
-    -- disappears with its organization.
-    ALTER TABLE scanner_collection_sessions
-      ADD COLUMN link_id uuid,
-      ADD COLUMN anypulse_brand_id uuid REFERENCES brands(id) ON DELETE SET NULL,
-      ADD COLUMN anypulse_brand_name varchar(200),
-      ADD CONSTRAINT scanner_sessions_link_fk FOREIGN KEY (account_id, link_id)
-        REFERENCES scanner_links (account_id, id) ON DELETE SET NULL (link_id),
-      ADD CONSTRAINT scanner_sessions_brand_needs_link
-        CHECK (anypulse_brand_id IS NULL OR link_id IS NOT NULL);
 
     ALTER TABLE scanner_links ENABLE ROW LEVEL SECURITY;
     ALTER TABLE scanner_links FORCE ROW LEVEL SECURITY;
@@ -95,39 +84,6 @@ def upgrade() -> None:
       FOR EACH ROW EXECUTE FUNCTION scanner_links_provision_guard();
     """)
 
-    # Destination check: the account's own active link, and an active brand of its
-    # organization. SECURITY DEFINER because a Scanner context cannot read `brands`.
-    x("""
-    CREATE FUNCTION scanner_sessions_destination_check() RETURNS trigger
-      LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-    DECLARE l scanner_links;
-    BEGIN
-      IF NEW.link_id IS NULL THEN
-        RETURN NEW;
-      END IF;
-      IF TG_OP = 'UPDATE' AND NEW.link_id IS NOT DISTINCT FROM OLD.link_id
-         AND (NEW.anypulse_brand_id IS NULL
-              OR NEW.anypulse_brand_id IS NOT DISTINCT FROM OLD.anypulse_brand_id) THEN
-        RETURN NEW;   -- unchanged destination, or a brand removed by ON DELETE SET NULL
-      END IF;
-      SELECT * INTO l FROM scanner_links WHERE id = NEW.link_id;
-      IF NOT FOUND OR l.status <> 'active' OR l.account_id <> NEW.account_id THEN
-        RAISE EXCEPTION 'collection destination: access to AnyPulse is not active for this account'
-          USING ERRCODE = 'check_violation';
-      END IF;
-      IF NEW.anypulse_brand_id IS NOT NULL AND NOT EXISTS (
-           SELECT 1 FROM brands b WHERE b.id = NEW.anypulse_brand_id
-             AND b.tenant_id = l.tenant_id AND b.status = 'active') THEN
-        RAISE EXCEPTION 'collection destination: not an active brand of the account''s organization'
-          USING ERRCODE = 'check_violation';
-      END IF;
-      RETURN NEW;
-    END $$;
-    REVOKE ALL ON FUNCTION scanner_sessions_destination_check() FROM PUBLIC;
-    CREATE TRIGGER scanner_sessions_destination_check
-      BEFORE INSERT OR UPDATE OF link_id, anypulse_brand_id ON scanner_collection_sessions
-      FOR EACH ROW EXECUTE FUNCTION scanner_sessions_destination_check();
-    """)
 
     x("""
     -- Used by the integration endpoints after they have verified a signed Scanner call.
@@ -212,14 +168,6 @@ def downgrade() -> None:
     DROP FUNCTION IF EXISTS admin_scanner_accounts();
     DROP FUNCTION IF EXISTS integration_scanner_link(uuid);
     DROP FUNCTION IF EXISTS integration_scanner_account(uuid);
-    DROP TRIGGER IF EXISTS scanner_sessions_destination_check ON scanner_collection_sessions;
-    DROP FUNCTION IF EXISTS scanner_sessions_destination_check();
-    ALTER TABLE scanner_collection_sessions
-      DROP CONSTRAINT IF EXISTS scanner_sessions_brand_needs_link,
-      DROP CONSTRAINT IF EXISTS scanner_sessions_link_fk,
-      DROP COLUMN IF EXISTS anypulse_brand_name,
-      DROP COLUMN IF EXISTS anypulse_brand_id,
-      DROP COLUMN IF EXISTS link_id;
     DROP TABLE IF EXISTS scanner_links CASCADE;
     DROP FUNCTION IF EXISTS scanner_links_provision_guard();
     """)

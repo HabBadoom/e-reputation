@@ -91,14 +91,6 @@ export type SessionStatus =
   | "draft" | "collecting" | "ready" | "validating" | "queued" | "transmitting"
   | "transmitted" | "acknowledged" | "failed" | "retrying" | "cancelled";
 
-/** The brand of the account's AnyPulse organization this collection goes to. */
-export interface Destination {
-  organization_name: string;
-  access_active: boolean;
-  brand_id: string | null;
-  brand_name: string | null;
-}
-
 export interface CollectionSession {
   id: string;
   status: SessionStatus;
@@ -109,20 +101,12 @@ export interface CollectionSession {
   anypulse_collection_id: string | null;
   is_open: boolean;
   counters: Counters;
-  destination: Destination | null;
 }
 
-/** The account's own AnyPulse organization, linked automatically at sign-up. */
+/** Whether this account can send its collections to AnyPulse (revoked only by a platform
+ * administrator). Scanner never shows AnyPulse data. */
 export interface AnyPulseAccess {
   state: "active" | "revoked" | "pending";
-  organization_name: string | null;
-  anypulse_url: string;
-  linked_at: string | null;
   revoked_at: string | null;
   revoke_reason: string | null;
 }
-
-export interface InvitationSent { email: string; expires_at: string }
-export interface BrandRef { id: string; name: string }
-
-export interface Page<T> { items: T[]; total: number; limit: number; offset: number }

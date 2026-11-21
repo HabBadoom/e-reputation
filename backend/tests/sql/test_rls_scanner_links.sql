@@ -1,6 +1,6 @@
 -- Scanner ↔ AnyPulse links (migration 0011): created only in the provisioning context for a
 -- brand-new organization, one per account and per organization, visible to both parties only,
--- status changed only by platform administrators, collection destination checked in the DB.
+-- status changed only by platform administrators.
 -- Run as the API role; rolls back everything.
 
 \set QUIET on
@@ -12,7 +12,6 @@ BEGIN;
 \set tm '''7b000000-0000-0000-0000-00000000000b'''
 \set u1 '''a1000000-0000-0000-0000-000000000001'''
 \set b1 '''b1000000-0000-0000-0000-000000000001'''
-\set bn '''ba000000-0000-0000-0000-00000000000a'''
 \set sa '''5ca00000-0000-0000-0000-0000000000a1'''
 \set sb '''5cb00000-0000-0000-0000-0000000000b1'''
 \set la '''1a000000-0000-0000-0000-0000000000a1'''
@@ -41,7 +40,6 @@ SELECT 'PASS seed';
 -- 1. provisioning: new organization TN created, then the link, with both contexts set
 SELECT set_config('app.scanner_account_id', '', true), set_config('app.tenant_id', :tn, true);
 INSERT INTO tenants (id, name, slug) VALUES (:tn, 'Kenza', 'kenza-abc123');
-INSERT INTO brands (id, tenant_id, name) VALUES (:bn, :tn, 'Djezzy');
 SELECT set_config('app.scanner_account_id', :sa, true);
 INSERT INTO scanner_links (id, account_id, tenant_id, tenant_name) VALUES (:la, :sa, :tn, 'Kenza');
 DO $$ BEGIN
@@ -137,34 +135,7 @@ DO $$ BEGIN
 END $$;
 SELECT 'PASS 4: only platform administrators change a link';
 
--- 5. collection destination is checked in the database
-SELECT set_config('app.tenant_id', '', true), set_config('app.user_id', '', true),
-       set_config('app.scanner_account_id', :sa, true);
-UPDATE scanner_collection_sessions SET link_id = :la, anypulse_brand_id = :bn,
-       anypulse_brand_name = 'Djezzy' WHERE id = :sess_a;
-DO $$ BEGIN
-  BEGIN
-    UPDATE scanner_collection_sessions SET anypulse_brand_id = 'b1000000-0000-0000-0000-000000000001'
-     WHERE id = '5ca00000-0000-0000-0000-00000000a5e5';
-    RAISE EXCEPTION 'brand of another organization accepted';
-  EXCEPTION WHEN check_violation THEN NULL; END;
-  BEGIN
-    UPDATE scanner_collection_sessions SET link_id = NULL
-     WHERE id = '5ca00000-0000-0000-0000-00000000a5e5';
-    RAISE EXCEPTION 'brand without a link accepted';
-  EXCEPTION WHEN check_violation THEN NULL; END;
-END $$;
-SELECT set_config('app.scanner_account_id', :sb, true);
-DO $$ BEGIN
-  BEGIN
-    UPDATE scanner_collection_sessions SET link_id = '1a000000-0000-0000-0000-0000000000a1'
-     WHERE id = '5cb00000-0000-0000-0000-00000000b5e5';
-    RAISE EXCEPTION 'another account''s link accepted';
-  EXCEPTION WHEN check_violation OR foreign_key_violation THEN NULL; END;
-END $$;
-SELECT 'PASS 5: destination = own active link and a brand of its organization';
-
--- 6. integration lookups are narrow
+-- 5. integration lookups are narrow
 DO $$ BEGIN
   ASSERT (SELECT tenant_id FROM integration_scanner_link('1a000000-0000-0000-0000-0000000000a1'))
          = '7a000000-0000-0000-0000-00000000000a', 'link lookup failed';
@@ -173,7 +144,7 @@ DO $$ BEGIN
   ASSERT (SELECT link_id FROM integration_scanner_account('5cb00000-0000-0000-0000-0000000000b1'))
          IS NULL, 'unlinked account reported a link';
 END $$;
-SELECT 'PASS 6: integration lookups';
+SELECT 'PASS 5: integration lookups';
 
 ROLLBACK;
 SELECT 'ALL SCANNER LINK RLS TESTS PASSED';

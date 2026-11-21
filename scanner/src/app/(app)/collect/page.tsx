@@ -2,9 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/components/providers";
-import { DestinationPicker } from "@/components/destination";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
-import { api, type CollectionSession } from "@/lib/api";
+import { api, type AnyPulseAccess, type CollectionSession } from "@/lib/api";
 import type { MessageKey } from "@/lib/i18n";
 
 // Screenshot first: the upload area is the dominant action, the URL option secondary.
@@ -24,6 +23,8 @@ export default function CollectPage() {
       qc.invalidateQueries({ queryKey: ["sessions"] });
     },
   });
+  // Only whether sending is possible; Scanner users never see AnyPulse data.
+  const access = useQuery({ queryKey: ["anypulse"], queryFn: () => api.get<AnyPulseAccess>("/anypulse") });
   const s = session.data;
 
   return (
@@ -47,6 +48,14 @@ export default function CollectPage() {
         <Button variant="ghost" disabled aria-describedby="url-not-yet">{t("collect.addUrl")}</Button>
         <span id="url-not-yet" className="text-xs text-ink-mute">{t("collect.notYet")}</span>
       </div>
+
+      {access.data?.state === "revoked" && (
+        <div role="alert" className="rounded border border-signal-neg/30 bg-signal-neg/5 px-4 py-3 text-sm text-signal-neg">
+          <p>{t("access.revoked")}</p>
+          {access.data.revoke_reason && <p className="mt-1">{t("access.reason", { reason: access.data.revoke_reason })}</p>}
+        </div>
+      )}
+      {access.data?.state === "pending" && <p className="text-xs text-ink-mute">{t("access.pending")}</p>}
 
       {session.isLoading && <Spinner />}
       <ErrorBanner error={session.error ?? cancel.error} />
@@ -83,9 +92,6 @@ export default function CollectPage() {
               </div>
             ))}
           </dl>
-          <div className="mt-5 border-t border-line pt-4">
-            <DestinationPicker session={s} />
-          </div>
           <div className="mt-5 border-t border-line pt-4">
             <Button className="w-full sm:w-auto" disabled aria-describedby="send-not-yet">{t("collect.send")}</Button>
             <p id="send-not-yet" className="mt-2 text-xs text-ink-mute">{t("collect.sendNotYet")}</p>

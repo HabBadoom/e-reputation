@@ -127,11 +127,10 @@ Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Brow
 | GET | `/scanner/auth/me` | Scanner account |
 | GET | `/scanner/sessions/current` | Open collection, created on first use |
 | GET | `/scanner/sessions`, `/scanner/sessions/{id}` | History / one collection, with collection counters |
-| PATCH | `/scanner/sessions/{id}` | `{title?, brand_id?}` (destination brand) |
+| PATCH | `/scanner/sessions/{id}` | `{title}` |
 | POST | `/scanner/sessions/{id}/cancel` | 409 `session_not_open` |
-| GET | `/scanner/anypulse`; POST `/scanner/anypulse/invitation` | The account's own AnyPulse organization (linked automatically) / owner invitation again |
-| GET / POST | `/scanner/brands` | Brands of that organization / create one |
-| POST | `/integrations/scanner/provision`; GET / POST `/integrations/scanner/brands`; POST `/integrations/scanner/invitation` | HMAC-signed Scanner calls only (no AnyPulse session) |
+| GET | `/scanner/anypulse` | Whether the account can send collections (automatic link; revoked only by platform admins) |
+| POST | `/integrations/scanner/provision` | HMAC-signed Scanner call only: create the account's own organization and link |
 | GET | `/admin/scanner/accounts`; POST `/admin/scanner/accounts/{id}/revoke`, `/restore` | Platform admin + MFA: revoke or restore a Scanner account's access |
 
 ## Example (API client)

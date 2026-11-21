@@ -3,15 +3,16 @@
 ## Unreleased — Aynpulse Scanner, Phase 2: automatic link to AnyPulse
 
 ### Added
-- Migration 0011: `scanner_links` (one AnyPulse organization per Scanner account, created at sign-up; insert guarded to brand-new organizations; status changed only by platform admins), collection destination brand with a database check; `integration_scanner_account()`, `integration_scanner_link()`, `admin_scanner_accounts()`, `admin_scanner_set_access()`.
-- Signed Scanner → AnyPulse integration (`app/integrations/anypulse/`, HMAC-SHA256) and AnyPulse endpoints `/api/v1/integrations/scanner/*`: provision (organization, subscription, owner invitation, link), brands, invitation.
-- Scanner: **Mon espace AnyPulse** page (status, open AnyPulse, resend invitation), brand picker with brand creation on the collection screen.
-- Admin console: **Scanner** tab to revoke (with a reason) or restore an account's access, audited in the organization.
+- Migration 0011: `scanner_links` (one AnyPulse organization per Scanner account, created at sign-up; insert guarded to brand-new organizations; status changed only by platform admins); `integration_scanner_account()`, `integration_scanner_link()`, `admin_scanner_accounts()`, `admin_scanner_set_access()`.
+- Signed Scanner → AnyPulse integration (`app/integrations/anypulse/`, HMAC-SHA256) and `POST /api/v1/integrations/scanner/provision`.
+- Scanner: `GET /scanner/anypulse` (can this agent send collections?) and a notice on the collection screen when access is revoked.
+- Admin console: **Scanner** tab to revoke (with a reason) or restore an agent's access, audited in the organization.
 - Tests: `tests/sql/test_rls_scanner_links.sql`, `tests/test_scanner_links.py`.
 
 ### Changed
+- Scanner users are collection agents: no AnyPulse invitation, no brand choice (brand attribution by RepIntel's AI later).
 - AnyPulse sign-in keeps the query string when redirecting back after login.
-- Scanner accounts: one account type for everyone (no individual/professional).
+- Scanner accounts: one account type for everyone.
 
 ## Aynpulse Scanner, Phase 1: foundation
 

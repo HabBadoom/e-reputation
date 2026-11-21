@@ -8,26 +8,21 @@ import dataclasses
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip
 from app.core.config import get_settings
-from app.core.errors import Conflict, Unauthorized
+from app.core.errors import Unauthorized
 from app.core.rate_limit import get_limiter
 from app.core.security import new_csrf_token
-from app.db.models import ScannerAccount, ScannerCollectionSession, ScannerLink
+from app.db.models import ScannerAccount, ScannerCollectionSession
 from app.db.session import get_db
 from app.modules.scanner.schemas import (
     AnyPulseAccessOut,
-    BrandCreateIn,
-    BrandOut,
     CollectionSessionOut,
     CollectionSessionPage,
     CollectionSessionPatch,
     CountersOut,
-    DestinationOut,
-    InvitationOut,
     ScannerLoginIn,
     ScannerMeOut,
     ScannerRefreshIn,
@@ -147,23 +142,17 @@ def me(ctx: ScannerContext = Depends(get_scanner_auth),
 
 
 # ---- collection sessions ---------------------------------------------------------------------
-def _out(s: ScannerCollectionSession, c: sessions.Counters,
-         link: ScannerLink | None) -> CollectionSessionOut:
-    dest = None
-    if s.link_id is not None and link is not None:
-        dest = DestinationOut(organization_name=link.tenant_name,
-                              access_active=link.status == "active",
-                              brand_id=s.anypulse_brand_id, brand_name=s.anypulse_brand_name)
+def _out(s: ScannerCollectionSession, c: sessions.Counters) -> CollectionSessionOut:
     return CollectionSessionOut(
         id=s.id, status=s.status, title=s.title, created_at=s.created_at,
         updated_at=s.updated_at, transmitted_at=s.transmitted_at,
         anypulse_collection_id=s.anypulse_collection_id,
         is_open=s.status in sessions.OPEN_STATUSES,
-        counters=CountersOut(**dataclasses.asdict(c)), destination=dest)
+        counters=CountersOut(**dataclasses.asdict(c)))
 
 
 def _one(db: Session, s: ScannerCollectionSession) -> CollectionSessionOut:
-    return _out(s, sessions.counters(db, [s.id])[s.id], anypulse.own_link(db))
+    return _out(s, sessions.counters(db, [s.id])[s.id])
 
 
 @router.get("/sessions/current", response_model=CollectionSessionOut)
@@ -185,8 +174,7 @@ def list_sessions(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, g
                   db: Session = Depends(get_db)) -> CollectionSessionPage:
     rows, total = sessions.list_sessions(db, limit=limit, offset=offset)
     c = sessions.counters(db, [r.id for r in rows])
-    link = anypulse.own_link(db)
-    return CollectionSessionPage(items=[_out(r, c[r.id], link) for r in rows],
+    return CollectionSessionPage(items=[_out(r, c[r.id]) for r in rows],
                                  total=total, limit=limit, offset=offset)
 
 
@@ -197,25 +185,10 @@ def get_session(session_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner
 
 
 @router.patch("/sessions/{session_id}", response_model=CollectionSessionOut)
-def update_session(session_id: uuid.UUID, body: CollectionSessionPatch, request: Request,
+def rename_session(session_id: uuid.UUID, body: CollectionSessionPatch,
                    ctx: ScannerContext = Depends(get_scanner_auth),
                    db: Session = Depends(get_db)) -> CollectionSessionOut:
-    s = sessions.get(db, session_id)
-    if body.title is not None:
-        sessions.rename(db, s, body.title)
-    if "brand_id" in body.model_fields_set:
-        try:
-            sessions.set_destination(db, s, account_id=ctx.account_id, brand_id=body.brand_id)
-        except DBAPIError as e:   # the DB trigger disagreed (e.g. brand archived meanwhile)
-            if getattr(e.orig, "sqlstate", None) != "23514":
-                raise
-            db.rollback()
-            raise Conflict("Invalid destination for this collection",
-                           code="invalid_destination") from e
-        record(db, account_id=ctx.account_id, action="session.destination_set",
-               target_type="collection_session", target_id=s.id,
-               meta={"brand_id": str(s.anypulse_brand_id) if s.anypulse_brand_id else None},
-               request=request)
+    s = sessions.rename(db, sessions.get(db, session_id), body.title)
     db.commit()
     return _one(db, s)
 
@@ -235,39 +208,14 @@ def cancel_session(session_id: uuid.UUID, request: Request,
 @router.get("/anypulse", response_model=AnyPulseAccessOut)
 def anypulse_access(ctx: ScannerContext = Depends(get_scanner_auth),
                     db: Session = Depends(get_db)) -> AnyPulseAccessOut:
+    """Whether this account can send its collections to AnyPulse (revoked only by a platform
+    administrator). Creates the account's organization first if sign-up could not."""
     link = anypulse.ensure_link(db, ctx.account_id)
-    url = get_settings().app_base_url
     if link is None:
-        return AnyPulseAccessOut(state="pending", organization_name=None, anypulse_url=url,
-                                 linked_at=None, revoked_at=None, revoke_reason=None)
-    return AnyPulseAccessOut(
-        state=link.status, organization_name=link.tenant_name, anypulse_url=url,
-        linked_at=link.created_at, revoked_at=link.revoked_at,
-        revoke_reason=(link.revoke_reason or None) if link.status == "revoked" else None)
-
-
-@router.post("/anypulse/invitation", response_model=InvitationOut)
-def resend_invitation(ctx: ScannerContext = Depends(get_scanner_auth),
-                      db: Session = Depends(get_db)) -> InvitationOut:
-    """E-mail again the invitation to open the account's organization in AnyPulse."""
-    return InvitationOut(**anypulse.resend_invitation(anypulse.active_link(db, ctx.account_id)))
-
-
-@router.get("/brands", response_model=list[BrandOut])
-def list_brands(ctx: ScannerContext = Depends(get_scanner_auth),
-                db: Session = Depends(get_db)) -> list[BrandOut]:
-    return [BrandOut(**b) for b in anypulse.brands(anypulse.active_link(db, ctx.account_id))]
-
-
-@router.post("/brands", response_model=BrandOut, status_code=201)
-def create_brand(body: BrandCreateIn, request: Request,
-                 ctx: ScannerContext = Depends(get_scanner_auth),
-                 db: Session = Depends(get_db)) -> BrandOut:
-    b = anypulse.create_brand(anypulse.active_link(db, ctx.account_id), body.name)
-    record(db, account_id=ctx.account_id, action="brand.created", target_type="brand",
-           target_id=uuid.UUID(b["id"]), meta={"name": b["name"]}, request=request)
-    db.commit()
-    return BrandOut(**b)
+        return AnyPulseAccessOut(state="pending", revoked_at=None, revoke_reason=None)
+    revoked = link.status == "revoked"
+    return AnyPulseAccessOut(state=link.status, revoked_at=link.revoked_at,
+                             revoke_reason=(link.revoke_reason or None) if revoked else None)
 
 
 @router.get("/health", include_in_schema=False)
