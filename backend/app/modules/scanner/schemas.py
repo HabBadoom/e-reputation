@@ -133,3 +133,11 @@ class UploadOut(BaseModel):
 
 class ReorderIn(BaseModel):
     item_ids: list[uuid.UUID] = Field(max_length=2000)
+
+
+class BrowserInfoOut(BaseModel):
+    """Built-in browser availability. `ws_url` empty = same origin as the Scanner app."""
+    enabled: bool
+    ws_url: str
+    has_saved_session: bool
+    saved_at: datetime | None

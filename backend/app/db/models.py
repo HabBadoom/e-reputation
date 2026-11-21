@@ -984,6 +984,15 @@ class ScannerUploadedFile(Base):
     retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class ScannerBrowserProfile(Base):
+    """Encrypted cookies/local storage of the agent's built-in browser (0013). No passwords."""
+    __tablename__ = "scanner_browser_profiles"
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"), primary_key=True)
+    state_encrypted: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = _created()
+
+
 class ScannerAuditLog(Base):
     __tablename__ = "scanner_audit_logs"
     id: Mapped[uuid.UUID] = _pk()

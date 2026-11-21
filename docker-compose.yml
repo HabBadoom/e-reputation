@@ -38,6 +38,10 @@ x-backend-env: &backend-env
   REPINTEL_STORAGE_BUCKET: repintel-scanner
   REPINTEL_STORAGE_ACCESS_KEY: repintel-dev
   REPINTEL_STORAGE_SECRET_KEY: repintel-dev-secret-change-me
+  # Built-in browser (scanner-browser service). The Scanner app connects to it directly in dev;
+  # the sc_access cookie (host-only, localhost) is sent to any localhost port.
+  REPINTEL_SCANNER_BROWSER_ENABLED: "true"
+  REPINTEL_SCANNER_BROWSER_PUBLIC_URL: ws://localhost:8100/api/v1/scanner/browser/ws
 
 services:
   postgres:
@@ -129,6 +133,24 @@ services:
     # Production: put this service on its own network whose egress firewall drops RFC 1918,
     # link-local (169.254.0.0/16, cloud metadata) and loopback ranges — the in-code checks are
     # the first layer, the network policy is the one DNS rebinding cannot defeat.
+
+  scanner-browser:   # Scanner's built-in browser (live Chromium streamed to the Scanner app)
+    build: ./backend
+    command: ["uvicorn", "app.scanner.browser.server:app", "--host", "0.0.0.0", "--port", "8100"]
+    environment:
+      <<: *backend-env
+      REPINTEL_SCANNER_BROWSER_MAX_SESSIONS: "4"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      rustfs: { condition: service_started }
+    ports: ["127.0.0.1:8100:8100"]
+    restart: unless-stopped
+    shm_size: "1gb"
+    mem_limit: "3g"
+    cpus: 2
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
 
   web:
     build: ./frontend

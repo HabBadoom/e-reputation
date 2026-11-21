@@ -15,10 +15,11 @@ from app.core.config import get_settings
 from app.core.errors import AppError, Unauthorized
 from app.core.rate_limit import get_limiter
 from app.core.security import new_csrf_token
-from app.db.models import ScannerAccount, ScannerCollectionSession
+from app.db.models import ScannerAccount, ScannerBrowserProfile, ScannerCollectionSession
 from app.db.session import get_db
 from app.modules.scanner.schemas import (
     AnyPulseAccessOut,
+    BrowserInfoOut,
     CollectionSessionOut,
     CollectionSessionPage,
     CollectionSessionPatch,
@@ -303,6 +304,29 @@ def file_content(file_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner_a
         "x-content-type-options": "nosniff",
         "content-security-policy": "default-src 'none'; sandbox",
     })
+
+
+@router.get("/browser", response_model=BrowserInfoOut)
+def browser_info(ctx: ScannerContext = Depends(get_scanner_auth),
+                 db: Session = Depends(get_db)) -> BrowserInfoOut:
+    cfg = get_settings()
+    row = db.get(ScannerBrowserProfile, ctx.account_id)
+    return BrowserInfoOut(enabled=cfg.scanner_browser_enabled,
+                          ws_url=cfg.scanner_browser_public_url,
+                          has_saved_session=row is not None,
+                          saved_at=row.updated_at if row else None)
+
+
+@router.delete("/browser/profile", status_code=204)
+def forget_browser_session(request: Request, ctx: ScannerContext = Depends(get_scanner_auth),
+                           db: Session = Depends(get_db)) -> Response:
+    """"Forget my signed-in sessions": deletes the saved cookies of the built-in browser.
+    A browser open at that moment saves again when it closes, so the app closes it first."""
+    from app.scanner.browser import profiles
+    if profiles.forget(db, ctx.account_id):
+        record(db, account_id=ctx.account_id, action="browser.session_forgotten",
+               request=request)
+    return Response(status_code=204)
 
 
 @router.get("/health", include_in_schema=False)

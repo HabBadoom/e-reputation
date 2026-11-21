@@ -137,6 +137,8 @@ Migration 0012 (screenshots):
 | `scanner_uploaded_files` | account | one per screenshot item; `storage_key` (private object storage), sanitised `mime_type` (PNG/JPEG/WebP only), size, dimensions, `sha256` (unique per collection), `dhash`; composite FKs to the account's item and collection; SELECT/INSERT/DELETE only |
 | `scanner_collection_items` + | account | `UNIQUE (account_id, id)`; `possible_duplicate_of` (composite FK to an item of the same account) |
 
+Migration 0013 (built-in browser): `scanner_browser_profiles` (account, own row only) — `account_id` PK, `state_encrypted` (Fernet: cookies and local storage of the agent's built-in browser, never passwords), `updated_at`.
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

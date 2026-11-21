@@ -189,3 +189,17 @@ export function uploadScreenshots(
     xhr.send(form);
   });
 }
+
+// Built-in browser (scanner-browser service, WebSocket). `ws_url` empty = same origin.
+export interface BrowserInfo {
+  enabled: boolean;
+  ws_url: string;
+  has_saved_session: boolean;
+  saved_at: string | null;
+}
+
+export function browserSocketUrl(info: BrowserInfo): string {
+  if (info.ws_url) return info.ws_url;
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${window.location.host}/api/v1/scanner/browser/ws`;
+}

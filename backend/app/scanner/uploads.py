@@ -65,8 +65,10 @@ def _next_position(db: Session, session_id: uuid.UUID) -> int:
 
 
 def add_screenshots(db: Session, s: ScannerCollectionSession,
-                    files: list[tuple[str, bytes]]) -> list[FileResult]:
-    """Validate, sanitise, store and attach each image. One bad file never blocks the others."""
+                    files: list[tuple[str, bytes]], *, source_url: str | None = None,
+                    platform: str | None = None) -> list[FileResult]:
+    """Validate, sanitise, store and attach each image. One bad file never blocks the others.
+    `source_url`/`platform` record where a capture was taken (built-in browser)."""
     cfg = get_settings()
     require_open(s)
     storage = get_storage()
@@ -113,7 +115,8 @@ def add_screenshots(db: Session, s: ScannerCollectionSession,
         try:
             db.add(ScannerCollectionItem(
                 id=item_id, account_id=s.account_id, session_id=s.id, source_type="screenshot",
-                position=position, status="pending", possible_duplicate_of=near))
+                position=position, status="pending", possible_duplicate_of=near,
+                source_url=(source_url or None) and source_url[:2000], platform=platform))
             db.flush()
             db.add(ScannerUploadedFile(
                 id=file_id, account_id=s.account_id, session_id=s.id, item_id=item_id,

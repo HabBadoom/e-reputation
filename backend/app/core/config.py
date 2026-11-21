@@ -151,6 +151,14 @@ class Settings(BaseSettings):
     scanner_upload_max_side: int = Field(default=12_000, ge=100)
     scanner_upload_max_files_per_request: int = Field(default=20, ge=1, le=100)
     scanner_uploads_per_hour: int = Field(default=600, ge=1)
+    # Built-in browser (scanner-browser service): a real Chromium shown live in the Scanner app.
+    scanner_browser_enabled: bool = False
+    scanner_browser_public_url: str = ""          # ws(s)://… for clients; "" = same origin
+    scanner_browser_allowed_origins: list[str] = []  # "" → the origin of scanner_base_url
+    scanner_browser_max_sessions: int = Field(default=4, ge=1, le=64)
+    scanner_browser_idle_seconds: int = Field(default=600, ge=60)
+    scanner_browser_max_state_bytes: int = Field(default=2_000_000, ge=10_000)
+    scanner_browser_allow_private_networks: bool = False   # tests only
 
     # Object storage for Scanner files. "filesystem" is for development and tests only;
     # staging and production must use an S3-compatible service (Scaleway, OVH, RustFS…).

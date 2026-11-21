@@ -53,18 +53,24 @@ def get_scanner_auth(request: Request, db: Session = Depends(get_db)) -> Scanner
     if via_cookie and request.method not in SAFE_METHODS and not csrf_ok:
         raise Forbidden("CSRF token missing or invalid", code="csrf_failed")
 
-    set_scanner_context(db, account_id=claims.account_id)
+    check_session(db, claims.account_id, claims.session_id)
+    request.state.scanner_account_id = claims.account_id
+    return ScannerContext(claims.account_id, claims.session_id, via_cookie)
+
+
+def check_session(db: Session, account_id: uuid.UUID, family_id: uuid.UUID) -> None:
+    """Set the Scanner context, then require a live refresh family and an active account
+    (immediate effect of logout, reuse detection and disabling). Also used by the built-in
+    browser service for its WebSocket connections."""
+    set_scanner_context(db, account_id=account_id)
     alive = db.scalar(
         select(ScannerRefreshToken.id).where(
-            ScannerRefreshToken.family_id == claims.session_id,
+            ScannerRefreshToken.family_id == family_id,
             ScannerRefreshToken.revoked_at.is_(None),
             ScannerRefreshToken.expires_at > func.now()).limit(1)
     )
     if alive is None:
         raise Unauthorized("Session has ended", code="session_revoked")
-    status = db.scalar(select(ScannerAccount.status)
-                       .where(ScannerAccount.id == claims.account_id))
+    status = db.scalar(select(ScannerAccount.status).where(ScannerAccount.id == account_id))
     if status != "active":
         raise Unauthorized("Account disabled", code="account_disabled")
-    request.state.scanner_account_id = claims.account_id
-    return ScannerContext(claims.account_id, claims.session_id, via_cookie)

@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased — Aynpulse Scanner, Phase 3: screenshot upload
+## Unreleased — Aynpulse Scanner, Phase 3: built-in browser and screenshot upload
 
 ### Added
+- **Built-in browser, the main collection action**: the agent opens Facebook (or another network) inside Scanner, signs in with a dedicated collection account and captures what they see; captures go through the screenshot pipeline with their page address and platform. Phone (touch, mobile layout) and computer modes.
+- `scanner-browser` service (`app/scanner/browser/`): one Chromium, an isolated context per agent, CDP screencast over a WebSocket, request filter to public http(s) only, Origin + cookie + live-session checks, idle timeout, one browser per agent, service-wide limit.
+- Migration 0013: `scanner_browser_profiles` — the agent's signed-in session (cookies, local storage) encrypted, never passwords; `GET /scanner/browser`, `DELETE /scanner/browser/profile`.
+- Compose: `scanner-browser` (dev port 8100; production under `--profile scanner` on the firewalled `browser` network, reached by Caddy over the internal `scanner-edge` network).
+- Tests: `test_scanner_browser.py` (real Chromium), profile isolation in `test_rls_scanner_uploads.sql`.
 - Migration 0012: `scanner_uploaded_files` (private storage key, sanitised metadata, SHA-256 unique per collection, difference hash) and `possible_duplicate_of` on items.
 - Upload pipeline (`app/scanner/images.py`, `uploads.py`, `storage.py`): limits before decoding, format from bytes (PNG/JPEG/WebP), re-encoding without metadata after EXIF orientation, exact-duplicate refusal and near-duplicate flag, private S3-compatible storage (filesystem backend for tests).
 - Endpoints: upload screenshots, list and reorder items, remove an item, read a file back (owner only).

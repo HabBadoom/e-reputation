@@ -3,12 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
+import { RemoteBrowser } from "@/components/remote-browser";
 import { ItemsGrid, ScreenshotDropzone } from "@/components/screenshots";
 import { api, type AnyPulseAccess, type CollectionItem, type CollectionSession } from "@/lib/api";
 import type { MessageKey } from "@/lib/i18n";
 
-// Screenshot first: the upload area is the dominant action, the URL option secondary. After each
-// screenshot the page stays on this add-item screen with the same collection. URL collection
+// Screenshot first. Main action: the built-in browser (the agent signs in to the dedicated
+// account and captures what they see); importing screenshots already taken is the fallback; the
+// URL option comes last. Every capture lands in the same current collection. URL collection
 // (phase 5) and sending (phase 7) are shown disabled with a note, never as buttons that do nothing.
 export default function CollectPage() {
   const { t, fmtDate } = useI18n();
@@ -40,7 +42,14 @@ export default function CollectPage() {
         <p className="mt-1 text-sm text-ink-soft">{t("collect.subtitle")}</p>
       </div>
 
-      {s && <ScreenshotDropzone session={s} disabled={!s.is_open} />}
+      {s && <RemoteBrowser session={s} disabled={!s.is_open} />}
+
+      {s && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-medium text-ink-soft">{t("collect.orImport")}</h2>
+          <ScreenshotDropzone session={s} disabled={!s.is_open} />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" disabled aria-describedby="url-not-yet">{t("collect.addUrl")}</Button>

@@ -89,5 +89,22 @@ DO $$ BEGIN
 END $$;
 SELECT 'PASS 2: exact duplicates refused per collection; metadata immutable; images only';
 
+-- built-in browser profiles (0013): own row only
+INSERT INTO scanner_browser_profiles (account_id, state_encrypted) VALUES (:sa, 'gAAAA-a');
+SELECT set_config('app.scanner_account_id', :sb, true);
+DO $$
+DECLARE n int;
+BEGIN
+  ASSERT (SELECT count(*) FROM scanner_browser_profiles) = 0, 'B reads A browser profile';
+  UPDATE scanner_browser_profiles SET state_encrypted = 'x';
+  GET DIAGNOSTICS n = ROW_COUNT; ASSERT n = 0, 'B rewrote A browser profile';
+  BEGIN
+    INSERT INTO scanner_browser_profiles (account_id, state_encrypted)
+      VALUES ('5ca00000-0000-0000-0000-0000000000a1', 'planted');
+    RAISE EXCEPTION 'browser profile planted for A';
+  EXCEPTION WHEN insufficient_privilege OR unique_violation THEN NULL; END;
+END $$;
+SELECT 'PASS 3: browser profiles are private to their account';
+
 ROLLBACK;
 SELECT 'ALL SCANNER UPLOAD RLS TESTS PASSED';
