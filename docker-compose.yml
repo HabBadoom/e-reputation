@@ -32,6 +32,12 @@ x-backend-env: &backend-env
   REPINTEL_METRICS_TOKEN: ${REPINTEL_METRICS_TOKEN:-}
   REPINTEL_SCANNER_ENABLED: ${REPINTEL_SCANNER_ENABLED:-true}
   REPINTEL_SCANNER_BASE_URL: http://localhost:3001
+  # Scanner screenshots: RustFS (S3-compatible) in development; any S3-compatible service in production.
+  REPINTEL_STORAGE_BACKEND: s3
+  REPINTEL_STORAGE_ENDPOINT_URL: http://rustfs:9000
+  REPINTEL_STORAGE_BUCKET: repintel-scanner
+  REPINTEL_STORAGE_ACCESS_KEY: repintel-dev
+  REPINTEL_STORAGE_SECRET_KEY: repintel-dev-secret-change-me
 
 services:
   postgres:
@@ -71,6 +77,13 @@ services:
       OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
     ports: ["127.0.0.1:9200:9200"]
 
+  rustfs:   # S3-compatible object storage for Scanner screenshots (MinIO's community images are gone)
+    image: rustfs/rustfs:latest
+    command: ["/data"]
+    environment: { RUSTFS_ACCESS_KEY: repintel-dev, RUSTFS_SECRET_KEY: repintel-dev-secret-change-me }
+    volumes: ["rustfsdata:/data"]
+    ports: ["127.0.0.1:9000:9000"]
+
   migrate:
     build: ./backend
     command: ["alembic", "upgrade", "head"]
@@ -83,6 +96,7 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
+      rustfs: { condition: service_started }
     ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/readyz')"]
@@ -129,4 +143,5 @@ services:
     ports: ["127.0.0.1:3001:3001"]
 
 volumes:
+  rustfsdata:
   pgdata:

@@ -153,10 +153,10 @@ class Settings(BaseSettings):
     scanner_uploads_per_hour: int = Field(default=600, ge=1)
 
     # Object storage for Scanner files. "filesystem" is for development and tests only;
-    # staging and production must use an S3-compatible service (MinIO, Scaleway, OVH…).
+    # staging and production must use an S3-compatible service (Scaleway, OVH, RustFS…).
     storage_backend: Literal["filesystem", "s3"] = "filesystem"
     storage_filesystem_root: str = "/tmp/repintel-storage"   # noqa: S108 — dev/test only
-    storage_endpoint_url: str = ""          # e.g. http://minio:9000; empty = AWS default
+    storage_endpoint_url: str = ""          # e.g. http://rustfs:9000; empty = AWS default
     storage_region: str = "us-east-1"
     storage_bucket: str = "repintel-scanner"
     storage_access_key: SecretStr = SecretStr("")

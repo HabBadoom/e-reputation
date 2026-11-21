@@ -1,26 +1,26 @@
 # Aynpulse Scanner
 
-Status: **Phases 1 (foundation) and 2 (links to AnyPulse) implemented.** Screenshot upload,
-extraction, URL collection and transmission are not built yet; their buttons are shown disabled
-with a note.
+Status: **Phases 1 (foundation), 2 (AnyPulse access) and 3 (screenshot upload) implemented.**
+Extraction (OCR), URL collection and transmission to AnyPulse are not built yet; their actions
+are shown disabled with a note.
 
 > Scanner collects. AnyPulse understands, analyses and reports.
 
-Scanner is the collection module of AnyPulse (this repository, named `RepIntel` in code). Users
-add screenshots, URLs or spreadsheet imports to a collection, review what was extracted and
-send the collection to AnyPulse. All analysis (language, sentiment, emotions, intents, topics,
-risks, crises, summaries, recommendations, reports) happens in AnyPulse; users sign in to
-AnyPulse to see it.
+Scanner is the collection module of AnyPulse (this repository, named `RepIntel` in code). Its
+users are **collection agents**: they add screenshots (and later URLs or spreadsheet imports)
+to a collection and send it to AnyPulse. They never see analyses and never choose a brand.
 
 ## Decisions (2026-11-21)
 
 | Decision | Choice |
 |---|---|
-| Codebase | Module inside the AnyPulse repository, with its own web app (`scanner/`) and tables (`scanner_*`), talking to AnyPulse through an ingest API (Phase 7) |
+| Codebase | Module inside the AnyPulse repository, with its own web app (`scanner/`) and tables (`scanner_*`) |
+| Users | **Collection agents**: they add screenshots and URLs, never see analyses, never choose a brand |
 | Accounts | **Separate Scanner accounts**, one account type for everyone, not AnyPulse users |
-| Users | Scanner users are **collection agents**: they add screenshots and URLs, never see analyses and never choose a brand (RepIntel's AI attributes brands later) |
-| AnyPulse link | **Automatic**: each Scanner account gets its own AnyPulse organization at sign-up, linked for good unless a **platform administrator** revokes it. No consent step, no invitation |
+| AnyPulse access | **Automatic** from sign-up, indefinitely. Only a **platform administrator** revokes it (with a reason shown to the agent) or restores it. No consent step, no invitation, no AnyPulse organization per agent |
+| Destination (option A) | The collections of all agents go to a **central RepIntel space**; RepIntel's AI attributes each one to a brand, hence to a customer, afterwards (transmission: phase 7) |
 | Login | Required before the first upload; no anonymous collection |
+| Storage | Private S3-compatible object storage: **RustFS** in development and CI (MinIO's community edition and images were withdrawn in 2025–2026), an S3-compatible bucket at the EU host in production |
 | Priority | Scanner before the Phase 2 & 3 plan (sprints 9–15) |
 
 The Phase 0 audit and integration plan is kept outside the repository (project documents).
@@ -28,17 +28,17 @@ The Phase 0 audit and integration plan is kept outside the repository (project d
 ## What Scanner must never do
 
 No sentiment, emotion, intent or topic classification; no reputation scores; no crisis
-detection; no summaries, recommendations or reports; no analytical history. Recognising what a
-comment *says* (OCR, layout) is collection; deciding whether it is *negative* is analysis and
-belongs to AnyPulse.
+detection; no summaries, recommendations or reports; no analytical history; no brand
+attribution. Recognising what a comment *says* (OCR, layout) is collection; deciding whether it
+is *negative*, or which brand it is about, belongs to AnyPulse.
 
 ## Architecture
 
 ```
 scanner/                       Next.js app (port 3001): login, register, collect, history
-backend/app/scanner/           auth (accounts, tokens), deps (request context), sessions, audit
+backend/app/scanner/           auth, deps (request context), sessions, uploads, images, storage, audit
 backend/app/modules/scanner/   HTTP router /api/v1/scanner/*
-backend/migrations/versions/0010_scanner_foundation.py
+backend/migrations/versions/0010_scanner_foundation.py, 0011_scanner_access.py, 0012_scanner_uploads.py
 ```
 
 Same FastAPI process, database cluster and CI as AnyPulse. The Scanner web app only proxies
@@ -47,8 +47,8 @@ Same FastAPI process, database cluster and CI as AnyPulse. The Scanner web app o
 ## Accounts, tokens and isolation
 
 - **Accounts** (`scanner_accounts`): email, Argon2id password hash, full name, locale. One
-  account type for everyone (no individual/professional split). Independent of AnyPulse `users`: the
-  same email may exist in both, with different passwords and no link.
+  account type for everyone. Independent of AnyPulse `users`: the same email may exist in both,
+  with different passwords and no link.
 - **Tokens**: 15-minute access JWT with `typ=scanner_access` and audience `aynpulse-scanner`;
   opaque refresh token (14 days) stored hashed, rotated on every use, reuse revokes the family.
   AnyPulse refuses Scanner tokens and Scanner refuses AnyPulse tokens.
@@ -57,51 +57,23 @@ Same FastAPI process, database cluster and CI as AnyPulse. The Scanner web app o
   (host-only by default).
 - **Row-level security**: every Scanner table has RLS enabled and forced, keyed on
   `app.scanner_account_id` (transaction-local). The DB session sets either the AnyPulse context
-  (`app.tenant_id`, `app.user_id`) or the Scanner context, never both: `set_scanner_context()`
-  clears the AnyPulse one. Unset context → no rows.
-- **Pre-context lookups**: `scanner_auth_find_account_by_email()` and
-  `scanner_auth_find_refresh_token()` (SECURITY DEFINER, narrow columns).
+  (`app.tenant_id`, `app.user_id`) or the Scanner context, never both. Unset context → no rows.
 - **Audit**: `scanner_audit_logs`, append-only for the app role (account created, sign-in,
-  collection created or discarded).
+  collection created or discarded, screenshots added, item removed, access revoked/restored).
 
-## Link to AnyPulse (phase 2)
+## AnyPulse access (phase 2)
 
-Every Scanner account is linked automatically to **its own AnyPulse organization**:
-
-1. Right after sign-up, Scanner calls the signed endpoint `POST /integrations/scanner/provision`.
-   AnyPulse creates an organization named after the account (default plan and trial) and the
-   link (`scanner_links`). The organization has no AnyPulse member: Scanner users are collection
-   agents and are not invited to AnyPulse.
-2. If AnyPulse is unreachable at sign-up, the account is still created; provisioning runs again
-   the next time Scanner checks the account's access (`GET /scanner/anypulse`). It is idempotent.
-3. The link stays active indefinitely. Only a **platform administrator** (admin console, "Scanner"
-   tab, two-step verification) revokes it, with a reason shown to the agent, and may restore it.
-   Revocation is audited in the organization's log. A revoked agent keeps using Scanner but
-   cannot send collections (phase 7); the collection screen says so.
-
-Database guards: a link can only be inserted with both the Scanner account and the new
-organization in context, and only for a brand-new organization (no member, created minutes
-ago), so no code path can attach a Scanner account to an existing customer organization. One
-organization per account and one account per organization. Only `admin_scanner_set_access()`
-(platform administrators) changes a link.
-
-A link gives no read access to anything in AnyPulse. From phase 7 it lets Scanner send
-collections to the organization; **brand attribution is done afterwards by RepIntel's AI**.
-
-### Signed integration
-
-Scanner reaches AnyPulse only through `app/integrations/anypulse/client.py`, which signs each
-call (HMAC-SHA256 over method, path, timestamp, Scanner account, link and body hash; headers
-`X-Scanner-Signature: v1=…`, `X-Scanner-Account`, `X-Scanner-Link` (empty before
-provisioning), `X-Scanner-Timestamp`, ±5 min). AnyPulse verifies the signature and checks the
-account (and, from phase 7, the link) in the database before acting. Both run in the same
-process today; the contract stays the same if Scanner is deployed separately. Key:
-`REPINTEL_SCANNER_INTEGRATION_SECRET` (required in staging/production when Scanner is enabled;
-derived from the JWT secret in development/tests).
+`scanner_accounts.anypulse_access` is `active` from creation (a trigger enforces it whatever the
+INSERT says) and stays so indefinitely. The API role cannot UPDATE the access columns (column
+grants); only `admin_scanner_set_access()` can, for a **platform administrator**, from the admin
+console's **Scanner** tab (two-step verification). Revocation records when, by whom and why; the
+reason is shown to the agent on the collection screen. A revoked agent keeps using Scanner but
+will not be able to send collections (phase 7). Each change is written to the account's Scanner
+audit trail.
 
 ## Collection sessions
 
-A session groups the user's successive additions until they are sent. Each account has **at
+A session groups the agent's successive additions until they are sent. Each account has **at
 most one open session** (`draft`, `collecting`, `ready`; partial unique index).
 `GET /scanner/sessions/current` returns it or creates it, so the add-item screen always comes
 back to the same collection. Statuses: `draft`, `collecting`, `ready`, `validating`, `queued`,
@@ -110,9 +82,37 @@ back to the same collection. Statuses: `draft`, `collecting`, `ready`, `validati
 Session counters are **collection metrics only**: items, screenshots, URLs, imports, items to
 review, ready, failed.
 
-Items (`scanner_collection_items`) hold the source type (`screenshot`, `url`, `import`),
-detected platform, content type, position, processing status and the URL for URL items. They
-are created from Phase 3 on.
+## Screenshots (phase 3)
+
+The collection screen opens on the upload zone: drag and drop, file picker (several files) and,
+on phones, the camera. Each file uploads on its own with a progress bar; a failed upload can be
+retried; the zone stays ready for the next screenshot and the collection below shows every
+screenshot in order, with move up/down and remove.
+
+On the server each file is:
+
+1. **Limited** before decoding: size (`REPINTEL_SCANNER_UPLOAD_MAX_BYTES`, 10 MB), pixels
+   (40 M) and side (12,000 px), files per request (20), uploads per hour (600), items per
+   collection (200). Pillow's own decompression-bomb check is also applied.
+2. **Identified from its bytes** (never from the file name or the client's MIME type): PNG,
+   JPEG or WebP only. Anything else is refused (`unsupported_type`), including SVG and PDF.
+3. **Decoded and re-encoded** in the same format after applying the EXIF orientation, **without
+   any metadata** (EXIF incl. GPS location, XMP, ICC, PNG text). The stored file is ours, not the
+   uploaded bytes. Animated images keep their first frame.
+4. **Fingerprinted**: SHA-256 of the stored bytes (an exact duplicate in the same collection is
+   refused and points to the existing item) and a 64-bit difference hash (a visually
+   near-identical screenshot is accepted but **flagged** `possible_duplicate_of`, never merged —
+   grouping screenshots of one discussion is extraction's job, phase 4).
+5. **Stored privately** under an application-made key `scanner/<account>/<session>/<file>.<ext>`
+   and attached to a new `screenshot` item (`pending` until extraction). One bad file never
+   blocks the others: the answer lists each file's outcome (`added`, `duplicate`, `rejected` with
+   a code).
+
+Images are read back only through `GET /scanner/files/{id}/content`, to their owner (RLS),
+with `Cache-Control: private`, `nosniff` and a sandboxing CSP. The bucket never allows anonymous
+access (checked in CI). When storage is down, the upload fails as a whole (503
+`storage_unavailable`) and nothing half-done is kept. Removing an item deletes its object after
+the database commit.
 
 ## API
 
@@ -123,42 +123,49 @@ are created from Phase 3 on.
 | POST | `/scanner/auth/refresh` | Body `{refresh_token}` or the `sc_refresh` cookie; rotates |
 | POST | `/scanner/auth/logout` | Revokes the refresh family; access tokens stop working immediately |
 | GET | `/scanner/auth/me` | Account profile |
+| GET | `/scanner/anypulse` | `{state: active\|revoked, revoked_at, revoke_reason}`: may this agent send collections? No AnyPulse data |
 | GET | `/scanner/sessions/current` | The open collection, created on first use |
 | GET | `/scanner/sessions` | History, newest first, `limit` / `offset` |
 | GET / PATCH | `/scanner/sessions/{id}` | PATCH `{title}` |
 | POST | `/scanner/sessions/{id}/cancel` | Open collections only (409 `session_not_open`) |
-| GET | `/scanner/anypulse` | `{state: active\|revoked\|pending, revoked_at, revoke_reason}`: whether collections can be sent; provisions first if needed. No AnyPulse data |
+| POST | `/scanner/sessions/{id}/screenshots` | Multipart `files` (PNG/JPEG/WebP) → `{results: [{filename, status, code, item_id}], items, session}`; 413 `too_many_files`, 409 `session_not_open`, 503 `storage_unavailable` |
+| GET | `/scanner/sessions/{id}/items` | Items in order, with file metadata and read-back URL |
+| PUT | `/scanner/sessions/{id}/items/order` | `{item_ids}`: every item exactly once (409 `invalid_order`) |
+| DELETE | `/scanner/items/{id}` | Removes the item and its file (open collections only) |
+| GET | `/scanner/files/{id}/content` | The sanitised image, owner only |
 
-AnyPulse side, signed Scanner calls only (`/api/v1/integrations/scanner/*`, no AnyPulse session):
-
-| Method | Path | Notes |
-|---|---|---|
-| POST | `/provision` | Create (once) the account's organization and link; `{link_id, organization_name, status, created}`. Collection submission comes in phase 7 |
+Another account's session, item or file answers 404, like a missing one. Token mode for API
+clients: `X-Auth-Mode: token` on register/login/refresh, then `Authorization: Bearer`.
 
 Platform administration (`/api/v1/admin/scanner/*`, platform admin + MFA):
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/admin/scanner/accounts` | Accounts, organization, access status, reason, collections |
-| POST | `/admin/scanner/accounts/{account_id}/revoke` | `{reason}` (shown to the user); audited in the organization |
+| GET | `/admin/scanner/accounts` | Accounts, access status, reason, collections |
+| POST | `/admin/scanner/accounts/{account_id}/revoke` | `{reason}` (shown to the agent) |
 | POST | `/admin/scanner/accounts/{account_id}/restore` | Restores access |
-
-Another account's session answers 404, like a missing one. Token mode for API clients:
-`X-Auth-Mode: token` on register/login/refresh, then `Authorization: Bearer`.
 
 ## Configuration
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `REPINTEL_SCANNER_ENABLED` | `false` | Mounts `/api/v1/scanner/*`. On in development (`docker-compose.yml`) and tests; keep off in production until the Scanner web app is deployed |
+| `REPINTEL_SCANNER_ENABLED` | `false` | Mounts `/api/v1/scanner/*`. On in development and tests; keep off in production until the Scanner web app is deployed |
 | `REPINTEL_SCANNER_BASE_URL` | `http://localhost:3001` | Public URL of the Scanner web app |
 | `REPINTEL_SCANNER_COOKIE_DOMAIN` | unset | Cookie domain for `sc_*` cookies (host-only when unset) |
-| `REPINTEL_SCANNER_MAX_ITEMS_PER_SESSION` | `200` | Upper bound per collection (used from Phase 3) |
-| `REPINTEL_SCANNER_INTEGRATION_SECRET` | unset | HMAC key for Scanner → AnyPulse calls (≥ 32 chars). Required in staging/production when Scanner is enabled |
-| `REPINTEL_ANYPULSE_API_URL` | `http://localhost:8000` | Where Scanner's integration client reaches the AnyPulse API |
+| `REPINTEL_SCANNER_MAX_ITEMS_PER_SESSION` | `200` | Items per collection |
+| `REPINTEL_SCANNER_UPLOAD_MAX_BYTES` | `10485760` | Per file |
+| `REPINTEL_SCANNER_UPLOAD_MAX_PIXELS` / `_MAX_SIDE` | `40000000` / `12000` | Image dimension limits |
+| `REPINTEL_SCANNER_UPLOAD_MAX_FILES_PER_REQUEST` | `20` | Files per upload request |
+| `REPINTEL_SCANNER_UPLOADS_PER_HOUR` | `600` | Files per account per hour |
+| `REPINTEL_STORAGE_BACKEND` | `filesystem` | `s3` required in staging/production when Scanner is enabled; `filesystem` for local tests only |
+| `REPINTEL_STORAGE_ENDPOINT_URL` | unset | S3-compatible endpoint (e.g. `http://rustfs:9000`); unset = AWS |
+| `REPINTEL_STORAGE_REGION` / `_BUCKET` | `us-east-1` / `repintel-scanner` | The bucket must be private |
+| `REPINTEL_STORAGE_ACCESS_KEY` / `_SECRET_KEY` | unset | Credentials scoped to that bucket |
+| `REPINTEL_STORAGE_FILESYSTEM_ROOT` | `/tmp/repintel-storage` | Filesystem backend only |
 
 Local development: `docker compose up --build`, then http://localhost:3001 (Scanner) and
-http://localhost:3000 (AnyPulse).
+http://localhost:3000 (AnyPulse). The `rustfs` service provides S3-compatible storage on
+port 9000; the development bucket is created automatically.
 
 ## Phases
 
@@ -166,28 +173,21 @@ http://localhost:3000 (AnyPulse).
 |---|---|---|
 | 0 | Audit, integration plan, decisions | Done |
 | 1 | Foundation: accounts, auth, sessions, RLS, web app shell, CI, docs | Done |
-| 2 | Automatic link to the account's own AnyPulse organization; platform-admin revocation; signed integration client | Done |
-| 3 | Screenshot-first upload: drag and drop, camera/gallery, preview, reorder, duplicates, private object storage, return to the add-item screen | Planned |
-| 4 | Extraction: validation, EXIF strip, preprocessing, OCR + vision, platform detection, threads, dedup, confidence, review screen | Planned |
+| 2 | AnyPulse access granted at sign-up; platform-admin revocation | Done |
+| 3 | Screenshot-first upload: drag and drop, camera, progress, retry, reorder, remove, duplicates, sanitisation, private storage | **Done** |
+| 4 | Extraction: preprocessing, OCR + vision, platform detection, threads, dedup, confidence, review screen | Next |
 | 5 | URL connectors (YouTube official API first; Apify behind the legal-review gate) and Excel import | Planned |
-| 6 | Normalisation, history, retention | Planned |
-| 7 | Transmission to AnyPulse: ingest API, idempotency, retries, acknowledgement, deep link | Planned |
-| 8–9 | Hardening, production deployment (Caddy host for Scanner, prod compose service) | Planned |
+| 6 | Normalisation, history, retention and cleanup of stored files | Planned |
+| 7 | Transmission to the central RepIntel space: ingest API, idempotency, retries, acknowledgement; brand attribution by RepIntel's AI | Planned |
+| 8–9 | Hardening, production deployment (Caddy host for Scanner, prod compose service, bucket) | Planned |
 
-## Known limitations (Phase 1)
+## Known limitations
 
-- No upload, extraction, URL collection or transmission yet; those actions are visibly disabled.
-- Signed integration calls are protected against tampering and stale replays (±5 min) but carry
-  no nonce: a captured call could be replayed within that window. Only read-only calls exist
-  today; collection submission (phase 7) adds an idempotency key.
-- Anyone can create a Scanner account, and so an AnyPulse organization on the default plan
-  (as with AnyPulse sign-up). Sign-up is rate-limited; e-mail verification for Scanner accounts
-  is not built yet.
-- **Open question for phase 7:** with one organization per agent, collected mentions land in
-  the agent's organization, while the brands they are about (Ooredoo, Mobilis…) belong to
-  customer organizations. How RepIntel's AI routes them to the right customer must be decided
-  before transmission is built. AnyPulse mentions also require a brand today.
-- No email verification or password reset for Scanner accounts yet (AnyPulse's flows exist and
-  will be adapted).
-- Production compose and Caddy do not serve the Scanner web app yet (Phase 9);
-  `REPINTEL_SCANNER_ENABLED` stays `false` there.
+- No extraction, URL collection or transmission yet; those actions are visibly disabled.
+- Stored screenshots are not yet deleted after a retention period, and objects left behind by
+  a failed database commit are not swept yet (phase 6).
+- Re-encoding JPEG/WebP at quality 92 slightly changes pixels; text stays legible for OCR.
+- Anyone can create a Scanner account (as with AnyPulse sign-up). Sign-up is rate-limited;
+  e-mail verification for Scanner accounts is not built yet.
+- **For phase 7:** AnyPulse mentions require a brand today; the central space must hold
+  collected content until RepIntel's AI attributes it to a brand and customer.

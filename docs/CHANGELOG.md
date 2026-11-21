@@ -1,16 +1,23 @@
 # Changelog
 
-## Unreleased — Aynpulse Scanner, Phase 2: automatic link to AnyPulse
+## Unreleased — Aynpulse Scanner, Phase 3: screenshot upload
 
 ### Added
-- Migration 0011: `scanner_links` (one AnyPulse organization per Scanner account, created at sign-up; insert guarded to brand-new organizations; status changed only by platform admins); `integration_scanner_account()`, `integration_scanner_link()`, `admin_scanner_accounts()`, `admin_scanner_set_access()`.
-- Signed Scanner → AnyPulse integration (`app/integrations/anypulse/`, HMAC-SHA256) and `POST /api/v1/integrations/scanner/provision`.
-- Scanner: `GET /scanner/anypulse` (can this agent send collections?) and a notice on the collection screen when access is revoked.
-- Admin console: **Scanner** tab to revoke (with a reason) or restore an agent's access, audited in the organization.
-- Tests: `tests/sql/test_rls_scanner_links.sql`, `tests/test_scanner_links.py`.
+- Migration 0012: `scanner_uploaded_files` (private storage key, sanitised metadata, SHA-256 unique per collection, difference hash) and `possible_duplicate_of` on items.
+- Upload pipeline (`app/scanner/images.py`, `uploads.py`, `storage.py`): limits before decoding, format from bytes (PNG/JPEG/WebP), re-encoding without metadata after EXIF orientation, exact-duplicate refusal and near-duplicate flag, private S3-compatible storage (filesystem backend for tests).
+- Endpoints: upload screenshots, list and reorder items, remove an item, read a file back (owner only).
+- Scanner collection screen: drag and drop, file picker, camera on phones, per-file progress, retry, confirmation, ordered screenshot grid with move and remove.
+- RustFS (S3-compatible) in development compose and CI; dependencies `pillow`, `python-multipart`, `boto3`.
+- Tests: `test_scanner_images.py`, `test_scanner_uploads.py`, `tests/sql/test_rls_scanner_uploads.sql`.
+
+## Aynpulse Scanner, Phase 2: AnyPulse access
+
+### Added
+- Migration 0011: AnyPulse access on `scanner_accounts`, granted at creation, changed only by platform administrators (`admin_scanner_set_access()`, `admin_scanner_accounts()`).
+- `GET /scanner/anypulse`; notice on the collection screen when access is revoked; admin console **Scanner** tab (revoke with reason, restore), audited in the account's Scanner trail.
 
 ### Changed
-- Scanner users are collection agents: no AnyPulse invitation, no brand choice (brand attribution by RepIntel's AI later).
+- Scanner users are collection agents: no AnyPulse organization, invitation or brand choice; collections will go to a central RepIntel space where RepIntel's AI attributes brands (option A).
 - AnyPulse sign-in keeps the query string when redirecting back after login.
 - Scanner accounts: one account type for everyone.
 

@@ -92,17 +92,17 @@ jobs:
           echo "$out" | grep -q "ALL SCANNER UPLOAD RLS TESTS PASSED"
       - name: Headless Chromium for PDF reports
         run: uv run playwright install --with-deps chromium
-      - name: MinIO for the Scanner storage test (S3-compatible, private bucket)
+      - name: RustFS for the Scanner storage test (S3-compatible, private bucket)
         run: |
-          docker run -d --name minio -p 9000:9000 -e MINIO_ROOT_USER=ci-minio \
-            -e MINIO_ROOT_PASSWORD=ci-minio-secret-0123456789 minio/minio server /data
-          for i in $(seq 1 30); do curl -sf http://localhost:9000/minio/health/live && break; sleep 1; done
+          docker run -d --name rustfs -p 9000:9000 -e RUSTFS_ACCESS_KEY=ci-rustfs \
+            -e RUSTFS_SECRET_KEY=ci-rustfs-secret-0123456789 rustfs/rustfs:latest /data
+          for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:9000/ && break; sleep 1; done
       - name: API tests
         run: uv run pytest -v
         env:
           REPINTEL_TEST_S3_ENDPOINT: http://localhost:9000
-          REPINTEL_TEST_S3_ACCESS_KEY: ci-minio
-          REPINTEL_TEST_S3_SECRET_KEY: ci-minio-secret-0123456789
+          REPINTEL_TEST_S3_ACCESS_KEY: ci-rustfs
+          REPINTEL_TEST_S3_SECRET_KEY: ci-rustfs-secret-0123456789
       - name: Backup and restore round-trip (server's PostgreSQL 16 tools, as in production)
         working-directory: .
         run: |

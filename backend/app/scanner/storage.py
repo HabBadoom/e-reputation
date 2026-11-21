@@ -1,9 +1,9 @@
 """Private object storage for Scanner files.
 
 Two backends behind one interface:
-  * `S3Storage` — any S3-compatible service (MinIO in development, an S3-compatible bucket at
-    the EU host in production). The bucket must not allow anonymous access; files are only ever
-    returned through the authenticated Scanner API.
+  * `S3Storage` — any S3-compatible service (RustFS in development and CI, an S3-compatible
+    bucket at the EU host in production). The bucket must not allow anonymous access; files
+    are only ever returned through the authenticated Scanner API.
   * `FilesystemStorage` — local directory, for development and tests only (refused in
     staging/production by the settings validator).
 
@@ -86,6 +86,17 @@ class S3Storage:
                           retries={"max_attempts": 3, "mode": "standard"},
                           connect_timeout=5, read_timeout=30))
 
+    def ensure_bucket(self) -> None:
+        """Development only: create the bucket if it is missing (production buckets are made,
+        and kept private, by operations)."""
+        try:
+            self.client.head_bucket(Bucket=self.bucket)
+        except Exception:
+            try:
+                self.client.create_bucket(Bucket=self.bucket)
+            except Exception as e:
+                raise StorageError("could not create the development bucket") from e
+
     def put(self, key: str, data: bytes, content_type: str) -> None:
         try:
             self.client.put_object(Bucket=self.bucket, Key=_check_key(key), Body=data,
@@ -110,8 +121,11 @@ class S3Storage:
 def get_storage() -> Storage:
     s = get_settings()
     if s.storage_backend == "s3":
-        return S3Storage(endpoint_url=s.storage_endpoint_url, region=s.storage_region,
-                         bucket=s.storage_bucket,
-                         access_key=s.storage_access_key.get_secret_value(),
-                         secret_key=s.storage_secret_key.get_secret_value())
+        st = S3Storage(endpoint_url=s.storage_endpoint_url, region=s.storage_region,
+                       bucket=s.storage_bucket,
+                       access_key=s.storage_access_key.get_secret_value(),
+                       secret_key=s.storage_secret_key.get_secret_value())
+        if s.env == "development":
+            st.ensure_bucket()
+        return st
     return FilesystemStorage(s.storage_filesystem_root)

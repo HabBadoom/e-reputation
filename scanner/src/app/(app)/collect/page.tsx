@@ -3,12 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
-import { api, type AnyPulseAccess, type CollectionSession } from "@/lib/api";
+import { ItemsGrid, ScreenshotDropzone } from "@/components/screenshots";
+import { api, type AnyPulseAccess, type CollectionItem, type CollectionSession } from "@/lib/api";
 import type { MessageKey } from "@/lib/i18n";
 
-// Screenshot first: the upload area is the dominant action, the URL option secondary.
-// Upload and URL collection are built in phases 3 and 5; until then they are shown disabled
-// with an explicit note rather than as buttons that would do nothing.
+// Screenshot first: the upload area is the dominant action, the URL option secondary. After each
+// screenshot the page stays on this add-item screen with the same collection. URL collection
+// (phase 5) and sending (phase 7) are shown disabled with a note, never as buttons that do nothing.
 export default function CollectPage() {
   const { t, fmtDate } = useI18n();
   const qc = useQueryClient();
@@ -26,6 +27,11 @@ export default function CollectPage() {
   // Only whether sending is possible; Scanner users never see AnyPulse data.
   const access = useQuery({ queryKey: ["anypulse"], queryFn: () => api.get<AnyPulseAccess>("/anypulse") });
   const s = session.data;
+  const items = useQuery({
+    queryKey: ["items", s?.id],
+    queryFn: () => api.get<CollectionItem[]>(`/sessions/${s!.id}/items`),
+    enabled: !!s,
+  });
 
   return (
     <div className="space-y-6">
@@ -34,19 +40,11 @@ export default function CollectPage() {
         <p className="mt-1 text-sm text-ink-soft">{t("collect.subtitle")}</p>
       </div>
 
-      <section aria-labelledby="add-screenshot"
-               className="rounded border-2 border-dashed border-brand/40 bg-brand-tint/40 px-6 py-10 text-center">
-        <h2 id="add-screenshot" className="text-lg font-semibold text-brand-strong">
-          {t("collect.importScreenshot")}
-        </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-ink-soft">{t("collect.screenshotKinds")}</p>
-        <Button className="mt-5" disabled aria-describedby="upload-not-yet">{t("collect.importScreenshot")}</Button>
-        <p id="upload-not-yet" className="mt-2 text-xs text-ink-mute">{t("collect.notYet")}</p>
-      </section>
+      {s && <ScreenshotDropzone session={s} disabled={!s.is_open} />}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" disabled aria-describedby="url-not-yet">{t("collect.addUrl")}</Button>
-        <span id="url-not-yet" className="text-xs text-ink-mute">{t("collect.notYet")}</span>
+        <span id="url-not-yet" className="text-xs text-ink-mute">{t("collect.urlNotYet")}</span>
       </div>
 
       {access.data?.state === "revoked" && (
@@ -76,6 +74,10 @@ export default function CollectPage() {
         >
           <p className="text-sm font-medium">{s.title || t("collect.untitled")}</p>
           <p className="text-xs text-ink-mute">{t("collect.started", { date: fmtDate(s.created_at) })}</p>
+          <div className="mt-4">
+            {items.isLoading ? <Spinner /> : <ItemsGrid session={s} items={items.data ?? []} />}
+            <ErrorBanner error={items.error} />
+          </div>
           <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {([
               ["counters.screenshots", s.counters.screenshots],

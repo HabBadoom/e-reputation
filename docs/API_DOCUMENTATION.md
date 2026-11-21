@@ -125,13 +125,14 @@ Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Brow
 |---|---|---|
 | POST | `/scanner/auth/register`, `/scanner/auth/login`, `/scanner/auth/refresh`, `/scanner/auth/logout` | Same conventions as `/auth/*` (`X-Auth-Mode: token` for API clients) |
 | GET | `/scanner/auth/me` | Scanner account |
-| GET | `/scanner/sessions/current` | Open collection, created on first use |
-| GET | `/scanner/sessions`, `/scanner/sessions/{id}` | History / one collection, with collection counters |
-| PATCH | `/scanner/sessions/{id}` | `{title}` |
-| POST | `/scanner/sessions/{id}/cancel` | 409 `session_not_open` |
-| GET | `/scanner/anypulse` | Whether the account can send collections (automatic link; revoked only by platform admins) |
-| POST | `/integrations/scanner/provision` | HMAC-signed Scanner call only: create the account's own organization and link |
-| GET | `/admin/scanner/accounts`; POST `/admin/scanner/accounts/{id}/revoke`, `/restore` | Platform admin + MFA: revoke or restore a Scanner account's access |
+| GET | `/scanner/anypulse` | May this agent send collections (revoked only by platform admins) |
+| GET | `/scanner/sessions/current`, `/scanner/sessions`, `/scanner/sessions/{id}` | Open collection (created on first use), history, one collection |
+| PATCH / POST | `/scanner/sessions/{id}` `{title}`; `/scanner/sessions/{id}/cancel` | Rename; discard (409 `session_not_open`) |
+| POST | `/scanner/sessions/{id}/screenshots` | Multipart `files`; per-file results |
+| GET / PUT | `/scanner/sessions/{id}/items`, `/scanner/sessions/{id}/items/order` | Items in order; reorder |
+| DELETE | `/scanner/items/{id}` | Remove an item and its file |
+| GET | `/scanner/files/{id}/content` | Sanitised image, owner only |
+| GET / POST | `/admin/scanner/accounts`, `/admin/scanner/accounts/{id}/revoke`, `/restore` | Platform admin + MFA |
 
 ## Example (API client)
 

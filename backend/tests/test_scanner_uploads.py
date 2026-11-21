@@ -182,9 +182,9 @@ def test_storage_outage_keeps_nothing_half_done(client, monkeypatch):
     assert sc.get(f"{S}/sessions/{sid}/items").json() == []
 
 
-# ---- S3-compatible backend (MinIO in CI) --------------------------------------------------------
+# ---- S3-compatible backend (RustFS in CI) --------------------------------------------------------
 @pytest.mark.skipif(not os.environ.get("REPINTEL_TEST_S3_ENDPOINT"),
-                    reason="needs an S3-compatible endpoint (MinIO in CI)")
+                    reason="needs an S3-compatible endpoint (RustFS in CI)")
 def test_s3_storage_roundtrip_and_private_bucket():
     import httpx
 
@@ -199,7 +199,7 @@ def test_s3_storage_roundtrip_and_private_bucket():
     st.put(key, data, "image/png")
     assert st.get(key) == data
     anonymous = httpx.get(f"{endpoint}/repintel-scanner-test/{key}")
-    assert anonymous.status_code == 403            # never public
+    assert anonymous.status_code in (401, 403)     # never public
     st.delete(key)
     with pytest.raises(StorageError):
         st.get(key)

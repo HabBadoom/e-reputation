@@ -65,6 +65,8 @@ export const api = {
   get: <T>(p: string) => request<T>("GET", p),
   post: <T>(p: string, b?: unknown) => request<T>("POST", p, b ?? {}),
   patch: <T>(p: string, b: unknown) => request<T>("PATCH", p, b),
+  put: <T>(p: string, b: unknown) => request<T>("PUT", p, b),
+  del: <T>(p: string) => request<T>("DELETE", p),
 };
 
 // ---- types mirroring backend schemas (app/modules/scanner/schemas.py) ------------------------
@@ -112,3 +114,78 @@ export interface AnyPulseAccess {
 }
 
 export interface Page<T> { items: T[]; total: number; limit: number; offset: number }
+
+// ---- screenshots (phase 3) ---------------------------------------------------------------------
+export interface UploadedFile {
+  id: string;
+  original_filename: string;
+  mime_type: string;
+  width: number;
+  height: number;
+  size_bytes: number;
+  url: string;
+}
+
+export interface CollectionItem {
+  id: string;
+  source_type: "screenshot" | "url" | "import";
+  status: "pending" | "processing" | "ready" | "needs_review" | "failed";
+  platform: string | null;
+  content_type: string | null;
+  position: number;
+  source_url: string | null;
+  possible_duplicate_of: string | null;
+  created_at: string;
+  file: UploadedFile | null;
+}
+
+export interface FileResult {
+  filename: string;
+  status: "added" | "duplicate" | "rejected";
+  code: string | null;
+  item_id: string | null;
+}
+
+export interface UploadResult {
+  results: FileResult[];
+  items: CollectionItem[];
+  session: CollectionSession;
+}
+
+export const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+
+/** Upload screenshots with progress (fetch has no upload progress). Same auth, CSRF and
+ *  refresh-on-401 behaviour as `api`. */
+export function uploadScreenshots(
+  sessionId: string,
+  files: File[],
+  onProgress: (fraction: number) => void,
+  retry = true,
+): Promise<UploadResult> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    for (const f of files) form.append("files", f, f.name);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${BASE}/sessions/${sessionId}/screenshots`);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("accept", "application/json");
+    const csrf = readCookie("sc_csrf");
+    if (csrf) xhr.setRequestHeader("x-csrf-token", decodeURIComponent(csrf));
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    xhr.onerror = () => reject(new ApiError(0, "network_error", "Network error"));
+    xhr.onload = async () => {
+      if (xhr.status === 401 && retry && (await tryRefresh())) {
+        uploadScreenshots(sessionId, files, onProgress, false).then(resolve, reject);
+        return;
+      }
+      let data: { error?: { code?: string; message?: string; details?: unknown; request_id?: string } } | null = null;
+      try { data = JSON.parse(xhr.responseText); } catch { data = null; }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data as unknown as UploadResult);
+      else {
+        const e = data?.error ?? {};
+        reject(new ApiError(xhr.status, e.code ?? "http_error", e.message ?? xhr.statusText, e.details, e.request_id));
+      }
+    };
+    xhr.send(form);
+  });
+}

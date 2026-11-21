@@ -128,11 +128,14 @@ Isolated by Scanner account (`app.scanner_account_id`), never by tenant. See SCA
 | `scanner_collection_items` | account | composite FK `(account_id, session_id)`; `source_type ∈ screenshot/url/import`; URL required for URL items |
 | `scanner_audit_logs` | account | INSERT/SELECT only |
 
-Migration 0011 (automatic link to AnyPulse):
+Migration 0011 (AnyPulse access): `scanner_accounts.anypulse_access` (`active`/`revoked`), `access_revoked_at`, `access_revoked_by`, `access_revoke_reason`. Forced to `active` on INSERT (trigger); not updatable by the API role (column grants); changed only by `admin_scanner_set_access()` for platform administrators.
+
+Migration 0012 (screenshots):
 
 | Table | Scope | Notes |
 |---|---|---|
-| `scanner_links` | **both parties**: the Scanner account and its organization | one per account and per organization; inserted only with both contexts set and only for a brand-new organization (trigger); status changed only by `admin_scanner_set_access()` (platform admins), with `revoked_by`, `revoke_reason`; `tenant_name` snapshot |
+| `scanner_uploaded_files` | account | one per screenshot item; `storage_key` (private object storage), sanitised `mime_type` (PNG/JPEG/WebP only), size, dimensions, `sha256` (unique per collection), `dhash`; composite FKs to the account's item and collection; SELECT/INSERT/DELETE only |
+| `scanner_collection_items` + | account | `UNIQUE (account_id, id)`; `possible_duplicate_of` (composite FK to an item of the same account) |
 
 ## Planned (per master prompt §14)
 
