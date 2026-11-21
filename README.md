@@ -14,6 +14,7 @@ docker compose up --build
 ```
 
 - App: http://localhost:3000 (register, then add a brand)
+- Scanner: http://localhost:3001 (separate Scanner account)
 - API docs: http://localhost:8000/api/docs
 - Production: see [DEPLOYMENT](docs/DEPLOYMENT.md) (`docker-compose.prod.yml`)
 
@@ -30,6 +31,7 @@ backend/    FastAPI API (Python 3.12, SQLAlchemy 2, Alembic)
   migrations/   schema, RLS policies, grants (authoritative)
   tests/        pytest API tests + tests/sql RLS suite
 frontend/   Next.js 15 + React 19 + Tailwind + React Query, i18n fr/ar/en
+scanner/    Aynpulse Scanner web app (collection module, separate accounts), see docs/SCANNER.md
 infra/      Postgres bootstrap (dev and production), Caddy
 scripts/    backup / restore, egress firewall
 docs/       architecture, security, data model, roadmap, …
@@ -45,4 +47,5 @@ docs/       architecture, security, data model, roadmap, …
 | [API_DOCUMENTATION](docs/API_DOCUMENTATION.md) | Endpoints and conventions |
 | [DEVELOPMENT](docs/DEVELOPMENT.md) · [TESTING](docs/TESTING.md) · [DEPLOYMENT](docs/DEPLOYMENT.md) | Working on the code |
 | [ROADMAP](docs/ROADMAP.md) · [CHANGELOG](docs/CHANGELOG.md) | Plan and history |
+| [SCANNER](docs/SCANNER.md) | Aynpulse Scanner: collection module, accounts, API, phases |
 | [CONNECTORS](docs/CONNECTORS.md) · [BROWSER_FLEET](docs/BROWSER_FLEET.md) · [CAPTCHA_INTERVENTIONS](docs/CAPTCHA_INTERVENTIONS.md) · [ALGERIAN_NLP](docs/ALGERIAN_NLP.md) · [AI_AGENTS](docs/AI_AGENTS.md) | Subsystem designs and decisions |

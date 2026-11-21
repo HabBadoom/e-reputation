@@ -79,6 +79,54 @@ def decode_access_token(token: str) -> AccessClaims:
         raise Unauthorized("Invalid access token") from e
 
 
+# ---- Aynpulse Scanner tokens ------------------------------------------------------------------
+# Same signing key, but a different type and audience: a Scanner token is refused by AnyPulse
+# (`decode_access_token` requires typ=access and a tenant) and an AnyPulse token is refused here.
+SCANNER_AUDIENCE = "aynpulse-scanner"
+
+
+@dataclass(frozen=True)
+class ScannerClaims:
+    account_id: uuid.UUID
+    session_id: uuid.UUID  # refresh-token family
+    jti: str
+
+
+def create_scanner_access_token(account_id: uuid.UUID, session_id: uuid.UUID) -> tuple[str, int]:
+    s = get_settings()
+    now = datetime.now(UTC)
+    payload = {
+        "sub": str(account_id),
+        "sid": str(session_id),
+        "aud": SCANNER_AUDIENCE,
+        "jti": secrets.token_hex(8),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(seconds=s.access_token_ttl_seconds)).timestamp()),
+        "typ": "scanner_access",
+    }
+    token = jwt.encode(payload, s.jwt_secret.get_secret_value(), algorithm=s.jwt_algorithm)
+    return token, s.access_token_ttl_seconds
+
+
+def decode_scanner_access_token(token: str) -> ScannerClaims:
+    s = get_settings()
+    try:
+        p = jwt.decode(
+            token,
+            s.jwt_secret.get_secret_value(),
+            algorithms=[s.jwt_algorithm],
+            audience=SCANNER_AUDIENCE,
+            options={"require": ["sub", "sid", "exp", "jti", "aud"]},
+        )
+        if p.get("typ") != "scanner_access":
+            raise Unauthorized("Invalid token type")
+        return ScannerClaims(uuid.UUID(p["sub"]), uuid.UUID(p["sid"]), p["jti"])
+    except jwt.ExpiredSignatureError as e:
+        raise Unauthorized("Access token expired", code="token_expired") from e
+    except (jwt.PyJWTError, ValueError, KeyError) as e:
+        raise Unauthorized("Invalid access token") from e
+
+
 def new_refresh_token() -> tuple[str, str]:
     """Return (plaintext, sha256-hex). Only the hash is stored."""
     raw = secrets.token_urlsafe(48)

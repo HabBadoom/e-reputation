@@ -891,3 +891,83 @@ class PlanChangeRequest(Base):
     handled_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
     handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
+
+
+# ---------------------------------------------------------------- Aynpulse Scanner (0010)
+# Scanner accounts are separate from AnyPulse users. Every Scanner table is isolated by
+# `app.scanner_account_id` (see migration 0010).
+class ScannerAccount(Base):
+    __tablename__ = "scanner_accounts"
+    id: Mapped[uuid.UUID] = _pk()
+    email: Mapped[str] = mapped_column(String(320))
+    password_hash: Mapped[str] = mapped_column(Text)
+    full_name: Mapped[str] = mapped_column(String(200))
+    account_type: Mapped[str] = mapped_column(String(20))
+    organization_name: Mapped[str | None] = mapped_column(String(200))
+    locale: Mapped[str] = mapped_column(String(5), default="fr")
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+
+
+class ScannerRefreshToken(Base):
+    __tablename__ = "scanner_refresh_tokens"
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user_agent: Mapped[str | None] = mapped_column(String(400))
+    ip: Mapped[str | None] = mapped_column(INET)
+    created_at: Mapped[datetime] = _created()
+
+
+class ScannerCollectionSession(Base):
+    __tablename__ = "scanner_collection_sessions"
+    __table_args__ = (UniqueConstraint("account_id", "id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    title: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+    transmitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    anypulse_collection_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class ScannerCollectionItem(Base):
+    __tablename__ = "scanner_collection_items"
+    __table_args__ = (
+        ForeignKeyConstraint(["account_id", "session_id"],
+                             ["scanner_collection_sessions.account_id",
+                              "scanner_collection_sessions.id"], ondelete="CASCADE"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    source_type: Mapped[str] = mapped_column(String(20))
+    platform: Mapped[str | None] = mapped_column(String(20))
+    content_type: Mapped[str | None] = mapped_column(String(30))
+    position: Mapped[int] = mapped_column()
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    source_url: Mapped[str | None] = mapped_column(String(2000))
+    error_code: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class ScannerAuditLog(Base):
+    __tablename__ = "scanner_audit_logs"
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"))
+    action: Mapped[str] = mapped_column(String(80))
+    target_type: Mapped[str | None] = mapped_column(String(50))
+    target_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    ip: Mapped[str | None] = mapped_column(INET)
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _created()

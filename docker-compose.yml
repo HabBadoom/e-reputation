@@ -30,6 +30,8 @@ x-backend-env: &backend-env
   REPINTEL_PLATFORM_NOTIFY_EMAILS: ${REPINTEL_PLATFORM_NOTIFY_EMAILS:-[]}
   REPINTEL_ADMIN_REQUIRE_MFA: ${REPINTEL_ADMIN_REQUIRE_MFA:-true}
   REPINTEL_METRICS_TOKEN: ${REPINTEL_METRICS_TOKEN:-}
+  REPINTEL_SCANNER_ENABLED: ${REPINTEL_SCANNER_ENABLED:-true}
+  REPINTEL_SCANNER_BASE_URL: http://localhost:3001
 
 services:
   postgres:
@@ -119,6 +121,12 @@ services:
     environment: { REPINTEL_BACKEND_URL: http://api:8000 }
     depends_on: { api: { condition: service_healthy } }
     ports: ["127.0.0.1:3000:3000"]
+
+  scanner-web:   # Aynpulse Scanner web app (collection only; separate accounts)
+    build: ./scanner
+    environment: { REPINTEL_BACKEND_URL: http://api:8000 }
+    depends_on: { api: { condition: service_healthy } }
+    ports: ["127.0.0.1:3001:3001"]
 
 volumes:
   pgdata:

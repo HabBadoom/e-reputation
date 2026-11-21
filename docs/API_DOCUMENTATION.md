@@ -117,6 +117,19 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | GET | `/metrics` | bearer `REPINTEL_METRICS_TOKEN` | Prometheus text, aggregates only; 404 when disabled or wrong token |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
+## Aynpulse Scanner
+
+Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Browsers use the `sc_*` cookies and `X-CSRF-Token` = `sc_csrf`. Full table in [SCANNER.md](SCANNER.md#api).
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/scanner/auth/register`, `/scanner/auth/login`, `/scanner/auth/refresh`, `/scanner/auth/logout` | Same conventions as `/auth/*` (`X-Auth-Mode: token` for API clients) |
+| GET | `/scanner/auth/me` | Scanner account |
+| GET | `/scanner/sessions/current` | Open collection, created on first use |
+| GET | `/scanner/sessions`, `/scanner/sessions/{id}` | History / one collection, with collection counters |
+| PATCH | `/scanner/sessions/{id}` | `{title}` |
+| POST | `/scanner/sessions/{id}/cancel` | 409 `session_not_open` |
+
 ## Example (API client)
 
 ```bash

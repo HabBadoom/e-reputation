@@ -29,6 +29,7 @@ from app.modules.mentions.router import router as mentions_router
 from app.modules.monitoring.router import router as monitoring_router
 from app.modules.nlp.router import router as nlp_router
 from app.modules.reports.router import router as reports_router
+from app.modules.scanner.router import router as scanner_router
 from app.modules.sources.router import router as sources_router
 from app.modules.tenancy.router import router as tenancy_router
 
@@ -145,6 +146,8 @@ def create_app() -> FastAPI:
               analytics_router, alerts_router, reports_router, browser_router, ai_router,
               billing_router, admin_router):
         v1.include_router(r)
+    if s.scanner_enabled:
+        v1.include_router(scanner_router)
     app.include_router(v1)
     return app
 

@@ -116,6 +116,18 @@ Daily sentiment and reputation figures are computed on demand from `mentions` + 
 | `plan_change_requests` | tenant | one pending at a time; done / declined / cancelled |
 | `connector_policies` + | global | `review_notes`; review recorded by platform admins |
 
+## Scanner tables (migration 0010)
+
+Isolated by Scanner account (`app.scanner_account_id`), never by tenant. See SCANNER.md.
+
+| Table | Scope | Notes |
+|---|---|---|
+| `scanner_accounts` | own row | separate from `users`; `account_type ∈ individual/professional` (organization name required for professional) |
+| `scanner_refresh_tokens` | account | hashed, rotated, family revocation |
+| `scanner_collection_sessions` | account | 11 statuses; partial unique index = one open session (`draft/collecting/ready`) per account; `anypulse_collection_id` once acknowledged |
+| `scanner_collection_items` | account | composite FK `(account_id, session_id)`; `source_type ∈ screenshot/url/import`; URL required for URL items |
+| `scanner_audit_logs` | account | INSERT/SELECT only |
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

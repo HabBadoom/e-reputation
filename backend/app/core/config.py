@@ -137,6 +137,14 @@ class Settings(BaseSettings):
     default_plan: str = ""
     trial_days: int = 14
 
+    # Aynpulse Scanner (collection module, separate accounts). See docs/SCANNER.md.
+    # Off by default: an existing production deployment does not open Scanner sign-up until
+    # the Scanner web app is deployed with it (Phase 9).
+    scanner_enabled: bool = False
+    scanner_base_url: str = "http://localhost:3001"
+    scanner_cookie_domain: str | None = None   # host-only cookies by default
+    scanner_max_items_per_session: int = Field(default=200, ge=1, le=2000)
+
     @field_validator("jwt_secret")
     @classmethod
     def _secret_strength(cls, v: SecretStr) -> SecretStr:
