@@ -73,7 +73,6 @@ const fr = {
   "lang.en": "English",
   "access.revoked": "Votre accès à AnyPulse a été révoqué par un administrateur : vous pouvez continuer à préparer des collectes, mais pas les envoyer.",
   "access.reason": "Motif : {reason}",
-  "access.pending": "La connexion à AnyPulse est en cours de préparation.",
 };
 
 type Dict = Record<keyof typeof fr, string>;
@@ -145,7 +144,6 @@ const ar: Dict = {
   "lang.en": "English",
   "access.revoked": "ألغى أحد المسؤولين وصولك إلى AnyPulse: يمكنك مواصلة تحضير عمليات الجمع لكن دون إرسالها.",
   "access.reason": "السبب: {reason}",
-  "access.pending": "جارٍ تحضير الاتصال بـ AnyPulse.",
 };
 
 const en: Dict = {
@@ -215,7 +213,6 @@ const en: Dict = {
   "lang.en": "English",
   "access.revoked": "Your access to AnyPulse was revoked by an administrator: you can keep preparing collections but not send them.",
   "access.reason": "Reason: {reason}",
-  "access.pending": "The connection to AnyPulse is being prepared.",
 };
 
 export const dictionaries: Record<Locale, Dict> = { fr, ar, en };

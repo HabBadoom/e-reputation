@@ -106,7 +106,7 @@ export interface CollectionSession {
 /** Whether this account can send its collections to AnyPulse (revoked only by a platform
  * administrator). Scanner never shows AnyPulse data. */
 export interface AnyPulseAccess {
-  state: "active" | "revoked" | "pending";
+  state: "active" | "revoked";
   revoked_at: string | null;
   revoke_reason: string | null;
 }

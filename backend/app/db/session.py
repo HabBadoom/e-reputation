@@ -79,15 +79,6 @@ def set_context(
     _switch(session, tenant_id=tenant_id, user_id=user_id)
 
 
-def set_provisioning_context(session: Session, *, tenant_id: uuid.UUID,
-                             scanner_account_id: uuid.UUID) -> None:
-    """Both an AnyPulse organization and a Scanner account, with no user. Used only to create
-    the organization of a new Scanner account and its link (the only policy that needs both
-    is the INSERT on scanner_links, and a trigger refuses any organization but a brand-new
-    one)."""
-    _switch(session, tenant_id=tenant_id, scanner_account_id=scanner_account_id)
-
-
 def set_scanner_context(session: Session, *, account_id: uuid.UUID | None) -> None:
     """Aynpulse Scanner context (one Scanner account). Clears any AnyPulse context, so a
     Scanner request can never read AnyPulse tenant data and vice versa."""

@@ -906,6 +906,12 @@ class ScannerAccount(Base):
     status: Mapped[str] = mapped_column(String(20), default="active")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
+    # AnyPulse access (0011): granted at creation, changed only by platform administrators
+    # (admin_scanner_set_access); the API role cannot UPDATE these columns.
+    anypulse_access: Mapped[str] = mapped_column(String(10), default="active")
+    access_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    access_revoked_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    access_revoke_reason: Mapped[str] = mapped_column(String(500), default="")
 
 
 class ScannerRefreshToken(Base):
@@ -969,23 +975,3 @@ class ScannerAuditLog(Base):
     ip: Mapped[str | None] = mapped_column(INET)
     request_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = _created()
-
-
-# ---------------------------------------------------------------- Scanner links (0011)
-class ScannerLink(Base):
-    """The AnyPulse organization created for a Scanner account (one each), linked
-    automatically at sign-up. Visible to both parties; only platform administrators change its
-    status (admin_scanner_set_access)."""
-    __tablename__ = "scanner_links"
-    __table_args__ = (UniqueConstraint("account_id", "id"),)
-    id: Mapped[uuid.UUID] = _pk()
-    account_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("scanner_accounts.id", ondelete="CASCADE"), unique=True)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), unique=True)
-    tenant_name: Mapped[str] = mapped_column(String(200))
-    status: Mapped[str] = mapped_column(String(10), default="active")
-    created_at: Mapped[datetime] = _created()
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    revoked_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
-    revoke_reason: Mapped[str] = mapped_column(String(500), default="")

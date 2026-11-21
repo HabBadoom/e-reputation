@@ -342,9 +342,8 @@ export interface PlatformStats {
 }
 export interface AdminScannerAccount {
   account_id: string; email: string; full_name: string; account_status: string;
-  created_at: string; last_login_at: string | null; link_id: string | null; tenant_id: string | null;
-  organization_name: string | null; link_status: "active" | "revoked" | null;
-  revoked_at: string | null; revoke_reason: string | null; collections: number;
+  created_at: string; last_login_at: string | null; anypulse_access: "active" | "revoked";
+  access_revoked_at: string | null; access_revoke_reason: string | null; collections: number;
 }
 export interface AdminTenantRow {
   tenant_id: string; name: string; slug: string; created_at: string; plan_key: string; plan_name: string;

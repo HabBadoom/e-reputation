@@ -261,7 +261,6 @@ function ScannerAccounts() {
               <thead className="text-xs text-ink-mute">
                 <tr>
                   <th className="pb-2 text-start font-medium">{t("adm.scanner.account")}</th>
-                  <th className="pb-2 text-start font-medium">{t("adm.scanner.org")}</th>
                   <th className="pb-2 text-start font-medium">{t("adm.scanner.collections")}</th>
                   <th className="pb-2 text-start font-medium">{t("adm.scanner.lastLogin")}</th>
                   <th className="pb-2 text-start font-medium">{t("adm.scanner.access")}</th>
@@ -275,24 +274,22 @@ function ScannerAccounts() {
                       <div>{r.full_name}</div>
                       <div className="text-xs text-ink-mute" dir="ltr">{r.email}</div>
                     </td>
-                    <td className="py-2">{r.organization_name ?? "—"}</td>
                     <td className="py-2 tabular-nums">{r.collections}</td>
                     <td className="py-2">{r.last_login_at ? fmtDate(r.last_login_at) : "—"}</td>
                     <td className="py-2">
-                      <Badge tone={r.link_status === "active" ? "brand" : r.link_status === "revoked" ? "neg" : "neutral"}>
-                        {t(r.link_status === "active" ? "adm.scanner.active"
-                          : r.link_status === "revoked" ? "adm.scanner.revoked" : "adm.scanner.pending")}
+                      <Badge tone={r.anypulse_access === "active" ? "brand" : "neg"}>
+                        {t(r.anypulse_access === "active" ? "adm.scanner.active" : "adm.scanner.revoked")}
                       </Badge>
-                      {r.revoke_reason && <div className="mt-1 text-xs text-ink-mute">{r.revoke_reason}</div>}
+                      {r.access_revoke_reason && <div className="mt-1 text-xs text-ink-mute">{r.access_revoke_reason}</div>}
                     </td>
                     <td className="py-2 text-end">
-                      {r.link_status === "active" && (
+                      {r.anypulse_access === "active" && (
                         <Button variant="danger" disabled={change.isPending} onClick={() => {
                           const reason = window.prompt(t("adm.scanner.reasonPrompt"));
                           if (reason !== null) change.mutate({ id: r.account_id, action: "revoke", reason });
                         }}>{t("adm.scanner.revoke")}</Button>
                       )}
-                      {r.link_status === "revoked" && (
+                      {r.anypulse_access === "revoked" && (
                         <Button variant="ghost" disabled={change.isPending}
                                 onClick={() => change.mutate({ id: r.account_id, action: "restore" })}>
                           {t("adm.scanner.restore")}

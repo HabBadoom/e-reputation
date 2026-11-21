@@ -506,45 +506,45 @@ def review_connector(key: str, body: ReviewBody, request: Request,
 
 
 # ------------------------------------------------------------------------ Aynpulse Scanner
-# Every Scanner account has its own AnyPulse organization, linked automatically. Only platform
-# administrators revoke (or restore) that access. The change is audited in the organization.
+# Scanner accounts (collection agents) may send collections to AnyPulse from sign-up on. Only
+# platform administrators revoke (or restore) that access; the change is written to the
+# account's own Scanner audit trail.
 class ScannerAccessIn(BaseModel):
     reason: str = Field(default="", max_length=500)
-
-
-def _scanner_row(r: Any) -> dict[str, Any]:
-    return dict(r._mapping)
 
 
 @router.get("/scanner/accounts")
 def scanner_accounts(ctx: AuthContext = Depends(require_platform_admin),
                      db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    rows = db.execute(text("SELECT * FROM admin_scanner_accounts()")).all()
-    return [_scanner_row(r) for r in rows]
+    return [dict(r._mapping) for r in db.execute(text("SELECT * FROM admin_scanner_accounts()"))]
 
 
 def _set_scanner_access(db: Session, ctx: AuthContext, request: Request,
                         account_id: uuid.UUID, active: bool, reason: str) -> dict[str, Any]:
     from sqlalchemy.exc import DBAPIError
 
+    from app.db.session import set_scanner_context
+    from app.scanner.audit import record as scanner_record
+
     try:
-        tenant_id = db.scalar(text("SELECT admin_scanner_set_access(:a, :on, :r)"),
-                              {"a": account_id, "on": active, "r": reason})
+        db.execute(text("SELECT admin_scanner_set_access(:a, :on, :r)"),
+                   {"a": account_id, "on": active, "r": reason})
     except DBAPIError as e:
         if getattr(e.orig, "sqlstate", None) == "P0002":
             db.rollback()
-            raise NotFound("No AnyPulse link for this Scanner account") from e
+            raise NotFound("Scanner account not found") from e
         raise
-    _enter(db, ctx, tenant_id)
-    record(db, tenant_id=tenant_id, actor_user_id=ctx.user_id,
-           action="scanner.access_restored" if active else "scanner.access_revoked",
-           target_type="scanner_account", target_id=account_id,
-           meta={"reason": reason} if reason else {}, request=request)
+    set_scanner_context(db, account_id=account_id)
+    scanner_record(db, account_id=account_id,
+                   action="access.restored" if active else "access.revoked",
+                   meta={"by_platform_admin": str(ctx.user_id), **({"reason": reason} if reason
+                                                                    else {})},
+                   request=request)
     _leave(db, ctx)
     db.commit()
     row = db.execute(text("SELECT * FROM admin_scanner_accounts() WHERE account_id = :a"),
                      {"a": account_id}).one()
-    return _scanner_row(row)
+    return dict(row._mapping)
 
 
 @router.post("/scanner/accounts/{account_id}/revoke")

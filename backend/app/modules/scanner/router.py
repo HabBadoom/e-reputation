@@ -29,8 +29,8 @@ from app.modules.scanner.schemas import (
     ScannerRegisterIn,
     ScannerTokenOut,
 )
-from app.scanner import anypulse, sessions
 from app.scanner import auth as service
+from app.scanner import sessions
 from app.scanner.audit import record
 from app.scanner.deps import (
     ACCESS_COOKIE,
@@ -88,9 +88,6 @@ def register(body: ScannerRegisterIn, request: Request, response: Response,
     tokens = service.issue_tokens(db, account_id=account_id, user_agent=_ua(request),
                                   ip=client_ip(request))
     db.commit()
-    # The account's own AnyPulse organization is created and linked automatically. If AnyPulse
-    # is unreachable now, it is created the next time the account looks at its AnyPulse access.
-    anypulse.try_provision(account_id)
     return _deliver(request, response, tokens)
 
 
@@ -204,18 +201,17 @@ def cancel_session(session_id: uuid.UUID, request: Request,
     return _one(db, s)
 
 
-# ---- AnyPulse access (automatic, one organization per account) -----------------------------
+# ---- AnyPulse access ------------------------------------------------------------------------
 @router.get("/anypulse", response_model=AnyPulseAccessOut)
 def anypulse_access(ctx: ScannerContext = Depends(get_scanner_auth),
                     db: Session = Depends(get_db)) -> AnyPulseAccessOut:
-    """Whether this account can send its collections to AnyPulse (revoked only by a platform
-    administrator). Creates the account's organization first if sign-up could not."""
-    link = anypulse.ensure_link(db, ctx.account_id)
-    if link is None:
-        return AnyPulseAccessOut(state="pending", revoked_at=None, revoke_reason=None)
-    revoked = link.status == "revoked"
-    return AnyPulseAccessOut(state=link.status, revoked_at=link.revoked_at,
-                             revoke_reason=(link.revoke_reason or None) if revoked else None)
+    """Whether this account may send its collections to AnyPulse. Granted at sign-up; only a
+    platform administrator revokes it. Nothing about AnyPulse's data."""
+    a = db.get(ScannerAccount, ctx.account_id)
+    assert a is not None
+    revoked = a.anypulse_access == "revoked"
+    return AnyPulseAccessOut(state=a.anypulse_access, revoked_at=a.access_revoked_at,
+                             revoke_reason=(a.access_revoke_reason or None) if revoked else None)
 
 
 @router.get("/health", include_in_schema=False)

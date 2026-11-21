@@ -55,7 +55,6 @@ export default function CollectPage() {
           {access.data.revoke_reason && <p className="mt-1">{t("access.reason", { reason: access.data.revoke_reason })}</p>}
         </div>
       )}
-      {access.data?.state === "pending" && <p className="text-xs text-ink-mute">{t("access.pending")}</p>}
 
       {session.isLoading && <Spinner />}
       <ErrorBanner error={session.error ?? cancel.error} />
