@@ -32,7 +32,7 @@ from app.core.config import get_settings
 from app.core.errors import AppError
 from app.core.rate_limit import get_limiter
 from app.core.security import decode_scanner_access_token
-from app.db.session import session_scope
+from app.db.session import session_scope, set_scanner_context
 from app.scanner import sessions, uploads
 from app.scanner.audit import record
 from app.scanner.browser import profiles
@@ -107,10 +107,11 @@ def _authenticate(token: str) -> tuple[uuid.UUID, uuid.UUID]:
 
 def _open_collection(account_id: uuid.UUID, session_id: Any) -> tuple[uuid.UUID, dict | None]:
     with session_scope() as db:
-        check_ctx = sessions.get(db, uuid.UUID(str(session_id))) if session_id \
+        set_scanner_context(db, account_id=account_id)
+        s = sessions.get(db, uuid.UUID(str(session_id))) if session_id \
             else sessions.current(db, account_id)[0]
-        uploads.require_open(check_ctx)
-        return check_ctx.id, profiles.load(db, account_id)
+        uploads.require_open(s)
+        return s.id, profiles.load(db, account_id)
 
 
 def _store_capture(account_id: uuid.UUID, session_id: uuid.UUID, png: bytes, url: str
@@ -120,7 +121,6 @@ def _store_capture(account_id: uuid.UUID, session_id: uuid.UUID, png: bytes, url
     host = (urlsplit(url).hostname or "page").replace(".", "-")[:60]
     name = f"capture-{host}-{datetime.now(UTC):%Y%m%d-%H%M%S}.png"
     with session_scope() as db:
-        from app.db.session import set_scanner_context
         set_scanner_context(db, account_id=account_id)
         s = sessions.get(db, session_id)
         result = uploads.add_screenshots(db, s, [(name, png)], source_url=url,
@@ -135,7 +135,6 @@ def _store_capture(account_id: uuid.UUID, session_id: uuid.UUID, png: bytes, url
 
 def _save_profile(account_id: uuid.UUID, state: dict) -> None:
     with session_scope() as db:
-        from app.db.session import set_scanner_context
         set_scanner_context(db, account_id=account_id)
         profiles.save(db, account_id, state)
 
