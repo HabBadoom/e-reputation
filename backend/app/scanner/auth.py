@@ -53,16 +53,14 @@ def issue_tokens(db: Session, *, account_id: uuid.UUID, family_id: uuid.UUID | N
     return IssuedTokens(access, ttl, raw, s.refresh_token_ttl_seconds, account_id)
 
 
-def register(db: Session, *, email: str, password: str, full_name: str, account_type: str,
-             organization_name: str | None, locale: str) -> uuid.UUID:
+def register(db: Session, *, email: str, password: str, full_name: str, locale: str
+             ) -> uuid.UUID:
     account_id = uuid.uuid4()
     set_scanner_context(db, account_id=account_id)
     try:
         db.add(ScannerAccount(
             id=account_id, email=email.lower(), password_hash=hash_password(password),
-            full_name=full_name, account_type=account_type,
-            organization_name=organization_name if account_type == "professional" else None,
-            locale=locale,
+            full_name=full_name, locale=locale,
         ))
         db.flush()
     except IntegrityError as e:

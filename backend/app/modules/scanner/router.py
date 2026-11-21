@@ -81,10 +81,9 @@ def register(body: ScannerRegisterIn, request: Request, response: Response,
                       3600)
     account_id = service.register(
         db, email=body.email, password=body.password, full_name=body.full_name,
-        account_type=body.account_type, organization_name=body.organization_name,
         locale=body.locale)
     record(db, account_id=account_id, action="account.created", target_type="scanner_account",
-           target_id=account_id, meta={"account_type": body.account_type}, request=request)
+           target_id=account_id, request=request)
     tokens = service.issue_tokens(db, account_id=account_id, user_agent=_ua(request),
                                   ip=client_ip(request))
     db.commit()
@@ -135,7 +134,6 @@ def me(ctx: ScannerContext = Depends(get_scanner_auth),
     a = db.get(ScannerAccount, ctx.account_id)
     assert a is not None
     return ScannerMeOut(account_id=a.id, email=a.email, full_name=a.full_name,
-                        account_type=a.account_type, organization_name=a.organization_name,
                         locale=a.locale, created_at=a.created_at)
 
 

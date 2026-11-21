@@ -122,7 +122,7 @@ Isolated by Scanner account (`app.scanner_account_id`), never by tenant. See SCA
 
 | Table | Scope | Notes |
 |---|---|---|
-| `scanner_accounts` | own row | separate from `users`; `account_type ∈ individual/professional` (organization name required for professional) |
+| `scanner_accounts` | own row | separate from `users`; one account type (email, name, locale) |
 | `scanner_refresh_tokens` | account | hashed, rotated, family revocation |
 | `scanner_collection_sessions` | account | 11 statuses; partial unique index = one open session (`draft/collecting/ready`) per account; `anypulse_collection_id` once acknowledged |
 | `scanner_collection_items` | account | composite FK `(account_id, session_id)`; `source_type ∈ screenshot/url/import`; URL required for URL items |

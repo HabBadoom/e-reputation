@@ -40,7 +40,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="ms-auto flex items-center gap-3 text-sm">
             {me.data && (
               <span className="hidden text-ink-soft sm:inline">
-                {me.data.organization_name ?? me.data.full_name}
+                {me.data.full_name}
               </span>
             )}
             <LangSwitcher />

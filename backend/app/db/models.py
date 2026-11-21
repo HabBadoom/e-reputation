@@ -902,8 +902,6 @@ class ScannerAccount(Base):
     email: Mapped[str] = mapped_column(String(320))
     password_hash: Mapped[str] = mapped_column(Text)
     full_name: Mapped[str] = mapped_column(String(200))
-    account_type: Mapped[str] = mapped_column(String(20))
-    organization_name: Mapped[str | None] = mapped_column(String(200))
     locale: Mapped[str] = mapped_column(String(5), default="fr")
     status: Mapped[str] = mapped_column(String(20), default="active")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

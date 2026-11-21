@@ -13,8 +13,8 @@ BEGIN;
 -- seed: each account writes its own rows under its own context
 SELECT set_config('app.scanner_account_id', :sa, true), set_config('app.tenant_id', '', true),
        set_config('app.user_id', '', true);
-INSERT INTO scanner_accounts (id, email, password_hash, full_name, account_type)
-  VALUES (:sa, 'a@scanner.dz', 'x', 'A', 'individual');
+INSERT INTO scanner_accounts (id, email, password_hash, full_name)
+  VALUES (:sa, 'a@scanner.dz', 'x', 'A');
 INSERT INTO scanner_refresh_tokens (id, account_id, token_hash, family_id, expires_at)
   VALUES (gen_random_uuid(), :sa, repeat('a', 64), gen_random_uuid(), now() + interval '1 day');
 INSERT INTO scanner_collection_sessions (id, account_id) VALUES (:sess_a, :sa);
@@ -23,8 +23,8 @@ INSERT INTO scanner_collection_items (id, account_id, session_id, source_type, p
 INSERT INTO scanner_audit_logs (id, account_id, action) VALUES (gen_random_uuid(), :sa, 'auth.login');
 
 SELECT set_config('app.scanner_account_id', :sb, true);
-INSERT INTO scanner_accounts (id, email, password_hash, full_name, account_type, organization_name)
-  VALUES (:sb, 'b@scanner.dz', 'x', 'B', 'professional', 'Agence B');
+INSERT INTO scanner_accounts (id, email, password_hash, full_name)
+  VALUES (:sb, 'b@scanner.dz', 'x', 'B');
 INSERT INTO scanner_collection_sessions (id, account_id) VALUES (:sess_b, :sb);
 SELECT 'PASS seed: rows inserted under each account''s own context';
 

@@ -68,14 +68,10 @@ export const api = {
 };
 
 // ---- types mirroring backend schemas (app/modules/scanner/schemas.py) ------------------------
-export type AccountType = "individual" | "professional";
-
 export interface ScannerMe {
   account_id: string;
   email: string;
   full_name: string;
-  account_type: AccountType;
-  organization_name: string | null;
   locale: "fr" | "ar" | "en";
   created_at: string;
 }

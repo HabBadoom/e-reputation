@@ -16,7 +16,7 @@ AnyPulse to see it.
 | Decision | Choice |
 |---|---|
 | Codebase | Module inside the AnyPulse repository, with its own web app (`scanner/`) and tables (`scanner_*`), talking to AnyPulse through an ingest API (Phase 7) |
-| Accounts | **Separate Scanner accounts** (individual or professional), not AnyPulse users. Linking a Scanner account to an AnyPulse organization is required before transmission (Phase 2/7) |
+| Accounts | **Separate Scanner accounts**, one account type for everyone, not AnyPulse users. Linking a Scanner account to an AnyPulse organization is required before transmission (Phase 2/7) |
 | Login | Required before the first upload; no anonymous collection |
 | Destination | Every collection is attached to an AnyPulse brand at transmission |
 | Priority | Scanner before the Phase 2 & 3 plan (sprints 9–15) |
@@ -44,8 +44,8 @@ Same FastAPI process, database cluster and CI as AnyPulse. The Scanner web app o
 
 ## Accounts, tokens and isolation
 
-- **Accounts** (`scanner_accounts`): email, Argon2id password hash, full name, `individual` or
-  `professional` (organization name required), locale. Independent of AnyPulse `users`: the
+- **Accounts** (`scanner_accounts`): email, Argon2id password hash, full name, locale. One
+  account type for everyone (no individual/professional split). Independent of AnyPulse `users`: the
   same email may exist in both, with different passwords and no link.
 - **Tokens**: 15-minute access JWT with `typ=scanner_access` and audience `aynpulse-scanner`;
   opaque refresh token (14 days) stored hashed, rotated on every use, reuse revokes the family.
@@ -81,7 +81,7 @@ are created from Phase 3 on.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/scanner/auth/register` | `{email, password (≥12), full_name, account_type: individual\|professional, organization_name?, locale}`; 409 `email_taken`; rate-limited |
+| POST | `/scanner/auth/register` | `{email, password (≥12), full_name, locale}`; 409 `email_taken`; rate-limited |
 | POST | `/scanner/auth/login` | `{email, password}`; rate-limited per IP and per email |
 | POST | `/scanner/auth/refresh` | Body `{refresh_token}` or the `sc_refresh` cookie; rotates |
 | POST | `/scanner/auth/logout` | Revokes the refresh family; access tokens stop working immediately |
@@ -127,5 +127,3 @@ http://localhost:3000 (AnyPulse).
   will be adapted).
 - Production compose and Caddy do not serve the Scanner web app yet (Phase 9);
   `REPINTEL_SCANNER_ENABLED` stays `false` there.
-- Professional accounts are single-user; team members under one professional account are not
-  modelled yet.

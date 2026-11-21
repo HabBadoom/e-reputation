@@ -1,4 +1,4 @@
-"""Aynpulse Scanner foundation: Scanner accounts (separate from AnyPulse users), their refresh
+"""Aynpulse Scanner foundation: Scanner accounts (one account type, separate from AnyPulse users), their refresh
 tokens, collection sessions and items, and an append-only Scanner audit trail.
 
 Revision ID: 0010_scanner_foundation
@@ -55,14 +55,10 @@ def upgrade() -> None:
       email varchar(320) NOT NULL CHECK (email = lower(email) AND position('@' in email) > 1),
       password_hash text NOT NULL,
       full_name varchar(200) NOT NULL CHECK (length(trim(full_name)) > 0),
-      account_type varchar(20) NOT NULL CHECK (account_type IN ('individual','professional')),
-      organization_name varchar(200)
-        CHECK (organization_name IS NULL OR length(trim(organization_name)) > 1),
       locale varchar(5) NOT NULL DEFAULT 'fr' CHECK (locale IN ('fr','ar','en')),
       status varchar(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','disabled')),
       last_login_at timestamptz,
-      created_at timestamptz NOT NULL DEFAULT now(),
-      CHECK (account_type = 'individual' OR organization_name IS NOT NULL)
+      created_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE UNIQUE INDEX scanner_accounts_email_uq ON scanner_accounts (email);
 

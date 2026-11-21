@@ -44,14 +44,15 @@ def code(r) -> str:  # noqa: ANN001
 
 # ---- accounts ------------------------------------------------------------------------------
 def test_register_and_me(client):
-    a = scanner_signup(client, account_type="professional", organization_name="Agence Alger")
+    a = scanner_signup(client, full_name="  Kenza  ")
     r = a.get("/api/v1/scanner/auth/me")
     assert r.status_code == 200, r.text
     me = r.json()
     assert me["email"] == a.email
-    assert me["account_type"] == "professional"
-    assert me["organization_name"] == "Agence Alger"
+    assert me["full_name"] == "Kenza"
     assert me["locale"] == "fr"
+    # One account type only: there is no individual/professional distinction.
+    assert "account_type" not in me and "organization_name" not in me
 
 
 def test_register_validation(client):
@@ -59,11 +60,8 @@ def test_register_validation(client):
     base = {"email": "v@example.dz", "password": PASSWORD, "full_name": "V"}
     r = client.post(url, headers=TOKEN, json={**base, "password": "short"})
     assert r.status_code == 422 and code(r) == "validation_error"
-    r = client.post(url, headers=TOKEN, json={**base, "account_type": "professional"})
-    assert r.status_code == 422, "professional account without organization accepted"
-    # An individual's organization name is ignored, never stored.
-    a = scanner_signup(client, organization_name="Ignored")
-    assert a.get("/api/v1/scanner/auth/me").json()["organization_name"] is None
+    r = client.post(url, headers=TOKEN, json={**base, "full_name": "   "})
+    assert r.status_code == 422, "blank name accepted"
 
 
 def test_duplicate_email(client):

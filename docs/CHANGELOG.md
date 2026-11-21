@@ -3,7 +3,7 @@
 ## Unreleased — Aynpulse Scanner, Phase 1: foundation
 
 ### Added
-- Migration 0010: `scanner_accounts` (separate from AnyPulse users; individual or professional), `scanner_refresh_tokens`, `scanner_collection_sessions` (one open session per account), `scanner_collection_items`, append-only `scanner_audit_logs`; RLS forced on all of them, keyed on `app.scanner_account_id`; narrow `scanner_auth_find_*` lookups.
+- Migration 0010: `scanner_accounts` (separate from AnyPulse users; one account type), `scanner_refresh_tokens`, `scanner_collection_sessions` (one open session per account), `scanner_collection_items`, append-only `scanner_audit_logs`; RLS forced on all of them, keyed on `app.scanner_account_id`; narrow `scanner_auth_find_*` lookups.
 - Scanner API `/api/v1/scanner/*`: register, login, refresh (rotation + reuse detection), logout, me; current collection, history, rename, discard. Scanner tokens (`typ=scanner_access`, audience `aynpulse-scanner`) and `sc_*` cookies are not accepted by AnyPulse, and AnyPulse's are not accepted by Scanner.
 - `scanner/`: Scanner web app (Next.js, French first, Arabic RTL and English): sign-in, sign-up, screenshot-first collection screen with collection counters, history.
 - Tests: `tests/sql/test_rls_scanner.sql`, `tests/test_scanner.py`; CI job and image build for the Scanner web app.
