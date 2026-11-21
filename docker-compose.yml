@@ -90,12 +90,14 @@ services:
 
   migrate:
     build: ./backend
+    image: repintel-backend:dev   # built once here; every backend service runs this image
     command: ["alembic", "upgrade", "head"]
     environment: *backend-env
     depends_on: { postgres: { condition: service_healthy } }
 
   api:
-    build: ./backend
+    image: repintel-backend:dev   # built by `migrate`
+    pull_policy: never
     environment: *backend-env
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -108,7 +110,8 @@ services:
       retries: 20
 
   worker:   # background jobs: emails (with retries) and the monitoring scheduler
-    build: ./backend
+    image: repintel-backend:dev   # built by `migrate`
+    pull_policy: never
     command: ["python", "-m", "app.jobs.worker"]
     environment: *backend-env
     depends_on:
@@ -116,7 +119,8 @@ services:
     restart: unless-stopped
 
   browser-worker:   # headless Chromium fleet (scale with: docker compose up --scale browser-worker=N)
-    build: ./backend
+    image: repintel-backend:dev   # built by `migrate`
+    pull_policy: never
     command: ["python", "-m", "app.browser.worker"]
     environment:
       <<: *backend-env
@@ -135,7 +139,8 @@ services:
     # the first layer, the network policy is the one DNS rebinding cannot defeat.
 
   scanner-browser:   # Scanner's built-in browser (live Chromium streamed to the Scanner app)
-    build: ./backend
+    image: repintel-backend:dev   # built by `migrate`
+    pull_policy: never
     command: ["uvicorn", "app.scanner.browser.server:app", "--host", "0.0.0.0", "--port", "8100"]
     environment:
       <<: *backend-env
