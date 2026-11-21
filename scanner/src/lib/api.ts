@@ -91,11 +91,10 @@ export type SessionStatus =
   | "draft" | "collecting" | "ready" | "validating" | "queued" | "transmitting"
   | "transmitted" | "acknowledged" | "failed" | "retrying" | "cancelled";
 
-/** Where the collection will be sent: an AnyPulse organization (via a link) and a brand. */
+/** The brand of the account's AnyPulse organization this collection goes to. */
 export interface Destination {
-  link_id: string;
   organization_name: string;
-  link_active: boolean;
+  access_active: boolean;
   brand_id: string | null;
   brand_name: string | null;
 }
@@ -113,16 +112,17 @@ export interface CollectionSession {
   destination: Destination | null;
 }
 
-export interface AnyPulseLink {
-  id: string;
-  organization_name: string;
-  status: "active" | "revoked";
-  created_at: string;
+/** The account's own AnyPulse organization, linked automatically at sign-up. */
+export interface AnyPulseAccess {
+  state: "active" | "revoked" | "pending";
+  organization_name: string | null;
+  anypulse_url: string;
+  linked_at: string | null;
   revoked_at: string | null;
-  revoked_by: "scanner" | "anypulse" | null;
+  revoke_reason: string | null;
 }
 
-export interface LinkStart { authorize_url: string; expires_at: string }
+export interface InvitationSent { email: string; expires_at: string }
 export interface BrandRef { id: string; name: string }
 
 export interface Page<T> { items: T[]; total: number; limit: number; offset: number }

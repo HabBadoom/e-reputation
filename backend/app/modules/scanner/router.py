@@ -8,7 +8,6 @@ import dataclasses
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -20,22 +19,23 @@ from app.core.security import new_csrf_token
 from app.db.models import ScannerAccount, ScannerCollectionSession, ScannerLink
 from app.db.session import get_db
 from app.modules.scanner.schemas import (
+    AnyPulseAccessOut,
+    BrandCreateIn,
     BrandOut,
     CollectionSessionOut,
     CollectionSessionPage,
     CollectionSessionPatch,
     CountersOut,
     DestinationOut,
-    LinkOut,
-    LinkStartOut,
+    InvitationOut,
     ScannerLoginIn,
     ScannerMeOut,
     ScannerRefreshIn,
     ScannerRegisterIn,
     ScannerTokenOut,
 )
+from app.scanner import anypulse, sessions
 from app.scanner import auth as service
-from app.scanner import links, sessions
 from app.scanner.audit import record
 from app.scanner.deps import (
     ACCESS_COOKIE,
@@ -93,6 +93,9 @@ def register(body: ScannerRegisterIn, request: Request, response: Response,
     tokens = service.issue_tokens(db, account_id=account_id, user_agent=_ua(request),
                                   ip=client_ip(request))
     db.commit()
+    # The account's own AnyPulse organization is created and linked automatically. If AnyPulse
+    # is unreachable now, it is created the next time the account looks at its AnyPulse access.
+    anypulse.try_provision(account_id)
     return _deliver(request, response, tokens)
 
 
@@ -148,9 +151,9 @@ def _out(s: ScannerCollectionSession, c: sessions.Counters,
          link: ScannerLink | None) -> CollectionSessionOut:
     dest = None
     if s.link_id is not None and link is not None:
-        dest = DestinationOut(link_id=link.id, organization_name=link.tenant_name,
-                              link_active=link.status == "active", brand_id=s.anypulse_brand_id,
-                              brand_name=s.anypulse_brand_name)
+        dest = DestinationOut(organization_name=link.tenant_name,
+                              access_active=link.status == "active",
+                              brand_id=s.anypulse_brand_id, brand_name=s.anypulse_brand_name)
     return CollectionSessionOut(
         id=s.id, status=s.status, title=s.title, created_at=s.created_at,
         updated_at=s.updated_at, transmitted_at=s.transmitted_at,
@@ -159,15 +162,8 @@ def _out(s: ScannerCollectionSession, c: sessions.Counters,
         counters=CountersOut(**dataclasses.asdict(c)), destination=dest)
 
 
-def _links_by_id(db: Session, rows: list[ScannerCollectionSession]) -> dict:
-    ids = {r.link_id for r in rows if r.link_id}
-    if not ids:
-        return {}
-    return {lk.id: lk for lk in db.scalars(select(ScannerLink).where(ScannerLink.id.in_(ids)))}
-
-
 def _one(db: Session, s: ScannerCollectionSession) -> CollectionSessionOut:
-    return _out(s, sessions.counters(db, [s.id])[s.id], _links_by_id(db, [s]).get(s.link_id))
+    return _out(s, sessions.counters(db, [s.id])[s.id], anypulse.own_link(db))
 
 
 @router.get("/sessions/current", response_model=CollectionSessionOut)
@@ -189,8 +185,8 @@ def list_sessions(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, g
                   db: Session = Depends(get_db)) -> CollectionSessionPage:
     rows, total = sessions.list_sessions(db, limit=limit, offset=offset)
     c = sessions.counters(db, [r.id for r in rows])
-    lk = _links_by_id(db, rows)
-    return CollectionSessionPage(items=[_out(r, c[r.id], lk.get(r.link_id)) for r in rows],
+    link = anypulse.own_link(db)
+    return CollectionSessionPage(items=[_out(r, c[r.id], link) for r in rows],
                                  total=total, limit=limit, offset=offset)
 
 
@@ -207,10 +203,9 @@ def update_session(session_id: uuid.UUID, body: CollectionSessionPatch, request:
     s = sessions.get(db, session_id)
     if body.title is not None:
         sessions.rename(db, s, body.title)
-    if {"link_id", "brand_id"} & body.model_fields_set:
-        link_id = body.link_id if "link_id" in body.model_fields_set else s.link_id
+    if "brand_id" in body.model_fields_set:
         try:
-            sessions.set_destination(db, s, link_id=link_id, brand_id=body.brand_id)
+            sessions.set_destination(db, s, account_id=ctx.account_id, brand_id=body.brand_id)
         except DBAPIError as e:   # the DB trigger disagreed (e.g. brand archived meanwhile)
             if getattr(e.orig, "sqlstate", None) != "23514":
                 raise
@@ -219,8 +214,7 @@ def update_session(session_id: uuid.UUID, body: CollectionSessionPatch, request:
                            code="invalid_destination") from e
         record(db, account_id=ctx.account_id, action="session.destination_set",
                target_type="collection_session", target_id=s.id,
-               meta={"link_id": str(s.link_id) if s.link_id else None,
-                     "brand_id": str(s.anypulse_brand_id) if s.anypulse_brand_id else None},
+               meta={"brand_id": str(s.anypulse_brand_id) if s.anypulse_brand_id else None},
                request=request)
     db.commit()
     return _one(db, s)
@@ -237,47 +231,43 @@ def cancel_session(session_id: uuid.UUID, request: Request,
     return _one(db, s)
 
 
-# ---- links to AnyPulse organizations ---------------------------------------------------------
-def _link_out(lk: ScannerLink) -> LinkOut:
-    return LinkOut(id=lk.id, organization_name=lk.tenant_name, status=lk.status,
-                   created_at=lk.created_at, revoked_at=lk.revoked_at, revoked_by=lk.revoked_by)
+# ---- AnyPulse access (automatic, one organization per account) -----------------------------
+@router.get("/anypulse", response_model=AnyPulseAccessOut)
+def anypulse_access(ctx: ScannerContext = Depends(get_scanner_auth),
+                    db: Session = Depends(get_db)) -> AnyPulseAccessOut:
+    link = anypulse.ensure_link(db, ctx.account_id)
+    url = get_settings().app_base_url
+    if link is None:
+        return AnyPulseAccessOut(state="pending", organization_name=None, anypulse_url=url,
+                                 linked_at=None, revoked_at=None, revoke_reason=None)
+    return AnyPulseAccessOut(
+        state=link.status, organization_name=link.tenant_name, anypulse_url=url,
+        linked_at=link.created_at, revoked_at=link.revoked_at,
+        revoke_reason=(link.revoke_reason or None) if link.status == "revoked" else None)
 
 
-@router.post("/links/start", response_model=LinkStartOut, status_code=201)
-def start_link(request: Request, ctx: ScannerContext = Depends(get_scanner_auth),
-               db: Session = Depends(get_db)) -> LinkStartOut:
-    """Create a link request. The returned AnyPulse URL is opened by a member of the
-    organization (owner or admin), who approves it there."""
-    get_limiter().hit(f"scanner:link-start:{ctx.account_id}", 10, 3600)
-    req, url = links.start(db, ctx.account_id)
-    record(db, account_id=ctx.account_id, action="link.requested", target_type="link_request",
-           target_id=req.id, request=request)
-    db.commit()
-    return LinkStartOut(authorize_url=url, expires_at=req.expires_at)
+@router.post("/anypulse/invitation", response_model=InvitationOut)
+def resend_invitation(ctx: ScannerContext = Depends(get_scanner_auth),
+                      db: Session = Depends(get_db)) -> InvitationOut:
+    """E-mail again the invitation to open the account's organization in AnyPulse."""
+    return InvitationOut(**anypulse.resend_invitation(anypulse.active_link(db, ctx.account_id)))
 
 
-@router.get("/links", response_model=list[LinkOut])
-def list_links(ctx: ScannerContext = Depends(get_scanner_auth),
-               db: Session = Depends(get_db)) -> list[LinkOut]:
-    return [_link_out(lk) for lk in links.list_links(db)]
-
-
-@router.post("/links/{link_id}/revoke", response_model=LinkOut)
-def revoke_link(link_id: uuid.UUID, request: Request,
-                ctx: ScannerContext = Depends(get_scanner_auth),
-                db: Session = Depends(get_db)) -> LinkOut:
-    lk = links.revoke(db, links.get(db, link_id))
-    record(db, account_id=ctx.account_id, action="link.revoked", target_type="link",
-           target_id=lk.id, request=request)
-    db.commit()
-    db.refresh(lk)
-    return _link_out(lk)
-
-
-@router.get("/links/{link_id}/brands", response_model=list[BrandOut])
-def link_brands(link_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner_auth),
+@router.get("/brands", response_model=list[BrandOut])
+def list_brands(ctx: ScannerContext = Depends(get_scanner_auth),
                 db: Session = Depends(get_db)) -> list[BrandOut]:
-    return [BrandOut(**b) for b in links.brands(links.get(db, link_id))]
+    return [BrandOut(**b) for b in anypulse.brands(anypulse.active_link(db, ctx.account_id))]
+
+
+@router.post("/brands", response_model=BrandOut, status_code=201)
+def create_brand(body: BrandCreateIn, request: Request,
+                 ctx: ScannerContext = Depends(get_scanner_auth),
+                 db: Session = Depends(get_db)) -> BrandOut:
+    b = anypulse.create_brand(anypulse.active_link(db, ctx.account_id), body.name)
+    record(db, account_id=ctx.account_id, action="brand.created", target_type="brand",
+           target_id=uuid.UUID(b["id"]), meta={"name": b["name"]}, request=request)
+    db.commit()
+    return BrandOut(**b)
 
 
 @router.get("/health", include_in_schema=False)

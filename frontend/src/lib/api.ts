@@ -340,6 +340,12 @@ export interface PlatformStats {
   outstanding: Record<string, number> | null; paid_last_30d: Record<string, number> | null;
   usage_month: Record<string, number> | null;
 }
+export interface AdminScannerAccount {
+  account_id: string; email: string; full_name: string; account_status: string;
+  created_at: string; last_login_at: string | null; link_id: string | null; tenant_id: string | null;
+  organization_name: string | null; link_status: "active" | "revoked" | null;
+  revoked_at: string | null; revoke_reason: string | null; collections: number;
+}
 export interface AdminTenantRow {
   tenant_id: string; name: string; slug: string; created_at: string; plan_key: string; plan_name: string;
   status: SubscriptionStatus; trial_ends_at: string | null; members: number; brands: number;

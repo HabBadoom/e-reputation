@@ -127,12 +127,12 @@ Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Brow
 | GET | `/scanner/auth/me` | Scanner account |
 | GET | `/scanner/sessions/current` | Open collection, created on first use |
 | GET | `/scanner/sessions`, `/scanner/sessions/{id}` | History / one collection, with collection counters |
-| PATCH | `/scanner/sessions/{id}` | `{title?, link_id?, brand_id?}` (destination) |
+| PATCH | `/scanner/sessions/{id}` | `{title?, brand_id?}` (destination brand) |
 | POST | `/scanner/sessions/{id}/cancel` | 409 `session_not_open` |
-| POST / GET | `/scanner/links/start`, `/scanner/links`; POST `/scanner/links/{id}/revoke`; GET `/scanner/links/{id}/brands` | Links to AnyPulse organizations and their brands |
-| POST | `/integrations/scanner/link-requests/inspect`, `/approve`, `/decline` | AnyPulse members; approve/decline need `scanner:link` |
-| GET / POST | `/integrations/scanner/links`, `/integrations/scanner/links/{id}/revoke` | `tenant:read` / `scanner:link` |
-| GET | `/integrations/scanner/links/{id}/brands` | HMAC-signed Scanner call only (no AnyPulse session) |
+| GET | `/scanner/anypulse`; POST `/scanner/anypulse/invitation` | The account's own AnyPulse organization (linked automatically) / owner invitation again |
+| GET / POST | `/scanner/brands` | Brands of that organization / create one |
+| POST | `/integrations/scanner/provision`; GET / POST `/integrations/scanner/brands`; POST `/integrations/scanner/invitation` | HMAC-signed Scanner calls only (no AnyPulse session) |
+| GET | `/admin/scanner/accounts`; POST `/admin/scanner/accounts/{id}/revoke`, `/restore` | Platform admin + MFA: revoke or restore a Scanner account's access |
 
 ## Example (API client)
 

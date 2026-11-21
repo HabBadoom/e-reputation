@@ -30,8 +30,11 @@ class AnyPulseRejected(Exception):
 
 
 class AnyPulseClient:
-    def __init__(self, *, account_id: uuid.UUID, link_id: uuid.UUID):
-        self.account_id, self.link_id = str(account_id), str(link_id)
+    """Calls made on behalf of one Scanner account (and its link, once it exists)."""
+
+    def __init__(self, *, account_id: uuid.UUID, link_id: uuid.UUID | None = None):
+        self.account_id = str(account_id)
+        self.link_id = str(link_id) if link_id else ""
 
     def _request(self, method: str, path: str, payload: Any | None = None) -> Any:
         s = get_settings()
@@ -61,7 +64,16 @@ class AnyPulseClient:
                                    err.get("message", "Refused by AnyPulse"))
         return data
 
+    def provision(self) -> dict:
+        """Create (once) the AnyPulse organization of this Scanner account and link it."""
+        return self._request("POST", "/api/v1/integrations/scanner/provision")
+
     def list_brands(self) -> list[dict]:
-        """Active brands of the linked organization: [{id, name}]."""
-        data = self._request("GET", f"/api/v1/integrations/scanner/links/{self.link_id}/brands")
-        return list(data["items"])
+        """Active brands of the account's organization: [{id, name}]."""
+        return list(self._request("GET", "/api/v1/integrations/scanner/brands")["items"])
+
+    def create_brand(self, name: str) -> dict:
+        return self._request("POST", "/api/v1/integrations/scanner/brands", {"name": name})
+
+    def resend_invitation(self) -> dict:
+        return self._request("POST", "/api/v1/integrations/scanner/invitation")

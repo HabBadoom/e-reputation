@@ -503,3 +503,59 @@ def review_connector(key: str, body: ReviewBody, request: Request,
            meta={"connector": key, "status": body.review_status}, request=request)
     db.commit()
     return _connector_out(c)
+
+
+# ------------------------------------------------------------------------ Aynpulse Scanner
+# Every Scanner account has its own AnyPulse organization, linked automatically. Only platform
+# administrators revoke (or restore) that access. The change is audited in the organization.
+class ScannerAccessIn(BaseModel):
+    reason: str = Field(default="", max_length=500)
+
+
+def _scanner_row(r: Any) -> dict[str, Any]:
+    return dict(r._mapping)
+
+
+@router.get("/scanner/accounts")
+def scanner_accounts(ctx: AuthContext = Depends(require_platform_admin),
+                     db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    rows = db.execute(text("SELECT * FROM admin_scanner_accounts()")).all()
+    return [_scanner_row(r) for r in rows]
+
+
+def _set_scanner_access(db: Session, ctx: AuthContext, request: Request,
+                        account_id: uuid.UUID, active: bool, reason: str) -> dict[str, Any]:
+    from sqlalchemy.exc import DBAPIError
+
+    try:
+        tenant_id = db.scalar(text("SELECT admin_scanner_set_access(:a, :on, :r)"),
+                              {"a": account_id, "on": active, "r": reason})
+    except DBAPIError as e:
+        if getattr(e.orig, "sqlstate", None) == "P0002":
+            db.rollback()
+            raise NotFound("No AnyPulse link for this Scanner account") from e
+        raise
+    _enter(db, ctx, tenant_id)
+    record(db, tenant_id=tenant_id, actor_user_id=ctx.user_id,
+           action="scanner.access_restored" if active else "scanner.access_revoked",
+           target_type="scanner_account", target_id=account_id,
+           meta={"reason": reason} if reason else {}, request=request)
+    _leave(db, ctx)
+    db.commit()
+    row = db.execute(text("SELECT * FROM admin_scanner_accounts() WHERE account_id = :a"),
+                     {"a": account_id}).one()
+    return _scanner_row(row)
+
+
+@router.post("/scanner/accounts/{account_id}/revoke")
+def revoke_scanner_access(account_id: uuid.UUID, body: ScannerAccessIn, request: Request,
+                          ctx: AuthContext = Depends(require_platform_admin),
+                          db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _set_scanner_access(db, ctx, request, account_id, False, body.reason.strip())
+
+
+@router.post("/scanner/accounts/{account_id}/restore")
+def restore_scanner_access(account_id: uuid.UUID, request: Request,
+                           ctx: AuthContext = Depends(require_platform_admin),
+                           db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _set_scanner_access(db, ctx, request, account_id, True, "")

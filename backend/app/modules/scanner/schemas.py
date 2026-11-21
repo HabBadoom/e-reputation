@@ -58,11 +58,10 @@ class CountersOut(BaseModel):
 
 
 class DestinationOut(BaseModel):
-    """Where the collection will be sent: an AnyPulse organization (through a link) and one
-    of its brands. Names are snapshots; Scanner cannot read AnyPulse data."""
-    link_id: uuid.UUID
+    """The brand of the account's AnyPulse organization this collection goes to. Names are
+    snapshots; Scanner cannot read AnyPulse data."""
     organization_name: str
-    link_active: bool
+    access_active: bool
     brand_id: uuid.UUID | None
     brand_name: str | None
 
@@ -88,9 +87,8 @@ class CollectionSessionPage(BaseModel):
 
 
 class CollectionSessionPatch(BaseModel):
-    """Fields left out are unchanged. `link_id: null` clears the destination."""
+    """Fields left out are unchanged. `brand_id: null` clears the destination."""
     title: str | None = Field(default=None, max_length=200)
-    link_id: uuid.UUID | None = None
     brand_id: uuid.UUID | None = None
 
     @field_validator("title")
@@ -99,20 +97,33 @@ class CollectionSessionPatch(BaseModel):
         return v.strip() if v is not None else v
 
 
-class LinkStartOut(BaseModel):
-    authorize_url: str
-    expires_at: datetime
-
-
-class LinkOut(BaseModel):
-    id: uuid.UUID
-    organization_name: str
-    status: str
-    created_at: datetime
+class AnyPulseAccessOut(BaseModel):
+    """`pending`: the organization is being created (AnyPulse unreachable at sign-up)."""
+    state: str                       # active | revoked | pending
+    organization_name: str | None
+    anypulse_url: str
+    linked_at: datetime | None
     revoked_at: datetime | None
-    revoked_by: str | None
+    revoke_reason: str | None
 
 
 class BrandOut(BaseModel):
     id: uuid.UUID
     name: str
+
+
+class BrandCreateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+    @field_validator("name")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("must not be blank")
+        return v
+
+
+class InvitationOut(BaseModel):
+    email: str
+    expires_at: datetime

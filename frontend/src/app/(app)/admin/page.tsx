@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
-import { api, type AdminPlan, type AdminTenantRow, type ConnectorReview, type PlatformStats } from "@/lib/api";
+import { api, type AdminPlan, type AdminScannerAccount, type AdminTenantRow, type ConnectorReview, type PlatformStats } from "@/lib/api";
 import { fmtDay, fmtMoney, parseMoney } from "@/lib/billing";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -15,7 +15,7 @@ const ENTITLEMENTS = [
   "max_ai_tasks_per_day", "max_mentions_per_month", "max_ai_calls_per_month",
   "max_reports_per_month", "max_webhooks", "max_concurrent_browser_missions", "max_retention_days",
 ] as const;
-type Tab = "orgs" | "plans" | "connectors";
+type Tab = "orgs" | "plans" | "connectors" | "scanner";
 
 function money(m: Record<string, number> | null, locale: "fr" | "ar" | "en") {
   const e = Object.entries(m ?? {});
@@ -234,6 +234,82 @@ function Connectors() {
   );
 }
 
+// Aynpulse Scanner accounts: each has its own organization, linked automatically. Only
+// platform administrators revoke or restore that access.
+function ScannerAccounts() {
+  const { t, fmtDate } = useI18n();
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["admin", "scanner"],
+    queryFn: () => api.get<AdminScannerAccount[]>("/admin/scanner/accounts"),
+  });
+  const change = useMutation({
+    mutationFn: ({ id, action, reason }: { id: string; action: "revoke" | "restore"; reason?: string }) =>
+      api.post<AdminScannerAccount>(`/admin/scanner/accounts/${id}/${action}`, action === "revoke" ? { reason } : {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "scanner"] }),
+  });
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-ink-soft">{t("adm.scanner.intro")}</p>
+      <ErrorBanner error={q.error ?? change.error} />
+      {q.isLoading && <Spinner />}
+      {q.data && q.data.length === 0 && <p className="text-sm text-ink-mute">{t("adm.scanner.none")}</p>}
+      {q.data && q.data.length > 0 && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-ink-mute">
+                <tr>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.account")}</th>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.org")}</th>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.collections")}</th>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.lastLogin")}</th>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.access")}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {q.data.map((r) => (
+                  <tr key={r.account_id} className="border-t border-line align-top">
+                    <td className="py-2">
+                      <div>{r.full_name}</div>
+                      <div className="text-xs text-ink-mute" dir="ltr">{r.email}</div>
+                    </td>
+                    <td className="py-2">{r.organization_name ?? "—"}</td>
+                    <td className="py-2 tabular-nums">{r.collections}</td>
+                    <td className="py-2">{r.last_login_at ? fmtDate(r.last_login_at) : "—"}</td>
+                    <td className="py-2">
+                      <Badge tone={r.link_status === "active" ? "brand" : r.link_status === "revoked" ? "neg" : "neutral"}>
+                        {t(r.link_status === "active" ? "adm.scanner.active"
+                          : r.link_status === "revoked" ? "adm.scanner.revoked" : "adm.scanner.pending")}
+                      </Badge>
+                      {r.revoke_reason && <div className="mt-1 text-xs text-ink-mute">{r.revoke_reason}</div>}
+                    </td>
+                    <td className="py-2 text-end">
+                      {r.link_status === "active" && (
+                        <Button variant="danger" disabled={change.isPending} onClick={() => {
+                          const reason = window.prompt(t("adm.scanner.reasonPrompt"));
+                          if (reason !== null) change.mutate({ id: r.account_id, action: "revoke", reason });
+                        }}>{t("adm.scanner.revoke")}</Button>
+                      )}
+                      {r.link_status === "revoked" && (
+                        <Button variant="ghost" disabled={change.isPending}
+                                onClick={() => change.mutate({ id: r.account_id, action: "restore" })}>
+                          {t("adm.scanner.restore")}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("orgs");
@@ -244,14 +320,14 @@ export default function AdminPage() {
         <p className="mt-1 text-sm text-ink-soft">{t("adm.subtitle")}</p>
       </div>
       <div role="tablist" className="flex gap-1 border-b border-line">
-        {(["orgs", "plans", "connectors"] as const).map((k) => (
+        {(["orgs", "plans", "connectors", "scanner"] as const).map((k) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                   className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === k ? "border-brand font-medium text-brand-strong" : "border-transparent text-ink-soft hover:text-ink"}`}>
             {t(`adm.tab.${k}`)}
           </button>
         ))}
       </div>
-      {tab === "orgs" ? <Overview /> : tab === "plans" ? <Plans /> : <Connectors />}
+      {tab === "orgs" ? <Overview /> : tab === "plans" ? <Plans /> : tab === "connectors" ? <Connectors /> : <ScannerAccounts />}
     </div>
   );
 }

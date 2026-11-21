@@ -128,13 +128,12 @@ Isolated by Scanner account (`app.scanner_account_id`), never by tenant. See SCA
 | `scanner_collection_items` | account | composite FK `(account_id, session_id)`; `source_type ∈ screenshot/url/import`; URL required for URL items |
 | `scanner_audit_logs` | account | INSERT/SELECT only |
 
-Migration 0011 (links to AnyPulse):
+Migration 0011 (automatic link to AnyPulse):
 
 | Table | Scope | Notes |
 |---|---|---|
-| `scanner_links` | **both parties**: the Scanner account and the organization | created only by `scanner_link_approve()` (owner/admin, re-checked in SQL); one active per pair; either side may revoke (column grants: `status`, `revoked_at`, `revoked_by`), never re-activate; name/email snapshots for the other side |
-| `scanner_link_requests` | account | token hashed, 15 min, single-use; decided only through `scanner_link_approve()` / `scanner_link_decline()` from an AnyPulse context |
-| `scanner_collection_sessions` + | account | `link_id` (composite FK to own links, SET NULL on deletion), `anypulse_brand_id` (FK brands), `anypulse_brand_name`; trigger: active own link and an active brand of that organization |
+| `scanner_links` | **both parties**: the Scanner account and its organization | one per account and per organization; inserted only with both contexts set and only for a brand-new organization (trigger); status changed only by `admin_scanner_set_access()` (platform admins), with `revoked_by`, `revoke_reason`; `tenant_name` snapshot |
+| `scanner_collection_sessions` + | account | `link_id` (composite FK to the own link, SET NULL on deletion), `anypulse_brand_id` (FK brands), `anypulse_brand_name`; trigger: active own link and an active brand of that organization |
 
 ## Planned (per master prompt §14)
 

@@ -17,7 +17,8 @@ AnyPulse to see it.
 | Decision | Choice |
 |---|---|
 | Codebase | Module inside the AnyPulse repository, with its own web app (`scanner/`) and tables (`scanner_*`), talking to AnyPulse through an ingest API (Phase 7) |
-| Accounts | **Separate Scanner accounts**, one account type for everyone, not AnyPulse users. Linking a Scanner account to an AnyPulse organization is required before transmission (Phase 2/7) |
+| Accounts | **Separate Scanner accounts**, one account type for everyone, not AnyPulse users |
+| AnyPulse link | **Automatic**: each Scanner account gets its own AnyPulse organization at sign-up, linked for good unless a **platform administrator** revokes it. No consent step |
 | Login | Required before the first upload; no anonymous collection |
 | Destination | Every collection is attached to an AnyPulse brand at transmission |
 | Priority | Scanner before the Phase 2 & 3 plan (sprints 9–15) |
@@ -63,42 +64,49 @@ Same FastAPI process, database cluster and CI as AnyPulse. The Scanner web app o
 - **Audit**: `scanner_audit_logs`, append-only for the app role (account created, sign-in,
   collection created or discarded).
 
-## Links to AnyPulse organizations (phase 2)
+## Link to AnyPulse (phase 2)
 
-A Scanner account sends collections only to AnyPulse organizations that approved it.
+Every Scanner account is linked automatically to **its own AnyPulse organization**:
 
-1. In Scanner (**Organisations AnyPulse**), the user asks for a link. Scanner creates a link
-   request (random token, stored hashed, valid `REPINTEL_SCANNER_LINK_REQUEST_TTL_SECONDS`,
-   15 min by default) and opens `{REPINTEL_APP_BASE_URL}/connect/scanner?request=…` in AnyPulse.
-2. In AnyPulse, a member signs in (normal AnyPulse login) and sees which Scanner account asks
-   (name and email) and for which organization (their current one). An **owner or admin**
-   (permission `scanner:link`) approves or declines. Approval runs in the database function
-   `scanner_link_approve()`, which re-checks the AnyPulse context and the permission itself.
-   The token is single-use.
-3. The link (`scanner_links`) is visible to its two parties only: the Scanner account (it sees
-   the organization's name) and the organization (it sees the account's name and email, in
-   **Scanner** in the AnyPulse menu). Either side can revoke it; a revoked link stays revoked.
+1. Right after sign-up, Scanner calls the signed endpoint `POST /integrations/scanner/provision`.
+   AnyPulse creates an organization named after the account (default plan and trial, like an
+   AnyPulse sign-up) and the link (`scanner_links`), and e-mails the account's address an
+   **invitation to become owner** of that organization in AnyPulse. The AnyPulse login is
+   separate; analyses and reports are read there.
+2. If AnyPulse is unreachable at sign-up, the account is still created; provisioning runs again
+   the next time the account opens its AnyPulse space or needs a brand (`anypulse_pending`
+   until then). Provisioning is idempotent.
+3. The link stays active indefinitely. Only a **platform administrator** (admin console, with
+   two-step verification) revokes it, with a reason shown to the user, and may restore it.
+   Revocation is audited in the organization's log. A revoked account keeps using Scanner but
+   can no longer list or create brands, nor (phase 7) send collections.
 
-What a link allows: list the organization's active **brand names** (to choose a destination)
-and, from phase 7, send collections. It never gives read access to mentions, analyses or reports.
+Database guards: a link can only be inserted with both the Scanner account and the new
+organization in context, and only for a brand-new organization (no member, created minutes
+ago), so no code path can attach a Scanner account to an existing customer organization. One
+organization per account and one account per organization. Only `admin_scanner_set_access()`
+(platform administrators) changes a link.
+
+What a link allows: list and create the organization's **brands** and, from phase 7, send
+collections. It never gives read access to mentions, analyses or reports.
 
 ### Signed integration
 
 Scanner reaches AnyPulse only through `app/integrations/anypulse/client.py`, which signs each
-call (HMAC-SHA256 over method, path, timestamp, Scanner account, link and body hash; header
-`X-Scanner-Signature: v1=…`, `X-Scanner-Account`, `X-Scanner-Link`, `X-Scanner-Timestamp`,
-±5 min). AnyPulse verifies the signature, then checks in the database that the link is
-active, belongs to that account and that the organization is active, and only then switches to
-the organization's context. Both run in the same process today; the contract stays the same if
-Scanner is deployed separately. Key: `REPINTEL_SCANNER_INTEGRATION_SECRET` (required in
-staging/production when Scanner is enabled; derived from the JWT secret in development/tests).
+call (HMAC-SHA256 over method, path, timestamp, Scanner account, link and body hash; headers
+`X-Scanner-Signature: v1=…`, `X-Scanner-Account`, `X-Scanner-Link` (empty before
+provisioning), `X-Scanner-Timestamp`, ±5 min). AnyPulse verifies the signature, then checks in
+the database that the link is active, belongs to that account and that the account and the
+organization are active, and only then switches to the organization's context. Both run in the
+same process today; the contract stays the same if Scanner is deployed separately. Key:
+`REPINTEL_SCANNER_INTEGRATION_SECRET` (required in staging/production when Scanner is enabled;
+derived from the JWT secret in development/tests).
 
 ### Collection destination
 
-Each open collection gets a destination: an active link of the account and one of its
-organization's active brands (decision D3). Scanner checks the brand against the live list from
-AnyPulse, and a database trigger checks it again. A collection whose link was revoked shows it
-and asks for another destination.
+Each open collection is attached to a brand of the account's organization (decision D3). The
+brand is checked against the live list from AnyPulse and again by a database trigger. Brands can
+be created from Scanner (plan limit `max_brands` applies).
 
 ## Collection sessions
 
@@ -126,23 +134,27 @@ are created from Phase 3 on.
 | GET | `/scanner/auth/me` | Account profile |
 | GET | `/scanner/sessions/current` | The open collection, created on first use |
 | GET | `/scanner/sessions` | History, newest first, `limit` / `offset` |
-| GET / PATCH | `/scanner/sessions/{id}` | PATCH `{title?, link_id?, brand_id?}`; `link_id: null` clears the destination; 409 `invalid_destination`, `link_revoked`, `session_not_open` |
+| GET / PATCH | `/scanner/sessions/{id}` | PATCH `{title?, brand_id?}`; `brand_id: null` clears the destination; 409 `invalid_destination`, `session_not_open`; 403 `access_revoked` |
 | POST | `/scanner/sessions/{id}/cancel` | Open collections only (409 `session_not_open`) |
-| POST | `/scanner/links/start` | Link request → `{authorize_url, expires_at}`; 10 per hour per account |
-| GET | `/scanner/links` | Own links (organization name, status, who revoked) |
-| POST | `/scanner/links/{id}/revoke` | 409 `link_revoked` if already revoked |
-| GET | `/scanner/links/{id}/brands` | Active brands of the linked organization, via the signed client; 503 `anypulse_unavailable` |
+| GET | `/scanner/anypulse` | `{state: active\|revoked\|pending, organization_name, anypulse_url, linked_at, revoked_at, revoke_reason}`; provisions first if needed |
+| POST | `/scanner/anypulse/invitation` | E-mail the AnyPulse owner invitation again; 409 `already_member` |
+| GET / POST | `/scanner/brands` | Brands of the account's organization / create one `{name}`; 403 `access_revoked`, 409 `anypulse_pending`, 503 `anypulse_unavailable`, 402 `plan_limit_reached`, 409 `duplicate` |
 
-AnyPulse side (`/api/v1/integrations/scanner/*`, normal AnyPulse auth unless noted):
+AnyPulse side, signed Scanner calls only (`/api/v1/integrations/scanner/*`, no AnyPulse session):
 
-| Method | Path | Permission | Notes |
-|---|---|---|---|
-| POST | `/link-requests/inspect` | any member | `{token}` → requesting account, status (`pending/approved/declined/expired`), organization, `can_decide` |
-| POST | `/link-requests/approve` | `scanner:link` | Links the account to the **current** organization; 404 `invalid_link_request` |
-| POST | `/link-requests/decline` | `scanner:link` | 204 |
-| GET | `/links` | `tenant:read` | The organization's Scanner links |
-| POST | `/links/{id}/revoke` | `scanner:link` | |
-| GET | `/links/{id}/brands` | **signed** Scanner call | `{items: [{id, name}]}`; 401 `invalid_signature`, 409 `link_revoked` |
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/provision` | Create (once) the account's organization, link and owner invitation; `{link_id, organization_name, status, created}` |
+| GET / POST | `/brands` | Active brands / create a brand in the linked organization |
+| POST | `/invitation` | Owner invitation again (5 per hour) |
+
+Platform administration (`/api/v1/admin/scanner/*`, platform admin + MFA):
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/admin/scanner/accounts` | Accounts, organization, access status, reason, collections |
+| POST | `/admin/scanner/accounts/{account_id}/revoke` | `{reason}` (shown to the user); audited in the organization |
+| POST | `/admin/scanner/accounts/{account_id}/restore` | Restores access |
 
 Another account's session answers 404, like a missing one. Token mode for API clients:
 `X-Auth-Mode: token` on register/login/refresh, then `Authorization: Bearer`.
@@ -155,7 +167,6 @@ Another account's session answers 404, like a missing one. Token mode for API cl
 | `REPINTEL_SCANNER_BASE_URL` | `http://localhost:3001` | Public URL of the Scanner web app |
 | `REPINTEL_SCANNER_COOKIE_DOMAIN` | unset | Cookie domain for `sc_*` cookies (host-only when unset) |
 | `REPINTEL_SCANNER_MAX_ITEMS_PER_SESSION` | `200` | Upper bound per collection (used from Phase 3) |
-| `REPINTEL_SCANNER_LINK_REQUEST_TTL_SECONDS` | `900` | Validity of a link request |
 | `REPINTEL_SCANNER_INTEGRATION_SECRET` | unset | HMAC key for Scanner → AnyPulse calls (≥ 32 chars). Required in staging/production when Scanner is enabled |
 | `REPINTEL_ANYPULSE_API_URL` | `http://localhost:8000` | Where Scanner's integration client reaches the AnyPulse API |
 
@@ -168,7 +179,7 @@ http://localhost:3000 (AnyPulse).
 |---|---|---|
 | 0 | Audit, integration plan, decisions | Done |
 | 1 | Foundation: accounts, auth, sessions, RLS, web app shell, CI, docs | Done |
-| 2 | Link a Scanner account to an AnyPulse organization (consent by owner/admin); brand picker; signed integration client | Done |
+| 2 | Automatic link to the account's own AnyPulse organization; owner invitation; brands and destination; platform-admin revocation; signed integration client | Done |
 | 3 | Screenshot-first upload: drag and drop, camera/gallery, preview, reorder, duplicates, private object storage, return to the add-item screen | Planned |
 | 4 | Extraction: validation, EXIF strip, preprocessing, OCR + vision, platform detection, threads, dedup, confidence, review screen | Planned |
 | 5 | URL connectors (YouTube official API first; Apify behind the legal-review gate) and Excel import | Planned |
@@ -182,9 +193,10 @@ http://localhost:3000 (AnyPulse).
 - Signed integration calls are protected against tampering and stale replays (±5 min) but carry
   no nonce: a captured call could be replayed within that window. Only read-only calls exist
   today; collection submission (phase 7) adds an idempotency key.
-- A link request URL is a bearer secret for 15 minutes: whoever holds it and is an owner/admin
-  of an organization can approve it for that organization. The consent screen shows which
-  Scanner account asks and warns to approve only expected requests.
+- Anyone can create a Scanner account, and so an AnyPulse organization on the default plan
+  (as with AnyPulse sign-up). Sign-up is rate-limited; e-mail verification for Scanner accounts
+  is not built yet.
+- The organization is named after the account's full name; the owner can rename it in AnyPulse.
 - No email verification or password reset for Scanner accounts yet (AnyPulse's flows exist and
   will be adapted).
 - Production compose and Caddy do not serve the Scanner web app yet (Phase 9);

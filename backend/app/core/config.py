@@ -144,7 +144,6 @@ class Settings(BaseSettings):
     scanner_base_url: str = "http://localhost:3001"
     scanner_cookie_domain: str | None = None   # host-only cookies by default
     scanner_max_items_per_session: int = Field(default=200, ge=1, le=2000)
-    scanner_link_request_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     # Shared secret for HMAC-signed Scanner → AnyPulse integration calls (>= 32 chars).
     # Required in staging/production when Scanner is enabled; development and tests derive
     # one from the JWT secret when it is left empty.

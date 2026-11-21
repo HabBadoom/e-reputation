@@ -25,7 +25,6 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
   { href: "/team", key: "nav.team" },
   { href: "/audit", key: "nav.audit", perm: "audit:read" },
   { href: "/billing", key: "nav.billing", perm: "billing:read" },
-  { href: "/connect/scanner", key: "nav.scanner", perm: "tenant:read" },
   { href: "/settings", key: "nav.settings" },
   { href: "/account", key: "nav.account" },
 ];

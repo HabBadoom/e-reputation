@@ -27,8 +27,8 @@ from app.main import create_app  # noqa: E402
 from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
 DATA_TABLES = [
-    "scanner_link_requests", "scanner_audit_logs", "scanner_collection_items",
-    "scanner_collection_sessions", "scanner_links",
+    "scanner_audit_logs", "scanner_collection_items", "scanner_collection_sessions",
+    "scanner_links",
     "scanner_refresh_tokens", "scanner_accounts",
     "usage_events", "plan_change_requests", "invoice_lines", "invoices", "billing_accounts",
     "invoice_counters",
@@ -109,6 +109,15 @@ def app():
 def client(app):
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def _scanner_integration_in_process(app):
+    """Scanner's signed AnyPulse client talks to this same app in-process (no network)."""
+    from app.integrations.anypulse import client as integration
+    integration.client_factory = lambda: TestClient(app)
+    yield
+    integration.client_factory = None
 
 
 class Api:
