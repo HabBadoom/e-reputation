@@ -91,3 +91,45 @@ class AnyPulseAccessOut(BaseModel):
     state: Literal["active", "revoked"]
     revoked_at: datetime | None
     revoke_reason: str | None
+
+
+# ---- screenshots (phase 3) --------------------------------------------------------------------
+class UploadedFileOut(BaseModel):
+    id: uuid.UUID
+    original_filename: str
+    mime_type: str
+    width: int
+    height: int
+    size_bytes: int
+    url: str             # authenticated Scanner API URL; files are never public
+
+
+class ItemOut(BaseModel):
+    id: uuid.UUID
+    source_type: str
+    status: str
+    platform: str | None
+    content_type: str | None
+    position: int
+    source_url: str | None
+    possible_duplicate_of: uuid.UUID | None
+    created_at: datetime
+    file: UploadedFileOut | None
+
+
+class FileResultOut(BaseModel):
+    filename: str
+    status: Literal["added", "duplicate", "rejected"]
+    code: str | None
+    item_id: uuid.UUID | None
+
+
+class UploadOut(BaseModel):
+    """Per-file outcome; one rejected file never blocks the others."""
+    results: list[FileResultOut]
+    items: list[ItemOut]
+    session: CollectionSessionOut
+
+
+class ReorderIn(BaseModel):
+    item_ids: list[uuid.UUID] = Field(max_length=2000)

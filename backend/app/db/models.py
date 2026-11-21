@@ -961,6 +961,27 @@ class ScannerCollectionItem(Base):
     error_code: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
+    # 0012: a visually near-identical screenshot already in the collection (flag only).
+    possible_duplicate_of: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class ScannerUploadedFile(Base):
+    """A sanitised screenshot (0012). Bytes are in private object storage at `storage_key`."""
+    __tablename__ = "scanner_uploaded_files"
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    storage_key: Mapped[str] = mapped_column(String(300), unique=True)
+    original_filename: Mapped[str] = mapped_column(String(255), default="")
+    mime_type: Mapped[str] = mapped_column(String(30))
+    size_bytes: Mapped[int] = mapped_column()
+    width: Mapped[int] = mapped_column()
+    height: Mapped[int] = mapped_column()
+    sha256: Mapped[str] = mapped_column(String(64))
+    dhash: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = _created()
+    retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ScannerAuditLog(Base):

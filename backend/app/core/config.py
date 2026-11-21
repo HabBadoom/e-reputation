@@ -144,6 +144,23 @@ class Settings(BaseSettings):
     scanner_base_url: str = "http://localhost:3001"
     scanner_cookie_domain: str | None = None   # host-only cookies by default
     scanner_max_items_per_session: int = Field(default=200, ge=1, le=2000)
+    # Screenshot uploads (phase 3). Images are validated, re-encoded without metadata and kept
+    # in private object storage; they are never served publicly.
+    scanner_upload_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    scanner_upload_max_pixels: int = Field(default=40_000_000, ge=10_000)
+    scanner_upload_max_side: int = Field(default=12_000, ge=100)
+    scanner_upload_max_files_per_request: int = Field(default=20, ge=1, le=100)
+    scanner_uploads_per_hour: int = Field(default=600, ge=1)
+
+    # Object storage for Scanner files. "filesystem" is for development and tests only;
+    # staging and production must use an S3-compatible service (MinIO, Scaleway, OVH…).
+    storage_backend: Literal["filesystem", "s3"] = "filesystem"
+    storage_filesystem_root: str = "/tmp/repintel-storage"   # noqa: S108 — dev/test only
+    storage_endpoint_url: str = ""          # e.g. http://minio:9000; empty = AWS default
+    storage_region: str = "us-east-1"
+    storage_bucket: str = "repintel-scanner"
+    storage_access_key: SecretStr = SecretStr("")
+    storage_secret_key: SecretStr = SecretStr("")
 
     @field_validator("jwt_secret")
     @classmethod
@@ -173,6 +190,14 @@ class Settings(BaseSettings):
             raise ValueError("REPINTEL_BREVO_API_KEY is required when EMAIL_PROVIDER=brevo")
         if self.env in ("staging", "production") and self.email_provider != "brevo":
             raise ValueError("A real email provider is required in staging/production")
+        return self
+
+    @model_validator(mode="after")
+    def _scanner_storage(self) -> "Settings":
+        if self.scanner_enabled and self.env in ("staging", "production") \
+                and self.storage_backend != "s3":
+            raise ValueError("REPINTEL_STORAGE_BACKEND must be 's3' when Scanner is enabled in "
+                             "staging/production")
         return self
 
     @property

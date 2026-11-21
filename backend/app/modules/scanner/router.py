@@ -7,12 +7,12 @@ the AnyPulse `ri_*` ones); API clients send `X-Auth-Mode: token` and use Bearer 
 import dataclasses
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip
 from app.core.config import get_settings
-from app.core.errors import Unauthorized
+from app.core.errors import AppError, Unauthorized
 from app.core.rate_limit import get_limiter
 from app.core.security import new_csrf_token
 from app.db.models import ScannerAccount, ScannerCollectionSession
@@ -23,14 +23,19 @@ from app.modules.scanner.schemas import (
     CollectionSessionPage,
     CollectionSessionPatch,
     CountersOut,
+    FileResultOut,
+    ItemOut,
+    ReorderIn,
     ScannerLoginIn,
     ScannerMeOut,
     ScannerRefreshIn,
     ScannerRegisterIn,
     ScannerTokenOut,
+    UploadedFileOut,
+    UploadOut,
 )
 from app.scanner import auth as service
-from app.scanner import sessions
+from app.scanner import sessions, uploads
 from app.scanner.audit import record
 from app.scanner.deps import (
     ACCESS_COOKIE,
@@ -212,6 +217,92 @@ def anypulse_access(ctx: ScannerContext = Depends(get_scanner_auth),
     revoked = a.anypulse_access == "revoked"
     return AnyPulseAccessOut(state=a.anypulse_access, revoked_at=a.access_revoked_at,
                              revoke_reason=(a.access_revoke_reason or None) if revoked else None)
+
+
+# ---- screenshots (phase 3) -------------------------------------------------------------------
+def _items(db: Session, session_id: uuid.UUID) -> list[ItemOut]:
+    out = []
+    for item, f in uploads.list_items(db, session_id):
+        fo = None if f is None else UploadedFileOut(
+            id=f.id, original_filename=f.original_filename, mime_type=f.mime_type,
+            width=f.width, height=f.height, size_bytes=f.size_bytes,
+            url=f"/api/v1/scanner/files/{f.id}/content")
+        out.append(ItemOut(id=item.id, source_type=item.source_type, status=item.status,
+                           platform=item.platform, content_type=item.content_type,
+                           position=item.position, source_url=item.source_url,
+                           possible_duplicate_of=item.possible_duplicate_of,
+                           created_at=item.created_at, file=fo))
+    return out
+
+
+@router.post("/sessions/{session_id}/screenshots", response_model=UploadOut)
+def upload_screenshots(session_id: uuid.UUID, request: Request,
+                       files: list[UploadFile] = File(...),
+                       ctx: ScannerContext = Depends(get_scanner_auth),
+                       db: Session = Depends(get_db)) -> UploadOut:
+    """Add screenshots to an open collection (multipart field `files`, PNG/JPEG/WebP).
+    Each file is validated and re-encoded without metadata; the answer lists what happened to
+    each one, then the collection's items, so the add-item screen can carry on."""
+    cfg = get_settings()
+    if len(files) > cfg.scanner_upload_max_files_per_request:
+        raise AppError("Too many files in one upload", code="too_many_files", status_code=413)
+    lim = get_limiter()
+    for _ in files:
+        lim.hit(f"scanner:uploads:{ctx.account_id}", cfg.scanner_uploads_per_hour, 3600)
+    s = sessions.get(db, session_id)
+    payload = [(f.filename or "", f.file.read(cfg.scanner_upload_max_bytes + 1)) for f in files]
+    results = uploads.add_screenshots(db, s, payload)
+    added = sum(r.status == "added" for r in results)
+    if added:
+        record(db, account_id=ctx.account_id, action="screenshots.added",
+               target_type="collection_session", target_id=s.id,
+               meta={"added": added, "refused": len(results) - added}, request=request)
+    db.commit()
+    return UploadOut(results=[FileResultOut(**r.__dict__) for r in results],
+                     items=_items(db, s.id), session=_one(db, s))
+
+
+@router.get("/sessions/{session_id}/items", response_model=list[ItemOut])
+def list_items(session_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner_auth),
+               db: Session = Depends(get_db)) -> list[ItemOut]:
+    return _items(db, sessions.get(db, session_id).id)
+
+
+@router.put("/sessions/{session_id}/items/order", response_model=list[ItemOut])
+def reorder_items(session_id: uuid.UUID, body: ReorderIn,
+                  ctx: ScannerContext = Depends(get_scanner_auth),
+                  db: Session = Depends(get_db)) -> list[ItemOut]:
+    s = sessions.get(db, session_id)
+    uploads.reorder(db, s, body.item_ids)
+    db.commit()
+    return _items(db, s.id)
+
+
+@router.delete("/items/{item_id}", response_model=CollectionSessionOut)
+def remove_item(item_id: uuid.UUID, request: Request,
+                ctx: ScannerContext = Depends(get_scanner_auth),
+                db: Session = Depends(get_db)) -> CollectionSessionOut:
+    item = uploads.get_item(db, item_id)
+    s = sessions.get(db, item.session_id)
+    keys = uploads.remove_item(db, item, s)
+    record(db, account_id=ctx.account_id, action="item.removed", target_type="collection_item",
+           target_id=item_id, request=request)
+    db.commit()
+    uploads.delete_objects(keys)   # after commit: never delete a file still referenced
+    return _one(db, s)
+
+
+@router.get("/files/{file_id}/content")
+def file_content(file_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner_auth),
+                 db: Session = Depends(get_db)) -> Response:
+    """The sanitised image, to its owner only. Never cached by shared caches."""
+    f, data = uploads.read_file(db, file_id)
+    return Response(content=data, media_type=f.mime_type, headers={
+        "cache-control": "private, max-age=300",
+        "content-disposition": "inline",
+        "x-content-type-options": "nosniff",
+        "content-security-policy": "default-src 'none'; sandbox",
+    })
 
 
 @router.get("/health", include_in_schema=False)
