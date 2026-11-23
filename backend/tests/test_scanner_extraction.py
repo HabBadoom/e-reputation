@@ -120,7 +120,9 @@ def test_low_confidence_or_nothing_readable_needs_review(client, fake):
     sc = scanner_signup(client)
     sid = current(sc)
     fake.answers += [out([post()], confidence=0.4), out(issues=["not_social_media"])]
-    upload(sc, sid, png("a.png", text="un"), png("b.png", text="deux"))
+    upload(sc, sid, png("a.png", text="un"))
+    drain()                                   # one at a time: job order is not guaranteed
+    upload(sc, sid, png("b.png", text="deux"))
     drain()
     a, b = items(sc, sid)
     assert a["status"] == "needs_review" and b["status"] == "needs_review"
@@ -188,7 +190,7 @@ def test_screenshots_added_before_configuration_can_be_queued(client, fake):
     vision.set_provider(None)
     upload(sc, sid, png("a.png", text="un"), png("b.png", text="deux"))
     vision.set_provider(fake)
-    fake.answers += [out([post()]), out([post(text="Autre")])]
+    fake.answers += [out([post()]), out([post(author="Djezzy", text="Autre")])]
     r = sc.post(f"{S}/sessions/{sid}/extract")
     assert r.status_code == 200 and r.json() == {"queued": 2}
     drain()
