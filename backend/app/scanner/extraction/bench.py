@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from app.core.config import get_settings
 from app.nlp.llm import LLMError
@@ -85,8 +86,8 @@ def score(got: list[schema.Entry], expected: list[dict]) -> dict:
             "texts_exact": sum(1 for c in cers if c == 0.0)}
 
 
-def run_one(path: Path, model: str, out: Path, tz: str) -> Run:
-    r = Run(path.name, model)
+def run_one(path: Path, model: str, out: Path, tz: str, root: Path) -> Run:
+    r = Run(str(path.relative_to(root)).replace("\\", "/"), model)
     raw = path.read_bytes()
     try:
         cfg = get_settings()
@@ -118,7 +119,7 @@ def run_one(path: Path, model: str, out: Path, tz: str) -> Run:
         r.error = "bad_output"
         return r
     r.ok = True
-    gold = path.parent / "attendu" / f"{path.stem}.json"
+    gold = root / "attendu" / f"{path.stem}.json"
     if gold.exists():
         r.score = score(r.result.entries,
                         json.loads(gold.read_text(encoding="utf-8")).get("entries", []))
@@ -196,8 +197,8 @@ def report(runs: list[Run], models: list[str], prices: dict[str, tuple[float, fl
                         + "".join(_entry_html(e, r.captured, tz) for e in res.entries))
             cols.append(f'<div class="col"><h3>{_esc(m)}</h3>{body}</div>')
         cards.append(f'<section><h2>{_esc(name)}</h2><div class="row">'
-                     f'<a class="img" href="../{_esc(name)}" target="_blank">'
-                     f'<img src="../{_esc(name)}" loading="lazy" alt=""></a>{"".join(cols)}'
+                     f'<a class="img" href="../{quote(name)}" target="_blank">'
+                     f'<img src="../{quote(name)}" loading="lazy" alt=""></a>{"".join(cols)}'
                      f"</div></section>")
     page = f"""<!doctype html><html lang="fr"><meta charset="utf-8">
 <title>Extraction Scanner — rapport</title><style>
@@ -247,11 +248,20 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError:
             print(f"--price invalide : {p}", file=sys.stderr)
             return 2
-    files = sorted(p for p in a.folder.iterdir() if p.suffix.lower() in EXTS and p.is_file())
+    if not a.folder.is_dir():
+        print(f"Dossier introuvable : {a.folder}", file=sys.stderr)
+        return 2
+    skip = {"rapport-extraction", "attendu"}
+    files = sorted((p for p in a.folder.rglob("*")
+                    if p.is_file() and p.suffix.lower() in EXTS
+                    and not skip & set(p.relative_to(a.folder).parts[:-1])),
+                   key=lambda p: str(p.relative_to(a.folder)).lower())
     if a.limit:
         files = files[: a.limit]
     if not files:
-        print(f"Aucune image dans {a.folder}", file=sys.stderr)
+        seen = sorted(p.name for p in a.folder.iterdir())[:10]
+        print(f"Aucune image (.png, .jpg, .jpeg, .webp) dans {a.folder} ni ses sous-dossiers. "
+              f"Contenu vu : {seen or 'dossier vide'}", file=sys.stderr)
         return 2
     out = a.folder / "rapport-extraction"
     out.mkdir(exist_ok=True)
@@ -260,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{len(files)} images × {len(models)} modèle(s) …", flush=True)
     runs: list[Run] = []
     with ThreadPoolExecutor(max_workers=max(1, a.workers)) as pool:
-        for n, r in enumerate(pool.map(lambda j: run_one(j[0], j[1], out, tz), jobs), 1):
+        for n, r in enumerate(pool.map(lambda j: run_one(j[0], j[1], out, tz, a.folder), jobs), 1):
             runs.append(r)
             state = f"{len(r.result.entries)} entrées" if r.ok and r.result else r.error
             print(f"[{n}/{len(jobs)}] {r.model} · {r.image} · {state}", flush=True)
