@@ -27,7 +27,9 @@ from app.scanner.storage import StorageError, get_storage
 log = logging.getLogger("repintel.scanner.extraction")
 JOB_KIND = "scanner.extract"
 MAX_ATTEMPTS = 4
-REVIEW_ISSUES = {"unreadable_parts", "not_social_media", "no_text"}
+# "unreadable_parts" is shown to the agent but does not by itself send to review: on the first
+# benchmark (104 real captures) models raised it on a third of fully readable screenshots.
+REVIEW_ISSUES = {"not_social_media", "no_text"}
 
 
 def queue_items(db: Session, account_id: uuid.UUID, session_id: uuid.UUID,

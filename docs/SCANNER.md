@@ -192,8 +192,8 @@ job when extraction is configured (`REPINTEL_OPENAI_API_KEY` and
    collection is linked with `duplicate_of` and not counted. A copy cut by the screen edge or by
    "voir plus" is linked to the full one, whichever came first.
 6. **Status**: `ready`, or `needs_review` when confidence is below
-   `REPINTEL_SCANNER_EXTRACTION_MIN_CONFIDENCE`, or when parts are unreadable, the image is not a
-   social network or no text was found; `failed` with `error_code` (`quota_exceeded`,
+   `REPINTEL_SCANNER_EXTRACTION_MIN_CONFIDENCE`, the image is not a social network or no text
+   was found ("unreadable parts" is shown but does not send to review on its own); `failed` with `error_code` (`quota_exceeded`,
    `auth_failed`, `model_not_found`, …). Temporary provider errors are retried (4 attempts).
 
 Script (`arabic`, `latin`, `mixed`) is detected from the letters only; no language, topic or
@@ -206,6 +206,18 @@ changed, enforced by column grants) or deletes an entry that is not content. "Re
 reads it again and replaces the entries.
 
 ### Extraction benchmark
+
+First run (2026-11-23, prompt v2, 104 real captures of the product owner, 50 hand-checked
+entries):
+
+| Model | Entries found | Exact authors | Exact texts | Char. errors | Avg. time | Cost / 1,000 captures |
+|---|---|---|---|---|---|---|
+| gpt-6.1-sol | 48/50 | 45 | 37 | 1.0 % | 19 s | ≈ 16 $ |
+| gpt-6.1-terra | 48/50 | 45 | 35 | 0.8 % | 18 s | ≈ 8 $ |
+| gpt-6-luna | 48/50 | 42 | 16 | 3.7 % | 23 s | ≈ 1.5 $ |
+
+gpt-6.1-terra was recommended (accuracy of the larger model at half its cost). Luna finds the
+same entries but changes letters too often for verbatim collection.
 
 Compare models on real screenshots before choosing one (no database, nothing stored in Scanner):
 
