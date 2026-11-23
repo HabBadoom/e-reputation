@@ -216,7 +216,7 @@ docker compose run --rm --no-deps -v "$PWD/captures:/captures" migrate \
   --price gpt-6.1-terra=1,5 --price gpt-6-luna=0.10,0.50
 ```
 
-It writes `captures/rapport-extraction/index.html` (each image next to what each model read,
+It processes every model on an image before the next image, rewrites the report every 10 results (Ctrl+C stops cleanly) and reuses results already obtained with the same prompt version (`--fresh` to redo them). It writes `captures/rapport-extraction/index.html` (each image next to what each model read,
 duration, tokens, estimated cost per 1,000 captures) and the raw JSON per image. With
 `captures/attendu/<image name>.json` (`{"entries": [{"author": "...", "text": "..."}]}`, written
 by hand), each model is scored: entries found / missed / extra, exact authors and texts,

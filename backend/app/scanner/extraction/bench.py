@@ -6,7 +6,9 @@
 For each model and image: the same sanitising as an upload, the same prompt and schema as
 production, then the entries as Scanner would store them. Writes, next to the images:
   rapport-extraction/index.html     side-by-side view (image | entries), totals, cost
-  rapport-extraction/<model>/*.json raw model output per image
+  rapport-extraction/<model>/*.json raw model output per image (+ .meta.json: tokens, time)
+The report is rewritten every 10 results; Ctrl+C stops cleanly. Results already obtained with
+the same prompt version are reused (not paid twice) unless --fresh is given.
 If `attendu/<image>.json` exists ({"entries": [{"author": "...", "text": "..."}]}), the entries
 are scored against it (found, missed, extra; author and text exactness; character error rate).
 No database is used and nothing is stored in Scanner.
@@ -46,6 +48,7 @@ class Run:
     result: schema.Result | None = None
     captured: datetime | None = None
     score: dict = field(default_factory=dict)
+    cached: bool = False
 
 
 def _light(s: str) -> str:
@@ -86,7 +89,8 @@ def score(got: list[schema.Entry], expected: list[dict]) -> dict:
             "texts_exact": sum(1 for c in cers if c == 0.0)}
 
 
-def run_one(path: Path, model: str, out: Path, tz: str, root: Path) -> Run:
+def run_one(path: Path, model: str, out: Path, tz: str, root: Path,
+            reuse: bool = True) -> Run:
     r = Run(str(path.relative_to(root)).replace("\\", "/"), model)
     raw = path.read_bytes()
     try:
@@ -100,21 +104,41 @@ def run_one(path: Path, model: str, out: Path, tz: str, root: Path) -> Run:
     from app.scanner.extraction.service import _as_png
     r.captured = dates.captured_at(path.name, datetime.fromtimestamp(path.stat().st_mtime, UTC),
                                    tz)
-    t0 = time.monotonic()
+    folder = out / _safe(model)
+    data_file, meta_file = folder / f"{path.stem}.json", folder / f"{path.stem}.meta.json"
+    data = None
+    if reuse and data_file.exists() and meta_file.exists():
+        try:
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            if meta.get("prompt") == schema.PROMPT_VERSION:
+                data = json.loads(data_file.read_text(encoding="utf-8"))
+                r.cached = True
+                r.seconds, r.parts = meta.get("seconds", 0.0), meta.get("parts", 1)
+                r.input_tokens = meta.get("input_tokens", 0)
+                r.output_tokens = meta.get("output_tokens", 0)
+        except ValueError:
+            data = None
+    if data is None:
+        t0 = time.monotonic()
+        try:
+            res = vision.OpenAIVision(model).read(
+                vision.prepare(_as_png(img.data)),
+                captured=r.captured.isoformat(timespec="minutes"))
+        except LLMError as e:
+            r.error, r.seconds = e.reason + (f" ({e})" if e.reason != str(e) else ""), \
+                time.monotonic() - t0
+            return r
+        r.seconds = time.monotonic() - t0
+        r.input_tokens, r.output_tokens, r.parts = res.input_tokens, res.output_tokens, res.parts
+        data = res.data
+        folder.mkdir(parents=True, exist_ok=True)
+        data_file.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        meta_file.write_text(json.dumps({
+            "prompt": schema.PROMPT_VERSION, "model": res.model, "seconds": round(r.seconds, 2),
+            "input_tokens": r.input_tokens, "output_tokens": r.output_tokens, "parts": r.parts}),
+            encoding="utf-8")
     try:
-        res = vision.OpenAIVision(model).read(vision.prepare(_as_png(img.data)),
-                                              captured=r.captured.isoformat(timespec="minutes"))
-    except LLMError as e:
-        r.error, r.seconds = e.reason + (f" ({e})" if e.reason != str(e) else ""), \
-            time.monotonic() - t0
-        return r
-    r.seconds = time.monotonic() - t0
-    r.input_tokens, r.output_tokens, r.parts = res.input_tokens, res.output_tokens, res.parts
-    (out / _safe(model)).mkdir(parents=True, exist_ok=True)
-    (out / _safe(model) / f"{path.stem}.json").write_text(
-        json.dumps(res.data, ensure_ascii=False, indent=1), encoding="utf-8")
-    try:
-        r.result = schema.parse(res.data)
+        r.result = schema.parse(data)
     except schema.BadOutput:
         r.error = "bad_output"
         return r
@@ -126,10 +150,10 @@ def run_one(path: Path, model: str, out: Path, tz: str, root: Path) -> Run:
     return r
 
 
-def _safe_run(path: Path, model: str, out: Path, tz: str, root: Path) -> Run:
+def _safe_run(path: Path, model: str, out: Path, tz: str, root: Path, reuse: bool) -> Run:
     """One image never stops the others: unexpected errors are reported in the run."""
     try:
-        return run_one(path, model, out, tz, root)
+        return run_one(path, model, out, tz, root, reuse)
     except Exception as e:  # noqa: BLE001
         return Run(str(path.relative_to(root)).replace("\\", "/"), model,
                    error=f"erreur inattendue : {type(e).__name__}: {e}"[:300])
@@ -177,7 +201,8 @@ def report(runs: list[Run], models: list[str], prices: dict[str, tuple[float, fl
         exp = sum(s["expected"] for s in scored)
         cers = [s["cer"] for s in scored if s["cer"] is not None]
         rows.append(
-            f"<tr><td><b>{_esc(m)}</b></td><td>{len(ok)}/{len(rs)}</td>"
+            f"<tr><td><b>{_esc(m)}</b></td><td>{len(ok)}/{len(rs)}"
+            f"{f' ({sum(r.cached for r in rs)} repris)' if any(r.cached for r in rs) else ''}</td>"
             f"<td>{sum(len(r.result.entries) for r in ok if r.result)}</td>"
             f"<td>{sum(r.seconds for r in ok) / max(1, len(ok)):.1f} s</td>"
             f"<td>{tin:,} / {tout:,}</td>"
@@ -237,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="vision model id (repeat to compare); default: the configured one")
     ap.add_argument("--limit", type=int, default=0, help="only the first N images")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--fresh", action="store_true",
+                    help="ignore results already in rapport-extraction (same prompt version)")
     ap.add_argument("--price", action="append", default=[],
                     help="MODEL=INPUT,OUTPUT in USD per million tokens, for the cost column")
     a = ap.parse_args(argv)
@@ -281,19 +308,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Impossible d'écrire le rapport dans {out} : {e}", file=sys.stderr)
         return 2
     tz = cfg.scanner_extraction_timezone
-    jobs = [(f, m) for m in models for f in files]
-    print(f"{len(files)} images × {len(models)} modèle(s) …", flush=True)
+    jobs = [(f, m) for f in files for m in models]   # all models on an image, then the next
+    print(f"{len(files)} images × {len(models)} modèle(s) … (rapport mis à jour en cours de "
+          f"route ; Ctrl+C l'arrête proprement)", flush=True)
     runs: list[Run] = []
-    with ThreadPoolExecutor(max_workers=max(1, a.workers)) as pool:
-        for n, r in enumerate(pool.map(lambda j: _safe_run(j[0], j[1], out, tz, a.folder), jobs),
-                              1):
+    pool = ThreadPoolExecutor(max_workers=max(1, a.workers))
+    try:
+        results = pool.map(lambda j: _safe_run(j[0], j[1], out, tz, a.folder, not a.fresh), jobs)
+        for n, r in enumerate(results, 1):
             runs.append(r)
-            state = f"{len(r.result.entries)} entrées" if r.ok and r.result else r.error
+            state = (f"{len(r.result.entries)} entrées" + (" (déjà fait)" if r.cached else "")
+                     if r.ok and r.result else r.error)
             print(f"[{n}/{len(jobs)}] {r.model} · {r.image} · {state}", flush=True)
             if not r.ok and r.error.startswith(("auth_failed", "quota_exceeded",
                                                 "model_not_found", "not_configured")):
                 print("Arrêt : " + r.error, file=sys.stderr)
                 break
+            if n % 10 == 0:
+                report(runs, models, prices, out, tz)
+    except KeyboardInterrupt:
+        print("Interrompu : rapport des images déjà traitées.", file=sys.stderr)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     path = report(runs, models, prices, out, tz)
     print(f"Rapport : {path}")
     return 0
