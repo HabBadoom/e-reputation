@@ -7,7 +7,7 @@ The model transcribes; it does not interpret. Its answer must follow a strict JS
 from dataclasses import dataclass, field
 from typing import Any
 
-PROMPT_VERSION = "scanner-extract-v1"
+PROMPT_VERSION = "scanner-extract-v2"
 
 PLATFORMS = ("facebook", "instagram", "tiktok", "youtube", "linkedin", "x", "web", "unknown")
 VIEWS = ("feed", "post_page", "comments_dialog", "photo_viewer", "group", "profile", "search",
@@ -20,9 +20,14 @@ collection tool. Report only what is visibly written. Never translate, correct, 
 summarise or judge anything. No opinion, sentiment or topic.
 
 Text rules:
-- Copy text exactly as displayed: original script and spelling (Arabic, Algerian Darija in Arabic
-  or Latin letters, French, English, mixed), emojis, and line breaks as \\n.
-- Arabic is right-to-left: give each line in its logical reading order.
+- Copy text exactly as displayed: original script (Arabic, Algerian Darija in Arabic or Latin
+  letters, French, English, mixed) and emojis in their place.
+- Keep every spelling mistake, doubled letter, missing hamza, dialect spelling and odd spacing
+  exactly as written: "هتى" stays "هتى" (not "حتى"), "االدفع" stays "االدفع". Never fix,
+  standardise or complete a word.
+- Lines that only wrap because of the width of the screen are joined with a single space. Keep
+  a line break (\\n) only where the author started a new line or paragraph.
+- Arabic is right-to-left: give the text in its logical reading order.
 - If text ends with "En voir plus", "Afficher la suite", "Voir plus", "See more", "عرض المزيد"
   or "…", set text_truncated=true and do not include those words.
 - A name at the start of a reply that tags someone is part of the reply text.
@@ -46,11 +51,19 @@ Structure:
   (indented under a comment) has parent_ref = the ref of the comment it answers; a top-level
   comment has parent_ref = null. post_ref = the ref of the post it belongs to, or null if the post
   is not in the screenshot.
+- context.platform: from the interface. Facebook: "J'aime / Répondre / Partager", "Voir X
+  réponses", "Voir l'original", round reaction icons (like, love, haha…), "· 8 h" after names,
+  "Publication de …". Instagram, TikTok, YouTube, X and LinkedIn have their own interfaces; use
+  "unknown" when nothing in the image tells.
 - relative_time: the time label exactly as shown ("9 h", "1 j", "2 sem", "Hier à 14:05",
   "12 mars"), "" if none.
 - Counters as integers: "1,2 k" = 1200, "12 commentaires" = 12; null if not shown.
 - partially_visible=true when the entry is cut by the top or bottom edge of the screenshot.
 - quality.confidence: from 0 to 1, how sure you are that names and texts are copied exactly.
+- quality.issues: "cropped" when entries are cut by the screenshot edge (that alone is normal);
+  "unreadable_parts" only when visible text cannot be read (blur, overlap, too small), never
+  for text that is simply cut by the edge or hidden by "voir plus"; "background_ignored" only
+  when a dimmed page is actually visible behind a dialog or viewer.
 """
 
 USER_PROMPT = ("Transcribe this screenshot. Capture time (for reference only, do not convert "
