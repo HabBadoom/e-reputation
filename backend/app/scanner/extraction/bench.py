@@ -126,6 +126,15 @@ def run_one(path: Path, model: str, out: Path, tz: str, root: Path) -> Run:
     return r
 
 
+def _safe_run(path: Path, model: str, out: Path, tz: str, root: Path) -> Run:
+    """One image never stops the others: unexpected errors are reported in the run."""
+    try:
+        return run_one(path, model, out, tz, root)
+    except Exception as e:  # noqa: BLE001
+        return Run(str(path.relative_to(root)).replace("\\", "/"), model,
+                   error=f"erreur inattendue : {type(e).__name__}: {e}"[:300])
+
+
 def _safe(name: str) -> str:
     return "".join(c if c.isalnum() or c in "-._" else "_" for c in name)
 
@@ -264,13 +273,20 @@ def main(argv: list[str] | None = None) -> int:
               f"Contenu vu : {seen or 'dossier vide'}", file=sys.stderr)
         return 2
     out = a.folder / "rapport-extraction"
-    out.mkdir(exist_ok=True)
+    try:
+        out.mkdir(exist_ok=True)
+        (out / ".write-test").write_text("ok")
+        (out / ".write-test").unlink()
+    except OSError as e:
+        print(f"Impossible d'écrire le rapport dans {out} : {e}", file=sys.stderr)
+        return 2
     tz = cfg.scanner_extraction_timezone
     jobs = [(f, m) for m in models for f in files]
     print(f"{len(files)} images × {len(models)} modèle(s) …", flush=True)
     runs: list[Run] = []
     with ThreadPoolExecutor(max_workers=max(1, a.workers)) as pool:
-        for n, r in enumerate(pool.map(lambda j: run_one(j[0], j[1], out, tz, a.folder), jobs), 1):
+        for n, r in enumerate(pool.map(lambda j: _safe_run(j[0], j[1], out, tz, a.folder), jobs),
+                              1):
             runs.append(r)
             state = f"{len(r.result.entries)} entrées" if r.ok and r.result else r.error
             print(f"[{n}/{len(jobs)}] {r.model} · {r.image} · {state}", flush=True)
