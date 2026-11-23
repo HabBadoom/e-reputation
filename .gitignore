@@ -8,3 +8,6 @@ __pycache__/
 node_modules/
 .next/
 *.tsbuildinfo
+
+# Scanner: real screenshots and extraction reports (real names) stay on the local machine
+/captures/
