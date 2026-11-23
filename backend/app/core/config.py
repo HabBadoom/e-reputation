@@ -151,6 +151,14 @@ class Settings(BaseSettings):
     scanner_upload_max_side: int = Field(default=12_000, ge=100)
     scanner_upload_max_files_per_request: int = Field(default=20, ge=1, le=100)
     scanner_uploads_per_hour: int = Field(default=600, ge=1)
+    # Phase 4: text extraction from screenshots by a vision model (OpenAI key above). Empty model
+    # = extraction off (screenshots stay "pending"). Model ids are never hardcoded.
+    scanner_extraction_enabled: bool = True
+    scanner_extraction_model: str = ""
+    scanner_extraction_detail: Literal["high", "low", "auto"] = "high"
+    scanner_extraction_max_output_tokens: int = Field(default=8000, ge=500, le=64000)
+    scanner_extraction_min_confidence: float = Field(default=0.75, ge=0, le=1)
+    scanner_extraction_timezone: str = "Africa/Algiers"   # local time of screenshot file names
     # Built-in browser (scanner-browser service): a real Chromium shown live in the Scanner app.
     scanner_browser_enabled: bool = False
     scanner_browser_public_url: str = ""          # ws(s)://… for clients; "" = same origin

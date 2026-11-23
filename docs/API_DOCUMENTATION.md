@@ -134,6 +134,8 @@ Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Brow
 | GET | `/scanner/files/{id}/content` | Sanitised image, owner only |
 | GET / DELETE | `/scanner/browser`, `/scanner/browser/profile` | Built-in browser availability and WebSocket URL; forget the saved session |
 | WS | `/scanner/browser/ws` | Built-in browser (scanner-browser service); protocol in SCANNER.md |
+| GET / POST | `/scanner/extraction`, `/scanner/items/{id}/entries`, `/scanner/items/{id}/extract`, `/scanner/sessions/{id}/extract` | Phase 4: extraction status, entries read from a screenshot, read again, queue pending |
+| PATCH / DELETE | `/scanner/entries/{id}` | Agent correction of author or text; removal |
 | GET / POST | `/admin/scanner/accounts`, `/admin/scanner/accounts/{id}/revoke`, `/restore` | Platform admin + MFA |
 
 ## Example (API client)

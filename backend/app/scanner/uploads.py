@@ -1,9 +1,10 @@
 """Screenshot items: add (upload), list, reorder, remove, read back.
 
-Each uploaded image becomes one `screenshot` item of the collection, in `pending` status until
-extraction (phase 4). Grouping several screenshots of the same discussion is extraction's job;
-here a near-identical image is only *flagged* (`possible_duplicate_of`), never merged, and an
-exact duplicate of an image already in the collection is refused.
+Each uploaded image becomes one `screenshot` item of the collection, queued for extraction
+(phase 4) when a vision model is configured, else left `pending`. A near-identical image is
+only *flagged* (`possible_duplicate_of`), never merged, and an exact duplicate of an image
+already in the collection is refused; repeated comments across overlapping screenshots are
+linked by extraction.
 """
 
 import logging
@@ -141,6 +142,9 @@ def add_screenshots(db: Session, s: ScannerCollectionSession,
         if s.status == "draft":
             s.status = "collecting"
         s.updated_at = datetime.now(UTC)
+        from app.scanner.extraction.service import queue_items
+        queue_items(db, s.account_id, s.id,
+                    [r.item_id for r in results if r.status == "added" and r.item_id])
     return results
 
 

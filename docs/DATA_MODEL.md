@@ -139,6 +139,8 @@ Migration 0012 (screenshots):
 
 Migration 0013 (built-in browser): `scanner_browser_profiles` (account, own row only) — `account_id` PK, `state_encrypted` (Fernet: cookies and local storage of the agent's built-in browser, never passwords), `updated_at`.
 
+Migration 0014 (extraction): `scanner_extractions` (account, own rows only) — one per item: `status` (queued, running, done, failed), `model`, tokens, `captured_at`, `context` (page or group, dialog title, view), `issues`, `confidence`, `raw` (model output and prompt version), `error_code`. `scanner_extracted_entries` (account) — `kind` (post, comment, reply), `parent_id` and `duplicate_of` (composite FKs within the account), `author_name`, `author_is_page`, `text`, `image_text`, `script`, `text_truncated`, `partially_visible`, `relative_time`, `published_at` + `published_precision`, counters, `dedup_key`, `edited_by_agent`. The API role may update only `author_name`, `text` (agent corrections) and the links.
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

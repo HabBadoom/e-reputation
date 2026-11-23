@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     LargeBinary,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -982,6 +983,75 @@ class ScannerUploadedFile(Base):
     dhash: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = _created()
     retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ScannerExtraction(Base):
+    """Latest extraction run of one screenshot item (0014)."""
+    __tablename__ = "scanner_extractions"
+    __table_args__ = (
+        ForeignKeyConstraint(["account_id", "item_id"], ["scanner_collection_items.account_id",
+                                                         "scanner_collection_items.id"],
+                             ondelete="CASCADE"),
+        ForeignKeyConstraint(["account_id", "session_id"],
+                             ["scanner_collection_sessions.account_id",
+                              "scanner_collection_sessions.id"], ondelete="CASCADE"),
+    )
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    model: Mapped[str | None] = mapped_column(String(100))
+    attempts: Mapped[int] = mapped_column(default=0)
+    input_tokens: Mapped[int] = mapped_column(default=0)
+    output_tokens: Mapped[int] = mapped_column(default=0)
+    captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    context: Mapped[dict] = mapped_column(JSONB, default=dict)
+    issues: Mapped[list] = mapped_column(JSONB, default=list)
+    confidence: Mapped[float | None] = mapped_column(Numeric(3, 2, asdecimal=False))
+    raw: Mapped[dict | None] = mapped_column(JSONB)
+    error_code: Mapped[str | None] = mapped_column(String(50))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class ScannerExtractedEntry(Base):
+    """A post, comment or reply read from a screenshot (0014). Collection data only."""
+    __tablename__ = "scanner_extracted_entries"
+    __table_args__ = (
+        ForeignKeyConstraint(["account_id", "item_id"], ["scanner_collection_items.account_id",
+                                                         "scanner_collection_items.id"],
+                             ondelete="CASCADE"),
+        ForeignKeyConstraint(["account_id", "session_id"],
+                             ["scanner_collection_sessions.account_id",
+                              "scanner_collection_sessions.id"], ondelete="CASCADE"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    position: Mapped[int] = mapped_column()
+    kind: Mapped[str] = mapped_column(String(10))
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    author_name: Mapped[str] = mapped_column(String(200), default="")
+    author_is_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    text: Mapped[str] = mapped_column(Text, default="")
+    image_text: Mapped[str] = mapped_column(Text, default="")
+    script: Mapped[str] = mapped_column(String(10), default="none")
+    text_truncated: Mapped[bool] = mapped_column(Boolean, default=False)
+    partially_visible: Mapped[bool] = mapped_column(Boolean, default=False)
+    relative_time: Mapped[str] = mapped_column(String(60), default="")
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_precision: Mapped[str | None] = mapped_column(String(10))
+    reactions_count: Mapped[int | None] = mapped_column()
+    comments_count: Mapped[int | None] = mapped_column()
+    shares_count: Mapped[int | None] = mapped_column()
+    dedup_key: Mapped[str] = mapped_column(String(64))
+    duplicate_of: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    edited_by_agent: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
 
 
 class ScannerBrowserProfile(Base):

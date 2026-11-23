@@ -90,6 +90,10 @@ jobs:
                 -v ON_ERROR_STOP=1 -f tests/sql/test_rls_scanner_uploads.sql)
           echo "$out"
           echo "$out" | grep -q "ALL SCANNER UPLOAD RLS TESTS PASSED"
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_scanner_extraction.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL SCANNER EXTRACTION RLS TESTS PASSED"
       - name: Headless Chromium for PDF reports
         run: uv run playwright install --with-deps chromium
       - name: RustFS for the Scanner storage test (S3-compatible, private bucket)

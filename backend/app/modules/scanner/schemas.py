@@ -104,10 +104,21 @@ class UploadedFileOut(BaseModel):
     url: str             # authenticated Scanner API URL; files are never public
 
 
+class ExtractionOut(BaseModel):
+    """Phase 4: how the screenshot was read (no analysis)."""
+    status: Literal["queued", "running", "done", "failed"]
+    confidence: float | None
+    issues: list[str]
+    context: dict[str, str]
+    entries: int
+    model: str | None
+
+
 class ItemOut(BaseModel):
     id: uuid.UUID
     source_type: str
     status: str
+    error_code: str | None = None
     platform: str | None
     content_type: str | None
     position: int
@@ -115,6 +126,44 @@ class ItemOut(BaseModel):
     possible_duplicate_of: uuid.UUID | None
     created_at: datetime
     file: UploadedFileOut | None
+    extraction: ExtractionOut | None = None
+
+
+class EntryOut(BaseModel):
+    """A post, comment or reply read from a screenshot, as the agent can review it."""
+    id: uuid.UUID
+    item_id: uuid.UUID
+    position: int
+    kind: Literal["post", "comment", "reply"]
+    parent_id: uuid.UUID | None
+    author_name: str
+    author_is_page: bool
+    text: str
+    image_text: str
+    script: str
+    text_truncated: bool
+    partially_visible: bool
+    relative_time: str
+    published_at: datetime | None
+    published_precision: str | None
+    reactions_count: int | None
+    comments_count: int | None
+    shares_count: int | None
+    duplicate_of: uuid.UUID | None
+    edited_by_agent: bool
+
+
+class EntryPatch(BaseModel):
+    author_name: str | None = Field(default=None, max_length=200)
+    text: str | None = Field(default=None, max_length=20000)
+
+
+class ExtractionInfoOut(BaseModel):
+    enabled: bool
+
+
+class QueuedOut(BaseModel):
+    queued: int
 
 
 class FileResultOut(BaseModel):

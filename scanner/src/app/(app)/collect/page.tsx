@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { RemoteBrowser } from "@/components/remote-browser";
@@ -33,7 +34,17 @@ export default function CollectPage() {
     queryKey: ["items", s?.id],
     queryFn: () => api.get<CollectionItem[]>(`/sessions/${s!.id}/items`),
     enabled: !!s,
+    // Screenshots being read update by themselves.
+    refetchInterval: (q) => (q.state.data?.some((i) => i.status === "processing") ? 3000 : false),
   });
+  const extractionOn = useQuery({ queryKey: ["extraction"], queryFn: () => api.get<{ enabled: boolean }>("/extraction") });
+  const extractPending = useMutation({
+    mutationFn: (id: string) => api.post<{ queued: number }>(`/sessions/${id}/extract`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["items"] }),
+  });
+  useEffect(() => {        // counters follow the screenshots being read
+    if (items.dataUpdatedAt) qc.invalidateQueries({ queryKey: ["session", "current"] });
+  }, [items.dataUpdatedAt, qc]);
 
   return (
     <div className="space-y-6">
@@ -85,7 +96,14 @@ export default function CollectPage() {
           <p className="text-xs text-ink-mute">{t("collect.started", { date: fmtDate(s.created_at) })}</p>
           <div className="mt-4">
             {items.isLoading ? <Spinner /> : <ItemsGrid session={s} items={items.data ?? []} />}
-            <ErrorBanner error={items.error} />
+            <ErrorBanner error={items.error ?? extractPending.error} />
+            {s.is_open && extractionOn.data?.enabled &&
+              items.data?.some((i) => i.source_type === "screenshot" && (i.status === "pending" || i.status === "failed")) && (
+              <Button variant="ghost" className="mt-3" disabled={extractPending.isPending}
+                      onClick={() => extractPending.mutate(s.id)}>
+                {t("collect.extractPending")}
+              </Button>
+            )}
           </div>
           <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {([

@@ -1,9 +1,9 @@
 # Aynpulse Scanner
 
-Status: **Phases 1 (foundation), 2 (AnyPulse access) and 3 (screenshots: built-in browser and
-upload) implemented.**
-Extraction (OCR), URL collection and transmission to AnyPulse are not built yet; their actions
-are shown disabled with a note.
+Status: **Phases 1 (foundation), 2 (AnyPulse access), 3 (screenshots: built-in browser and
+upload) and 4 (extraction by a vision model, review screen) implemented.**
+URL collection and transmission to AnyPulse are not built yet; their actions are shown disabled
+with a note.
 
 > Scanner collects. AnyPulse understands, analyses and reports.
 
@@ -22,6 +22,7 @@ to a collection and send it to AnyPulse. They never see analyses and never choos
 | Destination (option A) | The collections of all agents go to a **central RepIntel space**; RepIntel's AI attributes each one to a brand, hence to a customer, afterwards (transmission: phase 7) |
 | Login | Required before the first upload; no anonymous collection |
 | Main collection action | The **built-in browser**: the agent opens Facebook (or another network) inside Scanner, signs in with a **dedicated collection account** and captures what they see. Importing screenshots already taken is the fallback. Credentials are handled by each agent; the signed-in session is kept encrypted (cookies only, never the password) |
+| Extraction (D5) | A **vision AI model** (OpenAI, model id from configuration) reads each screenshot: posts, comments, replies, authors, times, counters, text inside images. Images are sent to the provider. Chosen by the product owner on 2026-11-23 |
 | Storage | Private S3-compatible object storage: **RustFS** in development and CI (MinIO's community edition and images were withdrawn in 2025–2026), an S3-compatible bucket at the EU host in production |
 | Priority | Scanner before the Phase 2 & 3 plan (sprints 9–15) |
 
@@ -165,6 +166,63 @@ access (checked in CI). When storage is down, the upload fails as a whole (503
 `storage_unavailable`) and nothing half-done is kept. Removing an item deletes its object after
 the database commit.
 
+## Extraction (phase 4)
+
+Each screenshot (uploaded or captured in the built-in browser) is queued as a `scanner.extract`
+job when extraction is configured (`REPINTEL_OPENAI_API_KEY` and
+`REPINTEL_SCANNER_EXTRACTION_MODEL`). The `worker` service runs it in the agent's Scanner context.
+
+1. **Image**: the sanitised file, as PNG. Screenshots taller than 2.6 × their width (full-page
+   captures) are cut into overlapping parts (at most 6) so small comment text stays readable.
+2. **Vision model** (`app/scanner/extraction/vision.py`): Chat Completions with Structured
+   Outputs (strict JSON schema, `schema.py`). The prompt asks for a verbatim transcription in the
+   original script (Arabic, Darija in Arabic or Latin letters, French, English, emojis), the
+   foreground only when a dialog or photo viewer is open, no interface text, and explicitly **no
+   translation, summary, opinion or sentiment**. Prompt version `scanner-extract-v1` is stored
+   with each result.
+3. **Checking** (`schema.parse`): unknown references are dropped, never guessed; empty or
+   sticker-only comments are skipped; replies are linked to their comment and comments to their
+   post (`parent_id`).
+4. **Dates** (`dates.py`): the capture time comes from the file name when it carries one
+   (Windows "Capture d'écran 2026-11-23 064458", WhatsApp, Android, iOS, Scanner's own captures),
+   else the upload time. Relative labels ("9 h", "1 j", "2 sem.", "Hier à 14:05", "21 novembre",
+   Arabic forms) become `published_at` with a precision (minute … year); the label itself is kept.
+5. **Duplicates across screenshots** (`text.py`): the same author + text (after normalising Arabic
+   letter variants, diacritics, punctuation, emojis and spacing) in another screenshot of the
+   collection is linked with `duplicate_of` and not counted. A copy cut by the screen edge or by
+   "voir plus" is linked to the full one, whichever came first.
+6. **Status**: `ready`, or `needs_review` when confidence is below
+   `REPINTEL_SCANNER_EXTRACTION_MIN_CONFIDENCE`, or when parts are unreadable, the image is not a
+   social network or no text was found; `failed` with `error_code` (`quota_exceeded`,
+   `auth_failed`, `model_not_found`, …). Temporary provider errors are retried (4 attempts).
+
+Script (`arabic`, `latin`, `mixed`) is detected from the letters only; no language, topic or
+sentiment is attached in Scanner.
+
+**Review screen** (`/collect/items/{id}`): the image next to the entries (post, comments,
+indented replies), with time, counters and flags (cut by "voir plus", cut by the edge, already in
+another screenshot, corrected). The agent fixes an author or a text (only those two fields can be
+changed, enforced by column grants) or deletes an entry that is not content. "Relire la capture"
+reads it again and replaces the entries.
+
+### Extraction benchmark
+
+Compare models on real screenshots before choosing one (no database, nothing stored in Scanner):
+
+```bash
+docker compose run --rm --no-deps -v "$PWD/captures:/captures" migrate \
+  python -m app.scanner.extraction.bench /captures \
+  --model gpt-6.1-terra --model gpt-6-luna \
+  --price gpt-6.1-terra=1,5 --price gpt-6-luna=0.10,0.50
+```
+
+It writes `captures/rapport-extraction/index.html` (each image next to what each model read,
+duration, tokens, estimated cost per 1,000 captures) and the raw JSON per image. With
+`captures/attendu/<image name>.json` (`{"entries": [{"author": "...", "text": "..."}]}`, written
+by hand), each model is scored: entries found / missed / extra, exact authors and texts,
+character error rate. Prices are in USD per million tokens, from the provider's pricing page.
+Expected-text files contain real names: keep them out of git.
+
 ## API
 
 | Method | Path | Notes |
@@ -184,6 +242,12 @@ the database commit.
 | PUT | `/scanner/sessions/{id}/items/order` | `{item_ids}`: every item exactly once (409 `invalid_order`) |
 | DELETE | `/scanner/items/{id}` | Removes the item and its file (open collections only) |
 | GET | `/scanner/files/{id}/content` | The sanitised image, owner only |
+| GET | `/scanner/extraction` | `{enabled}` |
+| GET | `/scanner/items/{id}/entries` | Entries read from the screenshot, in reading order |
+| POST | `/scanner/items/{id}/extract` | Read again (replaces entries and corrections); 409 `extraction_disabled`; rate-limited |
+| POST | `/scanner/sessions/{id}/extract` | Queue every screenshot still `pending` or `failed` → `{queued}` |
+| PATCH | `/scanner/entries/{id}` | `{author_name?, text?}`: agent correction (`edited_by_agent`) |
+| DELETE | `/scanner/entries/{id}` | Remove an entry that is not content (204) |
 | GET | `/scanner/browser` | `{enabled, ws_url, has_saved_session, saved_at}` |
 | DELETE | `/scanner/browser/profile` | Forget the saved browser session (204) |
 | WS | `/scanner/browser/ws` | scanner-browser service. Client → `start {session_id, width, height, mobile, url?}`, `navigate {url}`, `click {x, y}`, `scroll {dx, dy}`, `type {text}`, `key {key}` (whitelist), `back`, `forward`, `reload`, `capture`. Server → binary JPEG frames, `ready`, `url {url, title, platform}`, `captured {result}`, `error {code}`, `closed {reason}`. Close codes 4401 (not signed in), 4403 (wrong origin) |
@@ -222,11 +286,17 @@ Platform administration (`/api/v1/admin/scanner/*`, platform admin + MFA):
 | `REPINTEL_SCANNER_BROWSER_MAX_SESSIONS` | `4` | Live browsers per service instance (≈ 500 MB RAM each) |
 | `REPINTEL_SCANNER_BROWSER_IDLE_SECONDS` | `600` | Closes an unused browser |
 | `REPINTEL_SCANNER_BROWSER_MAX_STATE_BYTES` | `2000000` | Saved session size cap (local storage dropped first) |
+| `REPINTEL_SCANNER_EXTRACTION_MODEL` | empty | Vision model id (OpenAI); empty = extraction off, screenshots stay `pending` |
+| `REPINTEL_SCANNER_EXTRACTION_DETAIL` | `high` | Image detail sent to the model |
+| `REPINTEL_SCANNER_EXTRACTION_MAX_OUTPUT_TOKENS` | `8000` | Long comment threads need room |
+| `REPINTEL_SCANNER_EXTRACTION_MIN_CONFIDENCE` | `0.75` | Below: `needs_review` |
+| `REPINTEL_SCANNER_EXTRACTION_TIMEZONE` | `Africa/Algiers` | Local time of screenshot file names and of dates without a zone |
 
 Local development: `docker compose up --build`, then http://localhost:3001 (Scanner) and
 http://localhost:3000 (AnyPulse). The `rustfs` service provides S3-compatible storage on
 port 9000; the development bucket is created automatically. `scanner-browser` listens on
-port 8100 (the Scanner app connects to it directly in development).
+port 8100 (the Scanner app connects to it directly in development). Extraction runs in the `worker` service: to try Scanner alone,
+`docker compose up --build scanner-web scanner-browser worker`.
 
 ## Phases
 
@@ -236,13 +306,17 @@ port 8100 (the Scanner app connects to it directly in development).
 | 1 | Foundation: accounts, auth, sessions, RLS, web app shell, CI, docs | Done |
 | 2 | AnyPulse access granted at sign-up; platform-admin revocation | Done |
 | 3 | Screenshots: built-in browser with saved session (main action) and upload (drag and drop, camera, progress, retry, reorder, remove, duplicates, sanitisation, private storage) | **Done** |
-| 4 | Extraction: preprocessing, OCR + vision, platform detection, threads, dedup, confidence, review screen | Next |
+| 4 | Extraction by a vision model: parts for tall images, threads, dates, duplicates across screenshots, confidence, review and correction screen, benchmark | **Done** |
 | 5 | URL connectors (YouTube official API first; Apify behind the legal-review gate) and Excel import | Planned |
 | 6 | Normalisation, history, retention and cleanup of stored files | Planned |
 | 7 | Transmission to the central RepIntel space: ingest API, idempotency, retries, acknowledgement; brand attribution by RepIntel's AI | Planned |
 | 8–9 | Hardening, production deployment (Caddy host for Scanner with the WebSocket route, `--profile scanner`, bucket) | Planned |
 
 ## Known limitations
+
+- Extraction: a reply whose parent comment is in another screenshot is attached to the post, not
+  to that comment. Text hidden behind "voir plus" is not fetched: open the comment, then capture.
+  Correcting a text does not re-run duplicate detection.
 
 - Built-in browser: frames are JPEG at quality 60 (captures are full-quality PNG). Mobile
   keyboards that do not report Backspace use the Erase button. No copy/paste from the phone's

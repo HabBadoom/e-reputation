@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Aynpulse Scanner, Phase 4: extraction
+
+### Added
+- Screenshots are read by a vision model (OpenAI Structured Outputs, model from `REPINTEL_SCANNER_EXTRACTION_MODEL`) in a `scanner.extract` background job: posts, comments and replies with authors, times, counters and text inside images, verbatim in the original script; no analysis.
+- Migration 0014: `scanner_extractions`, `scanner_extracted_entries` (RLS per account; only author and text correctable).
+- Capture time from screenshot file names; relative and absolute Facebook times converted with their precision; duplicates across overlapping screenshots linked and not counted; tall captures sent in overlapping parts.
+- Review screen in the Scanner app (image next to the entries, corrections, removal, read again) and live statuses on the collection screen.
+- `python -m app.scanner.extraction.bench`: compares models on a folder of screenshots (HTML report, cost, scores against hand-written expected text).
+
 ## Unreleased — Aynpulse Scanner, Phase 3: built-in browser and screenshot upload
 
 ### Added

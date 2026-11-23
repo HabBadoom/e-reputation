@@ -178,3 +178,20 @@ def ai_task(db: Session, job: Job) -> None:
 def platform_daily(db: Session, job: Job) -> None:
     from app.billing.maintenance import run_daily
     run_daily()
+
+
+@handler("scanner.extract")
+def scanner_extract(db: Session, job: Job) -> None:
+    """Read one Scanner screenshot with the vision model (phase 4), in the agent's context."""
+    import uuid
+
+    from app.db.session import set_scanner_context
+    from app.scanner.extraction import service
+    try:
+        account_id = uuid.UUID(job.payload["account_id"])
+        item_id = uuid.UUID(job.payload["item_id"])
+    except (KeyError, ValueError) as e:
+        raise PermanentJobError("malformed scanner.extract payload") from e
+    set_scanner_context(db, account_id=account_id)
+    service.run(db, item_id, attempt=job.attempts,
+                last_attempt=job.attempts >= job.max_attempts)

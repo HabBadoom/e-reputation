@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Button } from "@/components/ui";
@@ -8,7 +9,7 @@ import {
   ACCEPTED_TYPES, ApiError, api, uploadScreenshots,
   type CollectionItem, type CollectionSession, type FileResult, type UploadResult,
 } from "@/lib/api";
-import { hasMessage } from "@/lib/i18n";
+import { hasMessage, type MessageKey } from "@/lib/i18n";
 
 type QueueState = "uploading" | "added" | "duplicate" | "rejected" | "error";
 
@@ -197,6 +198,13 @@ export function ItemsGrid({ session, items }: { session: CollectionSession; item
           </div>
           <div className="space-y-1 p-2">
             <p className="truncate" title={it.file?.original_filename}>{it.file?.original_filename || t("items.screenshot")}</p>
+            <ItemStatus item={it} />
+            {it.extraction?.status === "done" && (
+              <Link href={`/collect/items/${it.id}?s=${session.id}&n=${i + 1}`}
+                    className="inline-block font-medium text-brand hover:underline">
+                {t("items.review")} · {t("items.entries", { n: it.extraction.entries })}
+              </Link>
+            )}
             {it.possible_duplicate_of && (
               <p className="text-signal-warn">{t("items.possibleDuplicate", { n: byId.get(it.possible_duplicate_of) ?? "?" })}</p>
             )}
@@ -216,5 +224,27 @@ export function ItemsGrid({ session, items }: { session: CollectionSession; item
         </li>
       ))}
     </ol>
+  );
+}
+
+const STATUS_TONE: Record<CollectionItem["status"], string> = {
+  pending: "text-ink-mute",
+  processing: "text-signal-info",
+  ready: "text-signal-pos",
+  needs_review: "text-signal-warn",
+  failed: "text-signal-neg",
+};
+
+export function ItemStatus({ item }: { item: CollectionItem }) {
+  const { t } = useI18n();
+  const err = item.status === "failed" && item.error_code ? `upload.err.${item.error_code}` : null;
+  return (
+    <p className={`flex items-center gap-1 ${STATUS_TONE[item.status]}`} role="status">
+      {item.status === "processing" && (
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-current" aria-hidden />
+      )}
+      {t(`itemStatus.${item.status}` as MessageKey)}
+      {err && hasMessage(err) && <span className="text-ink-mute">— {t(err as MessageKey)}</span>}
+    </p>
   );
 }

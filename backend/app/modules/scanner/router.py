@@ -24,8 +24,13 @@ from app.modules.scanner.schemas import (
     CollectionSessionPage,
     CollectionSessionPatch,
     CountersOut,
+    EntryOut,
+    EntryPatch,
+    ExtractionInfoOut,
+    ExtractionOut,
     FileResultOut,
     ItemOut,
+    QueuedOut,
     ReorderIn,
     ScannerLoginIn,
     ScannerMeOut,
@@ -45,6 +50,8 @@ from app.scanner.deps import (
     ScannerContext,
     get_scanner_auth,
 )
+from app.scanner.extraction import service as extraction
+from app.scanner.extraction import vision
 
 router = APIRouter(prefix="/scanner", tags=["scanner"])
 REFRESH_PATH = "/api/v1/scanner/auth"
@@ -223,7 +230,9 @@ def anypulse_access(ctx: ScannerContext = Depends(get_scanner_auth),
 # ---- screenshots (phase 3) -------------------------------------------------------------------
 def _items(db: Session, session_id: uuid.UUID) -> list[ItemOut]:
     out = []
-    for item, f in uploads.list_items(db, session_id):
+    rows = uploads.list_items(db, session_id)
+    ex = extraction.summary(db, [item.id for item, _ in rows])
+    for item, f in rows:
         fo = None if f is None else UploadedFileOut(
             id=f.id, original_filename=f.original_filename, mime_type=f.mime_type,
             width=f.width, height=f.height, size_bytes=f.size_bytes,
@@ -232,7 +241,8 @@ def _items(db: Session, session_id: uuid.UUID) -> list[ItemOut]:
                            platform=item.platform, content_type=item.content_type,
                            position=item.position, source_url=item.source_url,
                            possible_duplicate_of=item.possible_duplicate_of,
-                           created_at=item.created_at, file=fo))
+                           created_at=item.created_at, file=fo, error_code=item.error_code,
+                           extraction=ExtractionOut(**ex[item.id]) if item.id in ex else None))
     return out
 
 
@@ -291,6 +301,87 @@ def remove_item(item_id: uuid.UUID, request: Request,
     db.commit()
     uploads.delete_objects(keys)   # after commit: never delete a file still referenced
     return _one(db, s)
+
+
+# ---- extraction and review (phase 4) ---------------------------------------------------------
+def _entry_out(e) -> EntryOut:  # noqa: ANN001
+    return EntryOut.model_validate(e, from_attributes=True)
+
+
+@router.get("/extraction", response_model=ExtractionInfoOut)
+def extraction_info(ctx: ScannerContext = Depends(get_scanner_auth)) -> ExtractionInfoOut:
+    return ExtractionInfoOut(enabled=vision.configured())
+
+
+@router.get("/items/{item_id}/entries", response_model=list[EntryOut])
+def item_entries(item_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner_auth),
+                 db: Session = Depends(get_db)) -> list[EntryOut]:
+    """What was read from one screenshot, in reading order (posts, comments, replies)."""
+    item = uploads.get_item(db, item_id)
+    return [_entry_out(e) for e in extraction.entries_of(db, item.id)]
+
+
+@router.post("/items/{item_id}/extract", response_model=list[ItemOut])
+def reextract_item(item_id: uuid.UUID, request: Request,
+                   ctx: ScannerContext = Depends(get_scanner_auth),
+                   db: Session = Depends(get_db)) -> list[ItemOut]:
+    """Read the screenshot again (after a failure, or if the result looks wrong). Corrections
+    made on its entries are replaced."""
+    item = uploads.get_item(db, item_id)
+    s = uploads.require_open(sessions.get(db, item.session_id))
+    if not vision.configured():
+        raise AppError("Extraction is not configured", code="extraction_disabled",
+                       status_code=409)
+    get_limiter().hit(f"scanner:extract:{ctx.account_id}", 120, 3600)
+    extraction.queue_items(db, ctx.account_id, s.id, [item.id])
+    record(db, account_id=ctx.account_id, action="item.extraction_requested",
+           target_type="collection_item", target_id=item.id, request=request)
+    db.commit()
+    return _items(db, s.id)
+
+
+@router.post("/sessions/{session_id}/extract", response_model=QueuedOut)
+def extract_pending(session_id: uuid.UUID, ctx: ScannerContext = Depends(get_scanner_auth),
+                    db: Session = Depends(get_db)) -> QueuedOut:
+    """Queue every screenshot of the collection that was never read or whose reading failed
+    (e.g. added before extraction was configured)."""
+    s = uploads.require_open(sessions.get(db, session_id))
+    if not vision.configured():
+        raise AppError("Extraction is not configured", code="extraction_disabled",
+                       status_code=409)
+    ids = [item.id for item, _ in uploads.list_items(db, s.id)
+           if item.source_type == "screenshot" and item.status in ("pending", "failed")]
+    n = extraction.queue_items(db, ctx.account_id, s.id, ids)
+    db.commit()
+    return QueuedOut(queued=n)
+
+
+@router.patch("/entries/{entry_id}", response_model=EntryOut)
+def correct_entry(entry_id: uuid.UUID, body: EntryPatch, request: Request,
+                  ctx: ScannerContext = Depends(get_scanner_auth),
+                  db: Session = Depends(get_db)) -> EntryOut:
+    """The agent fixes a name or a text the model misread (collection data, not analysis)."""
+    e = extraction.get_entry(db, entry_id)
+    uploads.require_open(sessions.get(db, e.session_id))
+    if extraction.correct(e, author_name=body.author_name, text_value=body.text):
+        record(db, account_id=ctx.account_id, action="entry.corrected",
+               target_type="extracted_entry", target_id=e.id, request=request)
+    db.commit()
+    return _entry_out(e)
+
+
+@router.delete("/entries/{entry_id}", status_code=204)
+def delete_entry(entry_id: uuid.UUID, request: Request,
+                 ctx: ScannerContext = Depends(get_scanner_auth),
+                 db: Session = Depends(get_db)) -> Response:
+    """Remove an entry that is not content (interface text read by mistake, an ad…)."""
+    e = extraction.get_entry(db, entry_id)
+    uploads.require_open(sessions.get(db, e.session_id))
+    db.delete(e)
+    record(db, account_id=ctx.account_id, action="entry.removed",
+           target_type="extracted_entry", target_id=entry_id, request=request)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/files/{file_id}/content")

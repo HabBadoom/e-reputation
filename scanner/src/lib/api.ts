@@ -137,6 +137,41 @@ export interface CollectionItem {
   possible_duplicate_of: string | null;
   created_at: string;
   file: UploadedFile | null;
+  error_code: string | null;
+  extraction: ExtractionSummary | null;
+}
+
+// Phase 4: what was read from a screenshot (collection data, no analysis).
+export interface ExtractionSummary {
+  status: "queued" | "running" | "done" | "failed";
+  confidence: number | null;
+  issues: string[];
+  context: { view?: string; page_or_group?: string; dialog_title?: string };
+  entries: number;
+  model: string | null;
+}
+
+export interface ExtractedEntry {
+  id: string;
+  item_id: string;
+  position: number;
+  kind: "post" | "comment" | "reply";
+  parent_id: string | null;
+  author_name: string;
+  author_is_page: boolean;
+  text: string;
+  image_text: string;
+  script: "arabic" | "latin" | "mixed" | "none";
+  text_truncated: boolean;
+  partially_visible: boolean;
+  relative_time: string;
+  published_at: string | null;
+  published_precision: "minute" | "hour" | "day" | "week" | "month" | "year" | null;
+  reactions_count: number | null;
+  comments_count: number | null;
+  shares_count: number | null;
+  duplicate_of: string | null;
+  edited_by_agent: boolean;
 }
 
 export interface FileResult {
