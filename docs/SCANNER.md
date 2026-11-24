@@ -23,6 +23,7 @@ to a collection and send it to AnyPulse. They never see analyses and never choos
 | Login | Required before the first upload; no anonymous collection |
 | Main collection action | The **built-in browser**: the agent opens Facebook (or another network) inside Scanner, signs in with a **dedicated collection account** and captures what they see. Importing screenshots already taken is the fallback. Credentials are handled by each agent; the signed-in session is kept encrypted (cookies only, never the password) |
 | Extraction (D5) | A **vision AI model** (OpenAI, model id from configuration) reads each screenshot: posts, comments, replies, authors, times, counters, text inside images. Images are sent to the provider. Chosen by the product owner on 2026-11-23 |
+| Validation before sending (phase 7) | Not required: the agent may send screenshots that were not validated; they reach AnyPulse marked as not validated (decided 2026-11-24) |
 | Storage | Private S3-compatible object storage: **RustFS** in development and CI (MinIO's community edition and images were withdrawn in 2025–2026), an S3-compatible bucket at the EU host in production |
 | Priority | Scanner before the Phase 2 & 3 plan (sprints 9–15) |
 
