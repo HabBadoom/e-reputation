@@ -2,18 +2,18 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { RemoteBrowser } from "@/components/remote-browser";
 import { ItemsGrid, ScreenshotDropzone } from "@/components/screenshots";
-import { api, type AnyPulseAccess, type CollectionItem, type CollectionSession } from "@/lib/api";
+import { api, openLinkInBrowser, type AnyPulseAccess, type CollectionItem, type CollectionSession, type LinkResult } from "@/lib/api";
 import type { MessageKey } from "@/lib/i18n";
 
 // Screenshot first. Main action: the built-in browser (the agent signs in to the dedicated
-// account and captures what they see); importing screenshots already taken is the fallback; the
-// URL option comes last. Every capture lands in the same current collection. URL collection
-// (phase 5) and sending (phase 7) are shown disabled with a note, never as buttons that do nothing.
+// account and captures what they see); importing screenshots already taken is the fallback; a
+// pasted link is recorded and opened in the browser, its captures attached to it (phase 5).
+// Sending (phase 7) is shown disabled with a note, never as a button that does nothing.
 export default function CollectPage() {
   const { t, fmtDate } = useI18n();
   const qc = useQueryClient();
@@ -63,10 +63,7 @@ export default function CollectPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" disabled aria-describedby="url-not-yet">{t("collect.addUrl")}</Button>
-        <span id="url-not-yet" className="text-xs text-ink-mute">{t("collect.urlNotYet")}</span>
-      </div>
+      {s && <LinkForm session={s} />}
 
       {access.data?.state === "revoked" && (
         <div role="alert" className="rounded border border-signal-neg/30 bg-signal-neg/5 px-4 py-3 text-sm text-signal-neg">
@@ -147,5 +144,37 @@ export default function CollectPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+function LinkForm({ session }: { session: CollectionSession }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const [url, setUrl] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  const add = useMutation({
+    mutationFn: (u: string) => api.post<LinkResult>(`/sessions/${session.id}/links`, { url: u }),
+    onSuccess: (r) => {
+      setUrl("");
+      setNote(r.created ? null : t("collect.linkAlready"));
+      qc.invalidateQueries({ queryKey: ["items", session.id] });
+      qc.invalidateQueries({ queryKey: ["session", "current"] });
+      openLinkInBrowser(r.item_id);
+    },
+  });
+  return (
+    <form className="space-y-1" onSubmit={(e) => { e.preventDefault(); if (url.trim()) add.mutate(url.trim()); }}>
+      <label htmlFor="link-input" className="text-sm font-medium text-ink-soft">{t("collect.linkLabel")}</label>
+      <div className="flex flex-wrap gap-2">
+        <input id="link-input" className="field min-w-0 flex-1" dir="ltr" inputMode="url" autoComplete="off"
+               placeholder="https://www.facebook.com/…" value={url} disabled={!session.is_open}
+               onChange={(e) => { setUrl(e.target.value); setNote(null); }} />
+        <Button type="submit" variant="ghost" disabled={!session.is_open || !url.trim() || add.isPending}>
+          {t("collect.linkAdd")}
+        </Button>
+      </div>
+      <p className="text-xs text-ink-mute">{note ?? t("collect.linkHint")}</p>
+      <ErrorBanner error={add.error} />
+    </form>
   );
 }

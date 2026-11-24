@@ -139,6 +139,22 @@ export interface CollectionItem {
   file: UploadedFile | null;
   error_code: string | null;
   extraction: ExtractionSummary | null;
+  link_item_id: string | null;
+  captures: number | null;
+}
+
+// Phase 5: a pasted link, recorded in the collection and opened in the built-in browser.
+export interface LinkResult {
+  item_id: string;
+  url: string;
+  platform: string | null;
+  created: boolean;
+}
+
+/** Ask the built-in browser to open a pasted link and attach the next captures to it. */
+export const OPEN_LINK_EVENT = "scanner:open-link";
+export function openLinkInBrowser(itemId: string) {
+  window.dispatchEvent(new CustomEvent(OPEN_LINK_EVENT, { detail: { itemId } }));
 }
 
 // Phase 4: what was read from a screenshot (collection data, no analysis).

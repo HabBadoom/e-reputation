@@ -964,6 +964,8 @@ class ScannerCollectionItem(Base):
     updated_at: Mapped[datetime] = _created()
     # 0012: a visually near-identical screenshot already in the collection (flag only).
     possible_duplicate_of: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    link_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # 0016
+    url_key: Mapped[str | None] = mapped_column(String(64))
 
 
 class ScannerUploadedFile(Base):

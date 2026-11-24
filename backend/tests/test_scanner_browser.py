@@ -32,7 +32,7 @@ def site():
             self.send_response(200)
             self.send_header("content-type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(PAGE)
+            self.wfile.write(PAGE + f"<p>{self.path}</p>".encode())   # differs per page
 
         def log_message(self, *a):  # noqa: ANN002
             pass

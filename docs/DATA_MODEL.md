@@ -143,6 +143,8 @@ Migration 0014 (extraction): `scanner_extractions` (account, own rows only) — 
 
 Migration 0015: `scanner_extractions.validated_at` — set when the agent validates the reading on the review screen; cleared when the screenshot is read again.
 
+Migration 0016 (links): `scanner_collection_items.link_item_id` (capture taken from a pasted link; composite FK within the account, `ON DELETE SET NULL`), `url_key` (SHA-256 of the normalised address; required for `url` items, unique per collection).
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

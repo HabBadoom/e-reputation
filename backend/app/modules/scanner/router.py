@@ -30,6 +30,8 @@ from app.modules.scanner.schemas import (
     ExtractionOut,
     FileResultOut,
     ItemOut,
+    LinkIn,
+    LinkOut,
     QueuedOut,
     ReorderIn,
     ScannerLoginIn,
@@ -42,7 +44,7 @@ from app.modules.scanner.schemas import (
     ValidateIn,
 )
 from app.scanner import auth as service
-from app.scanner import sessions, uploads
+from app.scanner import links, sessions, uploads
 from app.scanner.audit import record
 from app.scanner.deps import (
     ACCESS_COOKIE,
@@ -233,6 +235,7 @@ def _items(db: Session, session_id: uuid.UUID) -> list[ItemOut]:
     out = []
     rows = uploads.list_items(db, session_id)
     ex = extraction.summary(db, [item.id for item, _ in rows])
+    caps = links.capture_counts(db, [item.id for item, _ in rows if item.source_type == "url"])
     for item, f in rows:
         fo = None if f is None else UploadedFileOut(
             id=f.id, original_filename=f.original_filename, mime_type=f.mime_type,
@@ -243,7 +246,9 @@ def _items(db: Session, session_id: uuid.UUID) -> list[ItemOut]:
                            position=item.position, source_url=item.source_url,
                            possible_duplicate_of=item.possible_duplicate_of,
                            created_at=item.created_at, file=fo, error_code=item.error_code,
-                           extraction=ExtractionOut(**ex[item.id]) if item.id in ex else None))
+                           extraction=ExtractionOut(**ex[item.id]) if item.id in ex else None,
+                           link_item_id=item.link_item_id,
+                           captures=caps.get(item.id, 0) if item.source_type == "url" else None))
     return out
 
 
@@ -339,6 +344,24 @@ def reextract_item(item_id: uuid.UUID, request: Request,
            target_type="collection_item", target_id=item.id, request=request)
     db.commit()
     return _items(db, s.id)
+
+
+@router.post("/sessions/{session_id}/links", response_model=LinkOut)
+def add_link(session_id: uuid.UUID, body: LinkIn, request: Request,
+             ctx: ScannerContext = Depends(get_scanner_auth),
+             db: Session = Depends(get_db)) -> LinkOut:
+    """Phase 5: the agent pastes a link. It is kept once per collection (tracking parameters
+    removed) and the app opens it in the built-in browser for capture."""
+    s = sessions.get(db, session_id)
+    get_limiter().hit(f"scanner:links:{ctx.account_id}", 300, 3600)
+    item, created = links.add(db, s, body.url)
+    if created:
+        record(db, account_id=ctx.account_id, action="link.added",
+               target_type="collection_item", target_id=item.id,
+               meta={"platform": item.platform}, request=request)
+    db.commit()
+    return LinkOut(item_id=item.id, url=item.source_url or "", platform=item.platform,
+                   created=created)
 
 
 @router.post("/items/{item_id}/validate", response_model=list[ItemOut])

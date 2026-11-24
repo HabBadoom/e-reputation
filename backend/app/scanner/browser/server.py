@@ -4,10 +4,12 @@ Run with `uvicorn app.scanner.browser.server:app --port 8100` (container `scanne
 the isolated `browser` network in production). One live browser per Scanner account.
 
 Protocol on /api/v1/scanner/browser/ws:
-  client → server (JSON): start {session_id, width, height, mobile}; navigate {url};
+  client → server (JSON): start {session_id, width, height, mobile, url?, link_item_id?};
+    link {item_id | null} (captures are attached to this pasted link, which opens); navigate {url};
     click {x, y}; scroll {dx, dy, x?, y?}; type {text}; key {key}; back; forward; reload;
     capture {full_page?}; ping
-  server → client: binary JPEG frames; JSON ready, url {url, title}, captured {result},
+  server → client: binary JPEG frames; JSON ready, url {url, title}, linked {item_id, url},
+    captured {result},
     error {code}, closed {reason}
 
 Security: the Origin must be the Scanner app's; the `sc_access` cookie must be a valid Scanner
@@ -114,8 +116,16 @@ def _open_collection(account_id: uuid.UUID, session_id: Any) -> tuple[uuid.UUID,
         return s.id, profiles.load(db, account_id)
 
 
-def _store_capture(account_id: uuid.UUID, session_id: uuid.UUID, png: bytes, url: str
-                   ) -> dict:
+def _link(account_id: uuid.UUID, session_id: uuid.UUID, item_id: Any) -> tuple[uuid.UUID, str]:
+    from app.scanner import links
+    with session_scope() as db:
+        set_scanner_context(db, account_id=account_id)
+        item = links.get_link(db, uuid.UUID(str(item_id)), session_id)
+        return item.id, item.source_url or ""
+
+
+def _store_capture(account_id: uuid.UUID, session_id: uuid.UUID, png: bytes, url: str,
+                   link_item_id: uuid.UUID | None = None) -> dict:
     cfg = get_settings()
     get_limiter().hit(f"scanner:uploads:{account_id}", cfg.scanner_uploads_per_hour, 3600)
     host = (urlsplit(url).hostname or "page").replace(".", "-")[:60]
@@ -124,11 +134,13 @@ def _store_capture(account_id: uuid.UUID, session_id: uuid.UUID, png: bytes, url
         set_scanner_context(db, account_id=account_id)
         s = sessions.get(db, session_id)
         result = uploads.add_screenshots(db, s, [(name, png)], source_url=url,
-                                         platform=platform_of(url))[0]
+                                         platform=platform_of(url),
+                                         link_item_id=link_item_id)[0]
         if result.status == "added":
             record(db, account_id=account_id, action="screenshots.added",
                    target_type="collection_session", target_id=s.id,
-                   meta={"added": 1, "via": "built_in_browser", "platform": platform_of(url)})
+                   meta={"added": 1, "via": "built_in_browser", "platform": platform_of(url),
+                         "from_link": bool(link_item_id)})
         return {"filename": result.filename, "status": result.status, "code": result.code,
                 "item_id": str(result.item_id) if result.item_id else None}
 
@@ -144,6 +156,7 @@ class Connection:
         self.ws, self.account_id, self.family_id = ws, account_id, family_id
         self.session: AgentSession | None = None
         self.collection_id: uuid.UUID | None = None
+        self.link_item_id: uuid.UUID | None = None
         self._send_lock = asyncio.Lock()
         self.ended = False
 
@@ -195,6 +208,24 @@ async def _watch(conn: Connection, idle: int, every: float = 30) -> None:
             await conn.end("session_revoked")
 
 
+async def _set_link(conn: Connection, item_id: Any, *, navigate: bool) -> None:
+    """Attach the next captures to a pasted link of the collection (None: stop) and open it."""
+    assert conn.collection_id is not None and conn.session is not None
+    if not item_id:
+        conn.link_item_id = None
+        await conn.send_json({"type": "linked", "item_id": None, "url": None})
+        return
+    try:
+        link_id, url = await asyncio.to_thread(_link, conn.account_id, conn.collection_id,
+                                               item_id)
+    except (AppError, ValueError) as e:
+        raise BrowserError("link_not_found", "Link not found in this collection") from e
+    conn.link_item_id = link_id
+    await conn.send_json({"type": "linked", "item_id": str(link_id), "url": url})
+    if navigate:
+        await conn.session.navigate(url)
+
+
 async def _handle(conn: Connection, msg: dict) -> None:
     s = conn.session
     assert s is not None
@@ -216,12 +247,14 @@ async def _handle(conn: Connection, msg: dict) -> None:
         cap = await s.capture(full_page=bool(msg.get("full_page")))
         assert conn.collection_id is not None
         result = await asyncio.to_thread(_store_capture, conn.account_id, conn.collection_id,
-                                         cap.png, cap.url)
+                                         cap.png, cap.url, conn.link_item_id)
         await conn.send_json({"type": "captured", "result": result, "url": cap.url,
                               "platform": platform_of(cap.url)})
         state = await s.storage_state()
         if state is not None:
             asyncio.ensure_future(asyncio.to_thread(_save_profile, conn.account_id, state))
+    elif kind == "link":
+        await _set_link(conn, msg.get("item_id"), navigate=True)
     elif kind == "ping":
         await conn.send_json({"type": "pong"})
     else:
@@ -265,7 +298,10 @@ async def browser_ws(ws: WebSocket) -> None:
                               "signed_in_before": state is not None})
         idle = get_settings().scanner_browser_idle_seconds
         watcher = asyncio.create_task(_watch(conn, idle))
-        if first.get("url"):
+        if first.get("link_item_id"):
+            with contextlib.suppress(BrowserError):
+                await _set_link(conn, first["link_item_id"], navigate=True)
+        elif first.get("url"):
             with contextlib.suppress(BrowserError):
                 await conn.session.navigate(str(first["url"]))
         while not conn.ended:

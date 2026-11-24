@@ -132,6 +132,19 @@ class ItemOut(BaseModel):
     created_at: datetime
     file: UploadedFileOut | None
     extraction: ExtractionOut | None = None
+    link_item_id: uuid.UUID | None = None     # capture taken from this pasted link
+    captures: int | None = None               # for a link: captures taken from it
+
+
+class LinkIn(BaseModel):
+    url: str = Field(min_length=1, max_length=4000)
+
+
+class LinkOut(BaseModel):
+    item_id: uuid.UUID
+    url: str
+    platform: str | None
+    created: bool
 
 
 class EntryOut(BaseModel):

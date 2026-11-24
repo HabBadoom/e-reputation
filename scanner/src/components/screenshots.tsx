@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Button } from "@/components/ui";
 import {
-  ACCEPTED_TYPES, ApiError, api, uploadScreenshots,
+  ACCEPTED_TYPES, ApiError, api, openLinkInBrowser, uploadScreenshots,
   type CollectionItem, type CollectionSession, type FileResult, type UploadResult,
 } from "@/lib/api";
 import { hasMessage, type MessageKey } from "@/lib/i18n";
@@ -189,6 +189,12 @@ export function ItemsGrid({ session, items }: { session: CollectionSession; item
       {items.map((it, i) => (
         <li key={it.id} className="overflow-hidden rounded border border-line bg-paper-raised text-xs">
           <div className="relative">
+            {it.source_type === "url" && (
+              <div className="flex h-36 flex-col justify-center gap-1 bg-brand/5 px-3">
+                <span className="text-lg" aria-hidden>🔗</span>
+                <span className="line-clamp-3 break-all text-[11px] text-ink-soft" dir="ltr" title={it.source_url ?? ""}>{it.source_url}</span>
+              </div>
+            )}
             {it.file && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={it.file.url} alt={it.file.original_filename} loading="lazy"
@@ -197,8 +203,27 @@ export function ItemsGrid({ session, items }: { session: CollectionSession; item
             <span className="absolute start-1.5 top-1.5 rounded bg-ink/80 px-1.5 py-0.5 text-paper">{i + 1}</span>
           </div>
           <div className="space-y-1 p-2">
-            <p className="truncate" title={it.file?.original_filename}>{it.file?.original_filename || t("items.screenshot")}</p>
-            <ItemStatus item={it} />
+            {it.source_type === "url" ? (
+              <>
+                <p className="font-medium">{t("items.link")}{it.platform && it.platform !== "web" ? ` · ${it.platform}` : ""}</p>
+                <p className={it.captures ? "text-signal-pos" : "text-ink-mute"}>
+                  {it.captures ? t("items.linkCaptures", { n: it.captures }) : t("items.linkNoCapture")}
+                </p>
+                {session.is_open && (
+                  <button className="font-medium text-brand hover:underline" onClick={() => openLinkInBrowser(it.id)}>
+                    {t("items.openLink")}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="truncate" title={it.file?.original_filename}>{it.file?.original_filename || t("items.screenshot")}</p>
+                <ItemStatus item={it} />
+                {it.link_item_id && (
+                  <p className="text-ink-mute">🔗 {t("items.fromLink", { n: byId.get(it.link_item_id) ?? "?" })}</p>
+                )}
+              </>
+            )}
             {it.extraction?.status === "done" && (
               <Link href={`/collect/items/${it.id}?s=${session.id}&n=${i + 1}`}
                     className="inline-block font-medium text-brand hover:underline">

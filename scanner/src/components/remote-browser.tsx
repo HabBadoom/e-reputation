@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent } from "react";
 import { useI18n } from "@/components/providers";
 import { Button } from "@/components/ui";
-import { api, browserSocketUrl, type BrowserInfo, type CollectionSession } from "@/lib/api";
+import { api, browserSocketUrl, OPEN_LINK_EVENT, type BrowserInfo, type CollectionSession } from "@/lib/api";
 import { hasMessage, type MessageKey } from "@/lib/i18n";
 
 // Scanner's built-in browser: a real Chromium on our servers, streamed as JPEG frames over a
@@ -36,6 +36,7 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
   const [address, setAddress] = useState("");
   const [notice, setNotice] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [link, setLink] = useState<{ id: string; url: string } | null>(null);
 
   const ws = useRef<WebSocket | null>(null);
   const screen = useRef<HTMLImageElement | null>(null);
@@ -63,7 +64,7 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
     if (frameUrl.current) URL.revokeObjectURL(frameUrl.current);
   }, []);
 
-  async function open(startUrl?: string) {
+  async function open(startUrl?: string, linkItemId?: string) {
     setNotice(null);
     setPhase("connecting");
     let i: BrowserInfo;
@@ -83,6 +84,7 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
     ws.current = sock;
     sock.onopen = () => sock.send(JSON.stringify({
       type: "start", session_id: session.id, width, height, mobile: touch, url: startUrl,
+      link_item_id: linkItemId,
     }));
     sock.onmessage = (ev) => {
       if (ev.data instanceof Blob) {
@@ -96,6 +98,8 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
       if (m.type === "ready") {
         setRemote({ width: m.width, height: m.height, mobile: m.mobile });
         setPhase("live");
+      } else if (m.type === "linked") {
+        setLink(m.item_id ? { id: m.item_id, url: m.url } : null);
       } else if (m.type === "url") {
         setUrl(m.url);
         if (document.activeElement?.id !== "browser-address") setAddress(m.url);
@@ -126,11 +130,27 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
       setCapturing(false);
       setRemote(null);
       setFrame(null);
+      setLink(null);
       if (ev.code === 4401) say("err", "browser.closed.session_revoked");
       else if (ev.code !== 1000 && ev.code !== 1005) setNotice((n) => n ?? { tone: "err", text: t("browser.err.connection") });
       qc.invalidateQueries({ queryKey: ["browser"] });
     };
   }
+
+  // A pasted link (collect page or link card) opens here; captures are attached to it.
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  useEffect(() => {
+    const onOpen = (ev: Event) => {
+      const { itemId } = (ev as CustomEvent<{ itemId: string }>).detail;
+      box.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (phaseRef.current === "live") send({ type: "link", item_id: itemId });
+      else if (phaseRef.current === "idle") void open(undefined, itemId);
+    };
+    window.addEventListener(OPEN_LINK_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_LINK_EVENT, onOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [send, session.id]);
 
   const forget = useMutation({
     mutationFn: () => api.del<void>("/browser/profile"),
@@ -246,6 +266,15 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
       )}
 
       <div className={live ? "mt-3 space-y-2" : "hidden"}>
+        {link && (
+          <div className="flex flex-wrap items-center gap-2 rounded border border-brand/30 bg-brand/5 px-3 py-1.5 text-xs">
+            <span>🔗 {t("browser.linkedTo")}</span>
+            <span className="min-w-0 flex-1 truncate font-medium" dir="ltr" title={link.url}>{link.url}</span>
+            <button className="text-ink-mute underline hover:text-ink" onClick={() => send({ type: "link", item_id: null })}>
+              {t("browser.unlink")}
+            </button>
+          </div>
+        )}
         <form className="flex items-center gap-1" dir="ltr"
               onSubmit={(e) => { e.preventDefault(); send({ type: "navigate", url: address }); }}>
           <button type="button" className="rounded px-2 py-1.5 hover:bg-paper-sunk" aria-label={t("browser.back")} onClick={() => send({ type: "back" })}>←</button>

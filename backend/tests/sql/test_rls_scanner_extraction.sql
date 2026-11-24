@@ -89,5 +89,36 @@ BEGIN
 END $$;
 SELECT 'PASS 2: only author and text are correctable';
 
+-- Links (0016): a capture points only to a link of the same account; one link per collection.
+SELECT set_config('app.scanner_account_id', :sb, true);
+DO $$
+BEGIN
+  BEGIN
+    UPDATE scanner_collection_items SET link_item_id = '5ca00000-0000-0000-0000-00000000a17e';
+    RAISE EXCEPTION 'capture linked to another account''s link';
+  EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+  INSERT INTO scanner_collection_items (id, account_id, session_id, source_type, position,
+                                        source_url, url_key)
+    VALUES (gen_random_uuid(), '5cb00000-0000-0000-0000-0000000000b1',
+            '5cb00000-0000-0000-0000-00000000b5e5', 'url', 1, 'https://facebook.com/x',
+            repeat('c', 64));
+  BEGIN
+    INSERT INTO scanner_collection_items (id, account_id, session_id, source_type, position,
+                                          source_url, url_key)
+      VALUES (gen_random_uuid(), '5cb00000-0000-0000-0000-0000000000b1',
+              '5cb00000-0000-0000-0000-00000000b5e5', 'url', 2, 'https://facebook.com/x',
+              repeat('c', 64));
+    RAISE EXCEPTION 'same link twice in one collection';
+  EXCEPTION WHEN unique_violation THEN NULL; END;
+  BEGIN
+    INSERT INTO scanner_collection_items (id, account_id, session_id, source_type, position,
+                                          source_url)
+      VALUES (gen_random_uuid(), '5cb00000-0000-0000-0000-0000000000b1',
+              '5cb00000-0000-0000-0000-00000000b5e5', 'url', 3, 'https://facebook.com/y');
+    RAISE EXCEPTION 'link without key';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+END $$;
+SELECT 'PASS 3: links stay within the account, once per collection';
+
 ROLLBACK;
 SELECT 'ALL SCANNER EXTRACTION RLS TESTS PASSED';

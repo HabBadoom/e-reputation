@@ -67,9 +67,11 @@ def _next_position(db: Session, session_id: uuid.UUID) -> int:
 
 def add_screenshots(db: Session, s: ScannerCollectionSession,
                     files: list[tuple[str, bytes]], *, source_url: str | None = None,
-                    platform: str | None = None) -> list[FileResult]:
+                    platform: str | None = None,
+                    link_item_id: uuid.UUID | None = None) -> list[FileResult]:
     """Validate, sanitise, store and attach each image. One bad file never blocks the others.
-    `source_url`/`platform` record where a capture was taken (built-in browser)."""
+    `source_url`/`platform` record where a capture was taken (built-in browser);
+    `link_item_id` the pasted link it was taken from (phase 5)."""
     cfg = get_settings()
     require_open(s)
     storage = get_storage()
@@ -117,7 +119,8 @@ def add_screenshots(db: Session, s: ScannerCollectionSession,
             db.add(ScannerCollectionItem(
                 id=item_id, account_id=s.account_id, session_id=s.id, source_type="screenshot",
                 position=position, status="pending", possible_duplicate_of=near,
-                source_url=(source_url or None) and source_url[:2000], platform=platform))
+                source_url=(source_url or None) and source_url[:2000], platform=platform,
+                link_item_id=link_item_id))
             db.flush()
             db.add(ScannerUploadedFile(
                 id=file_id, account_id=s.account_id, session_id=s.id, item_id=item_id,
@@ -142,6 +145,10 @@ def add_screenshots(db: Session, s: ScannerCollectionSession,
         if s.status == "draft":
             s.status = "collecting"
         s.updated_at = datetime.now(UTC)
+        if link_item_id is not None:           # the link now has its capture(s)
+            link = db.get(ScannerCollectionItem, link_item_id)
+            if link is not None and link.status == "pending":
+                link.status, link.updated_at = "ready", s.updated_at
         from app.scanner.extraction.service import queue_items
         queue_items(db, s.account_id, s.id,
                     [r.item_id for r in results if r.status == "added" and r.item_id])

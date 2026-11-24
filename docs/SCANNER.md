@@ -1,9 +1,9 @@
 # Aynpulse Scanner
 
 Status: **Phases 1 (foundation), 2 (AnyPulse access), 3 (screenshots: built-in browser and
-upload) and 4 (extraction by a vision model, review screen) implemented.**
-URL collection and transmission to AnyPulse are not built yet; their actions are shown disabled
-with a note.
+upload), 4 (extraction by a vision model, review and validation) and 5 (pasted links opened in
+the built-in browser) implemented.** Transmission to AnyPulse is not built yet; its action is
+shown disabled with a note.
 
 > Scanner collects. AnyPulse understands, analyses and reports.
 
@@ -167,6 +167,26 @@ access (checked in CI). When storage is down, the upload fails as a whole (503
 `storage_unavailable`) and nothing half-done is kept. Removing an item deletes its object after
 the database commit.
 
+## Links (phase 5)
+
+Under the import zone, **"Coller un lien"**: the agent pastes a link (a post or comment received
+on WhatsApp, for example). Decided by the product owner on 2026-11-24: the link is **recorded
+and opened**.
+
+- Recorded as a `url` item of the collection. Tracking parameters (`fbclid`, `mibextid`,
+  `utm_*`, `__cft__`, `si`…) and the fragment are removed; the same page pasted again
+  (`m.`/`www.`/`web.` variants, parameter order, trailing slash) is not added twice
+  (`url_key`, unique per collection) and simply opens again. Only `http`/`https` addresses,
+  without user name or password.
+- Opened in the built-in browser (already signed in to the dedicated account). While a link is
+  active, a banner shows it and every capture taken is attached to it (`link_item_id`);
+  "Détacher" stops that. The link card shows how many captures were taken from it and
+  "Ouvrir pour capturer"; a linked capture shows "depuis le lien n°…".
+- A link becomes `ready` with its first capture. Removing a link keeps its captures.
+- Scanner never fetches or scrapes the page itself: what is collected is what the agent
+  captures. Connectors that fetch content (YouTube API, Apify, Excel import) stay in the plan
+  (D6).
+
 ## Extraction (phase 4)
 
 Each screenshot (uploaded or captured in the built-in browser) is queued as a `scanner.extract`
@@ -262,13 +282,14 @@ Expected-text files contain real names: keep them out of git.
 | GET | `/scanner/extraction` | `{enabled}` |
 | GET | `/scanner/items/{id}/entries` | Entries read from the screenshot, in reading order |
 | POST | `/scanner/items/{id}/extract` | Read again (replaces entries and corrections); 409 `extraction_disabled`; rate-limited |
+| POST | `/scanner/sessions/{id}/links` | `{url}` → `{item_id, url, platform, created}`: record a pasted link (once per collection); 422 `bad_url` |
 | POST | `/scanner/items/{id}/validate` | `{validated: true|false}` (default true): the agent confirms the reading; 409 `not_extracted` before it is read |
 | POST | `/scanner/sessions/{id}/extract` | Queue every screenshot still `pending` or `failed` → `{queued}` |
 | PATCH | `/scanner/entries/{id}` | `{author_name?, text?}`: agent correction (`edited_by_agent`) |
 | DELETE | `/scanner/entries/{id}` | Remove an entry that is not content (204) |
 | GET | `/scanner/browser` | `{enabled, ws_url, has_saved_session, saved_at}` |
 | DELETE | `/scanner/browser/profile` | Forget the saved browser session (204) |
-| WS | `/scanner/browser/ws` | scanner-browser service. Client → `start {session_id, width, height, mobile, url?}`, `navigate {url}`, `click {x, y}`, `scroll {dx, dy}`, `type {text}`, `key {key}` (whitelist), `back`, `forward`, `reload`, `capture`. Server → binary JPEG frames, `ready`, `url {url, title, platform}`, `captured {result}`, `error {code}`, `closed {reason}`. Close codes 4401 (not signed in), 4403 (wrong origin) |
+| WS | `/scanner/browser/ws` | scanner-browser service. Client → `start {session_id, width, height, mobile, url?, link_item_id?}`, `link {item_id|null}`, `navigate {url}`, `click {x, y}`, `scroll {dx, dy}`, `type {text}`, `key {key}` (whitelist), `back`, `forward`, `reload`, `capture`. Server → binary JPEG frames, `ready`, `url {url, title, platform}`, `captured {result}`, `error {code}`, `closed {reason}`. Close codes 4401 (not signed in), 4403 (wrong origin) |
 
 Another account's session, item or file answers 404, like a missing one. Token mode for API
 clients: `X-Auth-Mode: token` on register/login/refresh, then `Authorization: Bearer`.
@@ -325,7 +346,8 @@ port 8100 (the Scanner app connects to it directly in development). Extraction r
 | 2 | AnyPulse access granted at sign-up; platform-admin revocation | Done |
 | 3 | Screenshots: built-in browser with saved session (main action) and upload (drag and drop, camera, progress, retry, reorder, remove, duplicates, sanitisation, private storage) | **Done** |
 | 4 | Extraction by a vision model: parts for tall images, threads, dates, duplicates across screenshots, confidence, review and correction screen, benchmark | **Done** |
-| 5 | URL connectors (YouTube official API first; Apify behind the legal-review gate) and Excel import | Planned |
+| 5 | Pasted links recorded and opened in the built-in browser, captures attached to them | **Done** |
+| 5b | URL connectors (YouTube official API first; Apify behind the legal-review gate) and Excel import | Planned (D6) |
 | 6 | Normalisation, history, retention and cleanup of stored files | Planned |
 | 7 | Transmission to the central RepIntel space: ingest API, idempotency, retries, acknowledgement; brand attribution by RepIntel's AI | Planned |
 | 8–9 | Hardening, production deployment (Caddy host for Scanner with the WebSocket route, `--profile scanner`, bucket) | Planned |
@@ -340,7 +362,7 @@ port 8100 (the Scanner app connects to it directly in development). Extraction r
   keyboards that do not report Backspace use the Erase button. No copy/paste from the phone's
   clipboard into the page yet. Video and audio are not streamed.
 
-- No extraction, URL collection or transmission yet; those actions are visibly disabled.
+- No transmission to AnyPulse yet; that action is visibly disabled.
 - Stored screenshots are not yet deleted after a retention period, and objects left behind by
   a failed database commit are not swept yet (phase 6).
 - Re-encoding JPEG/WebP at quality 92 slightly changes pixels; text stays legible for OCR.

@@ -200,6 +200,20 @@ const fr = {
   "collect.validatedCount": "{n} capture(s) validée(s) sur {total}",
   "collect.reviewNext": "Vérifier la suivante",
   "upload.err.not_extracted": "La capture n'a pas encore été lue.",
+  "collect.linkLabel": "Coller un lien (publication, commentaire…)",
+  "collect.linkAdd": "Ajouter et ouvrir",
+  "collect.linkHint": "Le lien est ajouté à la collecte et s'ouvre dans le navigateur Scanner : capturez ce qu'il montre.",
+  "collect.linkAlready": "Ce lien est déjà dans la collecte : il s'ouvre à nouveau.",
+  "browser.linkedTo": "Captures rattachées au lien :",
+  "browser.unlink": "Détacher",
+  "browser.err.link_not_found": "Ce lien n'est plus dans la collecte.",
+  "items.link": "Lien",
+  "items.linkCaptures": "{n} capture(s) depuis ce lien",
+  "items.linkNoCapture": "Pas encore de capture",
+  "items.openLink": "Ouvrir pour capturer",
+  "items.fromLink": "depuis le lien n°{n}",
+  "upload.err.bad_url": "Ce n'est pas une adresse web valide (http ou https).",
+  "upload.err.link_not_found": "Ce lien n'est plus dans la collecte.",
 };
 
 type Dict = Record<keyof typeof fr, string>;
@@ -398,6 +412,20 @@ const ar: Dict = {
   "collect.validatedCount": "{n} من {total} لقطة تم التحقق منها",
   "collect.reviewNext": "مراجعة التالية",
   "upload.err.not_extracted": "لم تُقرأ اللقطة بعد.",
+  "collect.linkLabel": "الصق رابطًا (منشور، تعليق…)",
+  "collect.linkAdd": "إضافة وفتح",
+  "collect.linkHint": "يُضاف الرابط إلى الجمع ويُفتح في متصفح Scanner: التقط ما يعرضه.",
+  "collect.linkAlready": "هذا الرابط موجود في الجمع: يُفتح من جديد.",
+  "browser.linkedTo": "اللقطات مرتبطة بالرابط:",
+  "browser.unlink": "فصل",
+  "browser.err.link_not_found": "هذا الرابط لم يعد في الجمع.",
+  "items.link": "رابط",
+  "items.linkCaptures": "{n} لقطة من هذا الرابط",
+  "items.linkNoCapture": "لا توجد لقطة بعد",
+  "items.openLink": "فتح للالتقاط",
+  "items.fromLink": "من الرابط رقم {n}",
+  "upload.err.bad_url": "هذا ليس عنوان ويب صالحًا (http أو https).",
+  "upload.err.link_not_found": "هذا الرابط لم يعد في الجمع.",
 };
 
 const en: Dict = {
@@ -594,6 +622,20 @@ const en: Dict = {
   "collect.validatedCount": "{n} of {total} screenshot(s) validated",
   "collect.reviewNext": "Check the next one",
   "upload.err.not_extracted": "The screenshot has not been read yet.",
+  "collect.linkLabel": "Paste a link (post, comment…)",
+  "collect.linkAdd": "Add and open",
+  "collect.linkHint": "The link is added to the collection and opens in the Scanner browser: capture what it shows.",
+  "collect.linkAlready": "This link is already in the collection: it opens again.",
+  "browser.linkedTo": "Captures attached to the link:",
+  "browser.unlink": "Detach",
+  "browser.err.link_not_found": "This link is no longer in the collection.",
+  "items.link": "Link",
+  "items.linkCaptures": "{n} capture(s) from this link",
+  "items.linkNoCapture": "No capture yet",
+  "items.openLink": "Open to capture",
+  "items.fromLink": "from link #{n}",
+  "upload.err.bad_url": "This is not a valid web address (http or https).",
+  "upload.err.link_not_found": "This link is no longer in the collection.",
 };
 
 export const dictionaries: Record<Locale, Dict> = { fr, ar, en };

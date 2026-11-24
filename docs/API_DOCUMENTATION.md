@@ -137,6 +137,7 @@ Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Brow
 | GET / POST | `/scanner/extraction`, `/scanner/items/{id}/entries`, `/scanner/items/{id}/extract`, `/scanner/sessions/{id}/extract` | Phase 4: extraction status, entries read from a screenshot, read again, queue pending |
 | PATCH / DELETE | `/scanner/entries/{id}` | Agent correction of author or text; removal |
 | POST | `/scanner/items/{id}/validate` | Agent validates (or withdraws) the reading of a screenshot |
+| POST | `/scanner/sessions/{id}/links` | Phase 5: record a pasted link (opened in the built-in browser by the app) |
 | GET / POST | `/admin/scanner/accounts`, `/admin/scanner/accounts/{id}/revoke`, `/restore` | Platform admin + MFA |
 
 ## Example (API client)
