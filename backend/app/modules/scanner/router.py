@@ -39,6 +39,7 @@ from app.modules.scanner.schemas import (
     ScannerTokenOut,
     UploadedFileOut,
     UploadOut,
+    ValidateIn,
 )
 from app.scanner import auth as service
 from app.scanner import sessions, uploads
@@ -335,6 +336,23 @@ def reextract_item(item_id: uuid.UUID, request: Request,
     get_limiter().hit(f"scanner:extract:{ctx.account_id}", 120, 3600)
     extraction.queue_items(db, ctx.account_id, s.id, [item.id])
     record(db, account_id=ctx.account_id, action="item.extraction_requested",
+           target_type="collection_item", target_id=item.id, request=request)
+    db.commit()
+    return _items(db, s.id)
+
+
+@router.post("/items/{item_id}/validate", response_model=list[ItemOut])
+def validate_item(item_id: uuid.UUID, request: Request, body: ValidateIn | None = None,
+                  ctx: ScannerContext = Depends(get_scanner_auth),
+                  db: Session = Depends(get_db)) -> list[ItemOut]:
+    """The agent confirms that what was read matches the screenshot (`{"validated": false}`
+    withdraws it)."""
+    item = uploads.get_item(db, item_id)
+    s = uploads.require_open(sessions.get(db, item.session_id))
+    validated = body.validated if body else True
+    extraction.validate(db, item, validated=validated)
+    record(db, account_id=ctx.account_id,
+           action="item.validated" if validated else "item.validation_withdrawn",
            target_type="collection_item", target_id=item.id, request=request)
     db.commit()
     return _items(db, s.id)

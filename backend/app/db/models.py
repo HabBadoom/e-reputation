@@ -1012,6 +1012,7 @@ class ScannerExtraction(Base):
     error_code: Mapped[str | None] = mapped_column(String(50))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # 0015
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
 

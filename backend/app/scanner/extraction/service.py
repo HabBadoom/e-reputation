@@ -45,6 +45,7 @@ def queue_items(db: Session, account_id: uuid.UUID, session_id: uuid.UUID,
                                      session_id=session_id, status="queued"))
         else:
             ex.status, ex.error_code, ex.updated_at = "queued", None, now
+            ex.validated_at = None             # a new reading must be checked again
         db.execute(update(ScannerCollectionItem).where(ScannerCollectionItem.id == item_id)
                    .values(status="processing", error_code=None, updated_at=now))
         queue.enqueue(db, JOB_KIND, {"account_id": str(account_id), "item_id": str(item_id)},
@@ -230,5 +231,23 @@ def summary(db: Session, item_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict]:
     for ex in db.scalars(select(ScannerExtraction).where(ScannerExtraction.item_id.in_(item_ids))):
         out[ex.item_id] = {"status": ex.status, "confidence": ex.confidence,
                            "issues": ex.issues or [], "context": ex.context or {},
-                           "entries": int(counts.get(ex.item_id, 0)), "model": ex.model}
+                           "entries": int(counts.get(ex.item_id, 0)), "model": ex.model,
+                           "validated_at": ex.validated_at}
     return out
+
+
+def validate(db: Session, item: ScannerCollectionItem, *, validated: bool) -> None:
+    """The agent confirms (or withdraws) that the entries match the image. Only a finished
+    reading can be validated; a validated screenshot is `ready` even if it was to be checked."""
+    from app.core.errors import AppError
+    ex = db.get(ScannerExtraction, item.id)
+    if ex is None or ex.status != "done":
+        raise AppError("The screenshot has not been read yet", code="not_extracted",
+                       status_code=409)
+    now = datetime.now(UTC)
+    if validated:
+        ex.validated_at = ex.validated_at or now
+        item.status = "ready"
+    else:
+        ex.validated_at = None
+    ex.updated_at = item.updated_at = now

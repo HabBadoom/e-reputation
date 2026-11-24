@@ -112,6 +112,11 @@ class ExtractionOut(BaseModel):
     context: dict[str, str]
     entries: int
     model: str | None
+    validated_at: datetime | None = None
+
+
+class ValidateIn(BaseModel):
+    validated: bool = True
 
 
 class ItemOut(BaseModel):

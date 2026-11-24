@@ -7,6 +7,7 @@
 - Migration 0014: `scanner_extractions`, `scanner_extracted_entries` (RLS per account; only author and text correctable).
 - Capture time from screenshot file names; relative and absolute Facebook times converted with their precision; duplicates across overlapping screenshots linked and not counted; tall captures sent in overlapping parts.
 - Review screen in the Scanner app (image next to the entries, corrections, removal, read again) and live statuses on the collection screen.
+- "Valider" on the review screen (migration 0015 `validated_at`, `POST /scanner/items/{id}/validate`): marks a screenshot checked and opens the next one; progress shown on the collection screen.
 - `python -m app.scanner.extraction.bench`: compares models on a folder of screenshots (HTML report, cost, scores against hand-written expected text).
 
 ## Unreleased — Aynpulse Scanner, Phase 3: built-in browser and screenshot upload

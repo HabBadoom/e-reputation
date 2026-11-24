@@ -149,6 +149,7 @@ export interface ExtractionSummary {
   context: { view?: string; page_or_group?: string; dialog_title?: string };
   entries: number;
   model: string | null;
+  validated_at: string | null;
 }
 
 export interface ExtractedEntry {

@@ -207,3 +207,33 @@ def test_removing_a_screenshot_removes_its_entries(client, fake):
     h = {"authorization": f"Bearer {sc.access}", **TOKEN}
     assert sc.c.delete(f"{S}/items/{item['id']}", headers=h).status_code == 200
     assert sc.get(f"{S}/items/{item['id']}/entries").status_code == 404
+
+
+def test_agent_validates_a_reading(client, fake):
+    sc = scanner_signup(client)
+    sid = current(sc)
+    fake.answers += [out([post()], confidence=0.4), out([post()])]
+    item = upload(sc, sid, png("a.png")).json()["items"][0]
+    r = sc.post(f"{S}/items/{item['id']}/validate")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_extracted"   # not read yet
+    drain()
+    assert items(sc, sid)[0]["status"] == "needs_review"
+
+    r = sc.post(f"{S}/items/{item['id']}/validate")
+    assert r.status_code == 200, r.text
+    it = r.json()[0]
+    assert it["status"] == "ready" and it["extraction"]["validated_at"] is not None
+    first = it["extraction"]["validated_at"]
+    assert sc.post(f"{S}/items/{item['id']}/validate").json()[0]["extraction"][
+        "validated_at"] == first                                          # idempotent
+
+    r = sc.post(f"{S}/items/{item['id']}/validate", json={"validated": False})
+    assert r.json()[0]["extraction"]["validated_at"] is None
+
+    sc.post(f"{S}/items/{item['id']}/validate")
+    sc.post(f"{S}/items/{item['id']}/extract")                          # read again
+    drain()
+    assert items(sc, sid)[0]["extraction"]["validated_at"] is None       # to check again
+
+    other = scanner_signup(client)
+    assert other.post(f"{S}/items/{item['id']}/validate").status_code == 404

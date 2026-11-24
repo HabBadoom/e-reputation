@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useI18n } from "@/components/providers";
 import { ItemStatus } from "@/components/screenshots";
@@ -17,7 +17,7 @@ export default function ReviewRoute() {
 }
 
 function ReviewPage() {
-  const { t } = useI18n();
+  const { t, fmtDate } = useI18n();
   const qc = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
@@ -35,6 +35,20 @@ function ReviewPage() {
     queryKey: ["entries", id, item?.status],
     queryFn: () => api.get<ExtractedEntry[]>(`/items/${id}/entries`),
     enabled: !!item && item.status !== "processing",
+  });
+  const router = useRouter();
+  const validate = useMutation({
+    mutationFn: (validated: boolean) => api.post<CollectionItem[]>(`/items/${id}/validate`, { validated }),
+    onSuccess: (r, validated) => {
+      qc.setQueryData(["items", sessionId], r);
+      if (!validated) return;
+      // Next screenshot still to check (after this one, then from the start), else back.
+      const todo = (x: CollectionItem) => x.extraction?.status === "done" && !x.extraction.validated_at;
+      const idx = r.findIndex((x) => x.id === id);
+      const next = [...r.slice(idx + 1), ...r.slice(0, Math.max(idx, 0))].find(todo);
+      if (next) router.push(`/collect/items/${next.id}?s=${sessionId}&n=${r.indexOf(next) + 1}`);
+      else router.push("/collect");
+    },
   });
   const readAgain = useMutation({
     mutationFn: () => api.post<CollectionItem[]>(`/items/${id}/extract`),
@@ -93,7 +107,26 @@ function ReviewPage() {
             </Button>
           </div>
           {where && <p className="text-sm text-ink-soft" dir="auto">{t("review.context", { where })}</p>}
-          <ErrorBanner error={readAgain.error ?? entries.error} />
+          <ErrorBanner error={readAgain.error ?? validate.error ?? entries.error} />
+
+          {ex?.status === "done" && (
+            ex.validated_at ? (
+              <div className="flex flex-wrap items-center gap-3 rounded border border-signal-pos/40 bg-paper-raised px-3 py-2 text-sm">
+                <span className="font-medium text-signal-pos">✓ {t("review.validated", { date: fmtDate(ex.validated_at) })}</span>
+                <button className="text-xs text-ink-mute underline hover:text-ink" disabled={validate.isPending}
+                        onClick={() => validate.mutate(false)}>
+                  {t("review.unvalidate")}
+                </button>
+              </div>
+            ) : (
+              <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded border border-line bg-paper-raised px-3 py-2 shadow-sm">
+                <Button className="px-5 py-2.5 text-base" disabled={validate.isPending} onClick={() => validate.mutate(true)}>
+                  ✓ {t("review.validate")}
+                </Button>
+                <span className="text-xs text-ink-soft">{t("review.validateHint")}</span>
+              </div>
+            )
+          )}
 
           {item.status === "processing" && <p className="text-sm text-ink-soft">{t("review.waiting")}</p>}
           {entries.isLoading && <Spinner />}

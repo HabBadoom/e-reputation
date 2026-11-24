@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
@@ -95,6 +96,25 @@ export default function CollectPage() {
           <p className="text-sm font-medium">{s.title || t("collect.untitled")}</p>
           <p className="text-xs text-ink-mute">{t("collect.started", { date: fmtDate(s.created_at) })}</p>
           <div className="mt-4">
+            {(() => {
+              const read = (items.data ?? []).filter((i) => i.extraction?.status === "done");
+              const done = read.filter((i) => i.extraction?.validated_at);
+              const next = read.find((i) => !i.extraction?.validated_at);
+              if (!read.length) return null;
+              return (
+                <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+                  <span className={done.length === read.length ? "font-medium text-signal-pos" : "text-ink-soft"}>
+                    {done.length === read.length ? "✓ " : ""}{t("collect.validatedCount", { n: done.length, total: read.length })}
+                  </span>
+                  {next && (
+                    <Link href={`/collect/items/${next.id}?s=${s.id}&n=${(items.data ?? []).indexOf(next) + 1}`}
+                          className="font-medium text-brand hover:underline">
+                      {t("collect.reviewNext")} →
+                    </Link>
+                  )}
+                </div>
+              );
+            })()}
             {items.isLoading ? <Spinner /> : <ItemsGrid session={s} items={items.data ?? []} />}
             <ErrorBanner error={items.error ?? extractPending.error} />
             {s.is_open && extractionOn.data?.enabled &&

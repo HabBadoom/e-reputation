@@ -192,6 +192,14 @@ const fr = {
   "upload.err.quota_exceeded": "Crédit OpenAI épuisé : prévenez l'administrateur.",
   "upload.err.auth_failed": "Clé OpenAI refusée : prévenez l'administrateur.",
   "upload.err.model_not_found": "Modèle de lecture introuvable : prévenez l'administrateur.",
+  "itemStatus.validated": "Validé",
+  "review.validate": "Valider",
+  "review.validateHint": "Le texte correspond à l'image (après vos corrections). Passe ensuite à la capture suivante.",
+  "review.validated": "Validé le {date}",
+  "review.unvalidate": "Annuler la validation",
+  "collect.validatedCount": "{n} capture(s) validée(s) sur {total}",
+  "collect.reviewNext": "Vérifier la suivante",
+  "upload.err.not_extracted": "La capture n'a pas encore été lue.",
 };
 
 type Dict = Record<keyof typeof fr, string>;
@@ -382,6 +390,14 @@ const ar: Dict = {
   "upload.err.quota_exceeded": "نفد رصيد OpenAI: أبلغ المسؤول.",
   "upload.err.auth_failed": "مفتاح OpenAI مرفوض: أبلغ المسؤول.",
   "upload.err.model_not_found": "نموذج القراءة غير موجود: أبلغ المسؤول.",
+  "itemStatus.validated": "تم التحقق",
+  "review.validate": "تأكيد",
+  "review.validateHint": "النص مطابق للصورة (بعد تصحيحاتك). ثم الانتقال إلى اللقطة التالية.",
+  "review.validated": "تم التحقق بتاريخ {date}",
+  "review.unvalidate": "إلغاء التحقق",
+  "collect.validatedCount": "{n} من {total} لقطة تم التحقق منها",
+  "collect.reviewNext": "مراجعة التالية",
+  "upload.err.not_extracted": "لم تُقرأ اللقطة بعد.",
 };
 
 const en: Dict = {
@@ -570,6 +586,14 @@ const en: Dict = {
   "upload.err.quota_exceeded": "OpenAI credit exhausted: tell the administrator.",
   "upload.err.auth_failed": "OpenAI key refused: tell the administrator.",
   "upload.err.model_not_found": "Reading model not found: tell the administrator.",
+  "itemStatus.validated": "Validated",
+  "review.validate": "Validate",
+  "review.validateHint": "The text matches the image (after your fixes). Then goes to the next screenshot.",
+  "review.validated": "Validated on {date}",
+  "review.unvalidate": "Undo validation",
+  "collect.validatedCount": "{n} of {total} screenshot(s) validated",
+  "collect.reviewNext": "Check the next one",
+  "upload.err.not_extracted": "The screenshot has not been read yet.",
 };
 
 export const dictionaries: Record<Locale, Dict> = { fr, ar, en };

@@ -202,8 +202,10 @@ sentiment is attached in Scanner.
 **Review screen** (`/collect/items/{id}`): the image next to the entries (post, comments,
 indented replies), with time, counters and flags (cut by "voir plus", cut by the edge, already in
 another screenshot, corrected). The agent fixes an author or a text (only those two fields can be
-changed, enforced by column grants) or deletes an entry that is not content. "Relire la capture"
-reads it again and replaces the entries.
+changed, enforced by column grants) or deletes an entry that is not content, then presses **"Valider"**: the screenshot is marked
+checked (`validated_at`, status `ready`) and the next screenshot still to check opens. The
+collection screen shows "n captures validées sur N" and a link to the next one. "Relire la
+capture" reads it again, replaces the entries and clears the validation.
 
 ### Extraction benchmark
 
@@ -259,6 +261,7 @@ Expected-text files contain real names: keep them out of git.
 | GET | `/scanner/extraction` | `{enabled}` |
 | GET | `/scanner/items/{id}/entries` | Entries read from the screenshot, in reading order |
 | POST | `/scanner/items/{id}/extract` | Read again (replaces entries and corrections); 409 `extraction_disabled`; rate-limited |
+| POST | `/scanner/items/{id}/validate` | `{validated: true|false}` (default true): the agent confirms the reading; 409 `not_extracted` before it is read |
 | POST | `/scanner/sessions/{id}/extract` | Queue every screenshot still `pending` or `failed` → `{queued}` |
 | PATCH | `/scanner/entries/{id}` | `{author_name?, text?}`: agent correction (`edited_by_agent`) |
 | DELETE | `/scanner/entries/{id}` | Remove an entry that is not content (204) |

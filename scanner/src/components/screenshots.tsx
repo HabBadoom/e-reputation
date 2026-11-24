@@ -243,7 +243,7 @@ export function ItemStatus({ item }: { item: CollectionItem }) {
       {item.status === "processing" && (
         <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-current" aria-hidden />
       )}
-      {t(`itemStatus.${item.status}` as MessageKey)}
+      {item.extraction?.validated_at ? `✓ ${t("itemStatus.validated")}` : t(`itemStatus.${item.status}` as MessageKey)}
       {err && hasMessage(err) && <span className="text-ink-mute">— {t(err as MessageKey)}</span>}
     </p>
   );
