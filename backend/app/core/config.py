@@ -167,6 +167,8 @@ class Settings(BaseSettings):
     scanner_browser_idle_seconds: int = Field(default=600, ge=60)
     scanner_browser_max_state_bytes: int = Field(default=2_000_000, ge=10_000)
     scanner_browser_allow_private_networks: bool = False   # tests only
+    scanner_thread_max_captures: int = Field(default=20, ge=1, le=60)   # "Capturer tout le fil"
+    scanner_thread_settle_ms: int = Field(default=1200, ge=100, le=10000)  # wait after a scroll
 
     # Object storage for Scanner files. "filesystem" is for development and tests only;
     # staging and production must use an S3-compatible service (Scaleway, OVH, RustFS…).

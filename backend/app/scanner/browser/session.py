@@ -86,6 +86,28 @@ def normalise_url(raw: str) -> str:
 UrlCheck = Callable[[str], bool]   # blocking; True if the URL may be requested
 
 
+# The scrollable element under a point (a dialog's comment list…) or else the page itself.
+_FIND_SCROLLER = """(pt) => {
+  const scrolls = (el) => {
+    const s = getComputedStyle(el);
+    return /(auto|scroll|overlay)/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 20;
+  };
+  let el = document.elementFromPoint(pt.x, pt.y);
+  while (el && el !== document.body && el !== document.documentElement && !scrolls(el)) {
+    el = el.parentElement;
+  }
+  if (!el || el === document.body || el === document.documentElement) {
+    el = document.scrollingElement || document.documentElement;
+  }
+  window.__scannerScroller = el;
+  return true;
+}"""
+_SCROLL_STATE = """() => {
+  const el = window.__scannerScroller || document.scrollingElement;
+  return {top: el.scrollTop, height: el.clientHeight || window.innerHeight};
+}"""
+
+
 class RemoteBrowser:
     """One Chromium process for the service; one isolated context per agent session."""
 
@@ -168,6 +190,7 @@ class AgentSession:
         self.closed = False
         self.last_activity = time.monotonic()
         self.blocked_requests = 0
+        self.focus: tuple[float, float] | None = None   # last click: where "the thread" is
 
     # -- setup -----------------------------------------------------------------------------
     async def _host_ok(self, url: str) -> bool:
@@ -260,6 +283,7 @@ class AgentSession:
     async def click(self, x: float, y: float) -> None:
         x = max(0.0, min(float(x), self.viewport.width - 1))
         y = max(0.0, min(float(y), self.viewport.height - 1))
+        self.focus = (x, y)
         if self.viewport.mobile:
             await self.page.touchscreen.tap(x, y)
         else:
@@ -289,6 +313,37 @@ class AgentSession:
                 await self.page.go_forward(wait_until="commit", timeout=15_000)
             elif action == "reload":
                 await self.page.reload(wait_until="commit", timeout=30_000)
+
+    async def capture_thread(self, on_shot: Callable[[Capture], Awaitable[None]], *,
+                             stop: Callable[[], bool], max_shots: int,
+                             settle_ms: int = 1200) -> str:
+        """"Capturer tout le fil", on the agent's request, for the page in front of them:
+        capture, scroll the thread down by most of a screen, wait for it to load, again, until
+        its end. The scrolled area is the one under the agent's last click (a comment dialog,
+        the photo viewer's comment column) or else the page. Nothing is clicked and no other
+        page is opened. Returns why it stopped: end, limit or stopped."""
+        x, y = self.focus or (self.viewport.width / 2, self.viewport.height / 2)
+        await self.page.evaluate(_FIND_SCROLLER, {"x": x, "y": y})
+        last_png: bytes | None = None
+        for n in range(max_shots):
+            if stop():
+                return "stopped"
+            cap = await self.capture()
+            if cap.png == last_png:
+                return "end"
+            last_png = cap.png
+            await on_shot(cap)
+            if n == max_shots - 1:
+                return "limit"
+            before = await self.page.evaluate(_SCROLL_STATE)
+            step = max(200, int(before["height"] * 0.75))
+            await self.page.mouse.move(x, y)
+            await self.page.mouse.wheel(0, step)
+            await self.page.wait_for_timeout(settle_ms)
+            after = await self.page.evaluate(_SCROLL_STATE)
+            if after["top"] <= before["top"] + 2:     # did not move: the thread is complete
+                return "end"
+        return "limit"
 
     async def capture(self, *, full_page: bool = False) -> Capture:
         try:

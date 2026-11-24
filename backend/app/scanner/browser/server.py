@@ -7,9 +7,11 @@ Protocol on /api/v1/scanner/browser/ws:
   client → server (JSON): start {session_id, width, height, mobile, url?, link_item_id?};
     link {item_id | null} (captures are attached to this pasted link, which opens); navigate {url};
     click {x, y}; scroll {dx, dy, x?, y?}; type {text}; key {key}; back; forward; reload;
-    capture {full_page?}; ping
+    capture {full_page?}; capture_thread (scroll and capture the thread under the last click
+    until its end); stop_thread; ping
   server → client: binary JPEG frames; JSON ready, url {url, title}, linked {item_id, url},
-    captured {result},
+    captured {result}, thread_progress {n, result}, thread_done {added, duplicates,
+    rejected, reason: end|limit|stopped|full|error},
     error {code}, closed {reason}
 
 Security: the Origin must be the Scanner app's; the `sc_access` cookie must be a valid Scanner
@@ -157,6 +159,8 @@ class Connection:
         self.session: AgentSession | None = None
         self.collection_id: uuid.UUID | None = None
         self.link_item_id: uuid.UUID | None = None
+        self.thread_task: asyncio.Task | None = None
+        self.thread_stop = False
         self._send_lock = asyncio.Lock()
         self.ended = False
 
@@ -176,6 +180,11 @@ class Connection:
         if self.ended:
             return
         self.ended = True
+        if self.thread_task:
+            self.thread_stop = True
+            self.thread_task.cancel()
+            with contextlib.suppress(BaseException):
+                await self.thread_task
         if self.session:
             state = await self.session.storage_state()
             await self.session.close()
@@ -226,11 +235,63 @@ async def _set_link(conn: Connection, item_id: Any, *, navigate: bool) -> None:
         await conn.session.navigate(url)
 
 
+async def _thread(conn: Connection) -> None:
+    """Background run of "Capturer tout le fil": the agent keeps seeing the page scroll and can
+    press "Arrêter"; each capture is stored like a single one (same link, same checks)."""
+    assert conn.session is not None and conn.collection_id is not None
+    cfg = get_settings()
+    counts = {"added": 0, "duplicate": 0, "rejected": 0}
+    reason = "end"
+
+    async def on_shot(cap: Any) -> None:
+        nonlocal reason
+        conn.session.touch()                   # a long thread is not inactivity
+        result = await asyncio.to_thread(_store_capture, conn.account_id, conn.collection_id,
+                                         cap.png, cap.url, conn.link_item_id)
+        counts[result["status"] if result["status"] in counts else "rejected"] += 1
+        await conn.send_json({"type": "thread_progress", "n": sum(counts.values()),
+                              "result": result})
+        if result["code"] == "collection_full":
+            conn.thread_stop, reason = True, "full"
+
+    try:
+        why = await conn.session.capture_thread(
+            on_shot, stop=lambda: conn.thread_stop, max_shots=cfg.scanner_thread_max_captures,
+            settle_ms=cfg.scanner_thread_settle_ms)
+        reason = reason if reason == "full" else why
+    except asyncio.CancelledError:
+        raise
+    except AppError as e:                                  # rate limit, collection closed…
+        reason = e.code
+    except Exception:  # noqa: BLE001
+        log.warning("scanner_thread_capture_failed")
+        reason = "error"
+    finally:
+        conn.thread_task = None
+    if counts["added"]:
+        state = await conn.session.storage_state()
+        if state is not None:
+            asyncio.ensure_future(asyncio.to_thread(_save_profile, conn.account_id, state))
+    with contextlib.suppress(Exception):
+        await conn.send_json({"type": "thread_done", "added": counts["added"],
+                              "duplicates": counts["duplicate"], "rejected": counts["rejected"],
+                              "reason": reason, "platform": platform_of(conn.session.page.url)})
+
+
 async def _handle(conn: Connection, msg: dict) -> None:
     s = conn.session
     assert s is not None
     kind = msg.get("type")
     s.touch()
+    if kind == "stop_thread":
+        conn.thread_stop = True
+        return
+    if conn.thread_task is not None and kind != "ping":
+        raise BrowserError("thread_running", "Wait for the thread capture to finish or stop it")
+    if kind == "capture_thread":
+        conn.thread_stop = False
+        conn.thread_task = asyncio.create_task(_thread(conn))
+        return
     if kind == "navigate":
         await s.navigate(str(msg.get("url", "")))
     elif kind == "click":

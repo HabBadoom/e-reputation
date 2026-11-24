@@ -214,6 +214,18 @@ const fr = {
   "items.fromLink": "depuis le lien n°{n}",
   "upload.err.bad_url": "Ce n'est pas une adresse web valide (http ou https).",
   "upload.err.link_not_found": "Ce lien n'est plus dans la collecte.",
+  "browser.thread": "Capturer tout le fil",
+  "browser.threadHint": "Ouvrez la publication et ses commentaires, cliquez une fois dans les commentaires, puis lancez : Scanner fait défiler et capture jusqu'à la fin.",
+  "browser.threadRunning": "Capture du fil en cours… {n} capture(s). Ne touchez pas à la page.",
+  "browser.threadStop": "Arrêter ({n})",
+  "browser.threadDone": "Fil capturé : {n} capture(s) ajoutée(s).",
+  "browser.threadEnd.end": "Fin du fil atteinte.",
+  "browser.threadEnd.limit": "Limite de captures atteinte : relancez pour continuer.",
+  "browser.threadEnd.stopped": "Arrêté.",
+  "browser.threadEnd.full": "La collecte est pleine.",
+  "browser.threadEnd.rate_limited": "Trop de captures en peu de temps : réessayez plus tard.",
+  "browser.threadEnd.error": "Interrompu par une erreur.",
+  "browser.err.thread_running": "Attendez la fin de la capture du fil, ou arrêtez-la.",
 };
 
 type Dict = Record<keyof typeof fr, string>;
@@ -426,6 +438,18 @@ const ar: Dict = {
   "items.fromLink": "من الرابط رقم {n}",
   "upload.err.bad_url": "هذا ليس عنوان ويب صالحًا (http أو https).",
   "upload.err.link_not_found": "هذا الرابط لم يعد في الجمع.",
+  "browser.thread": "التقاط السلسلة كاملة",
+  "browser.threadHint": "افتح المنشور وتعليقاته، انقر مرة داخل التعليقات، ثم ابدأ: يمرّر Scanner ويلتقط حتى النهاية.",
+  "browser.threadRunning": "جارٍ التقاط السلسلة… {n} لقطة. لا تلمس الصفحة.",
+  "browser.threadStop": "إيقاف ({n})",
+  "browser.threadDone": "تم التقاط السلسلة: أُضيفت {n} لقطة.",
+  "browser.threadEnd.end": "تم الوصول إلى نهاية السلسلة.",
+  "browser.threadEnd.limit": "تم بلوغ حد اللقطات: أعد التشغيل للمتابعة.",
+  "browser.threadEnd.stopped": "تم الإيقاف.",
+  "browser.threadEnd.full": "الجمع ممتلئ.",
+  "browser.threadEnd.rate_limited": "لقطات كثيرة في وقت قصير: أعد المحاولة لاحقًا.",
+  "browser.threadEnd.error": "توقف بسبب خطأ.",
+  "browser.err.thread_running": "انتظر انتهاء التقاط السلسلة أو أوقفه.",
 };
 
 const en: Dict = {
@@ -636,6 +660,18 @@ const en: Dict = {
   "items.fromLink": "from link #{n}",
   "upload.err.bad_url": "This is not a valid web address (http or https).",
   "upload.err.link_not_found": "This link is no longer in the collection.",
+  "browser.thread": "Capture the whole thread",
+  "browser.threadHint": "Open the post and its comments, click once in the comments, then start: Scanner scrolls and captures to the end.",
+  "browser.threadRunning": "Capturing the thread… {n} capture(s). Do not touch the page.",
+  "browser.threadStop": "Stop ({n})",
+  "browser.threadDone": "Thread captured: {n} capture(s) added.",
+  "browser.threadEnd.end": "End of the thread reached.",
+  "browser.threadEnd.limit": "Capture limit reached: start again to continue.",
+  "browser.threadEnd.stopped": "Stopped.",
+  "browser.threadEnd.full": "The collection is full.",
+  "browser.threadEnd.rate_limited": "Too many captures in a short time: try again later.",
+  "browser.threadEnd.error": "Interrupted by an error.",
+  "browser.err.thread_running": "Wait for the thread capture to finish, or stop it.",
 };
 
 export const dictionaries: Record<Locale, Dict> = { fr, ar, en };

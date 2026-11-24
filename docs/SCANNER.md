@@ -167,6 +167,27 @@ access (checked in CI). When storage is down, the upload fails as a whole (503
 `storage_unavailable`) and nothing half-done is kept. Removing an item deletes its object after
 the database commit.
 
+## Capture the whole thread
+
+Next to "Capturer l'écran", **"Capturer tout le fil"** (asked by the product owner on
+2026-11-24), also while a pasted link is active (the captures are then attached to it). The agent
+opens a post and its comments, clicks once in the comments (that click chooses what scrolls: a
+comment dialog, the photo viewer's comment column, otherwise the page), then starts it. Scanner
+captures the screen, scrolls that area down by three quarters of its height with the mouse
+wheel, waits for it to load (`REPINTEL_SCANNER_THREAD_SETTLE_MS`, 1.2 s) and again, until the
+area stops moving (end of the thread), two captures are identical, the limit
+(`REPINTEL_SCANNER_THREAD_MAX_CAPTURES`, 20) is reached, or the agent presses "Arrêter". Each
+capture is stored and read like a single one; comments repeated in overlapping captures are
+linked as duplicates by extraction. The agent watches it happen; other actions wait until it
+ends.
+
+Limits kept on purpose: it acts only on the page the agent opened and asked for; it clicks
+nothing (no automatic "Voir plus" or "Afficher plus de commentaires": the agent opens them
+first), opens no other page and does not hide that it is automated. Fully automatic collection
+across pages was declined: dedicated accounts would be detected and banned quickly, platform
+terms forbid it, and it raises personal-data questions (Algerian law 18-07); content
+connectors (phase 5b) are the route for that.
+
 ## Links (phase 5)
 
 Under the import zone, **"Coller un lien"**: the agent pastes a link (a post or comment received
@@ -289,7 +310,7 @@ Expected-text files contain real names: keep them out of git.
 | DELETE | `/scanner/entries/{id}` | Remove an entry that is not content (204) |
 | GET | `/scanner/browser` | `{enabled, ws_url, has_saved_session, saved_at}` |
 | DELETE | `/scanner/browser/profile` | Forget the saved browser session (204) |
-| WS | `/scanner/browser/ws` | scanner-browser service. Client → `start {session_id, width, height, mobile, url?, link_item_id?}`, `link {item_id|null}`, `navigate {url}`, `click {x, y}`, `scroll {dx, dy}`, `type {text}`, `key {key}` (whitelist), `back`, `forward`, `reload`, `capture`. Server → binary JPEG frames, `ready`, `url {url, title, platform}`, `captured {result}`, `error {code}`, `closed {reason}`. Close codes 4401 (not signed in), 4403 (wrong origin) |
+| WS | `/scanner/browser/ws` | scanner-browser service. Client → `start {session_id, width, height, mobile, url?, link_item_id?}`, `link {item_id|null}`, `capture_thread`, `stop_thread` (server → `thread_progress {n, result}`, `thread_done {added, duplicates, rejected, reason}`), `navigate {url}`, `click {x, y}`, `scroll {dx, dy}`, `type {text}`, `key {key}` (whitelist), `back`, `forward`, `reload`, `capture`. Server → binary JPEG frames, `ready`, `url {url, title, platform}`, `captured {result}`, `error {code}`, `closed {reason}`. Close codes 4401 (not signed in), 4403 (wrong origin) |
 
 Another account's session, item or file answers 404, like a missing one. Token mode for API
 clients: `X-Auth-Mode: token` on register/login/refresh, then `Authorization: Bearer`.
@@ -325,6 +346,8 @@ Platform administration (`/api/v1/admin/scanner/*`, platform admin + MFA):
 | `REPINTEL_SCANNER_BROWSER_MAX_SESSIONS` | `4` | Live browsers per service instance (≈ 500 MB RAM each) |
 | `REPINTEL_SCANNER_BROWSER_IDLE_SECONDS` | `600` | Closes an unused browser |
 | `REPINTEL_SCANNER_BROWSER_MAX_STATE_BYTES` | `2000000` | Saved session size cap (local storage dropped first) |
+| `REPINTEL_SCANNER_THREAD_MAX_CAPTURES` | `20` | "Capturer tout le fil": captures per run |
+| `REPINTEL_SCANNER_THREAD_SETTLE_MS` | `1200` | Wait after each scroll for comments to load |
 | `REPINTEL_SCANNER_EXTRACTION_MODEL` | empty | Vision model id (OpenAI); empty = extraction off, screenshots stay `pending` |
 | `REPINTEL_SCANNER_EXTRACTION_DETAIL` | `high` | Image detail sent to the model |
 | `REPINTEL_SCANNER_EXTRACTION_MAX_OUTPUT_TOKENS` | `8000` | Long comment threads need room |

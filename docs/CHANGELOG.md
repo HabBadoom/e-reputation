@@ -4,6 +4,7 @@
 
 ### Added
 - "Coller un lien": the link is recorded once per collection (tracking parameters removed, mobile host variants merged) and opened in the built-in browser; captures taken from it are attached to it (migration 0016 `link_item_id`, `url_key`; `POST /scanner/sessions/{id}/links`; WebSocket `link` message and `start.link_item_id`).
+- "Capturer tout le fil" in the built-in browser: on the agent's request, scrolls the thread under their last click and captures it to the end (limit, stop button, progress), with or without an active link.
 - Link cards in the collection (captures taken, "Ouvrir pour capturer"), link banner with "Détacher" in the browser.
 
 ## Unreleased — Aynpulse Scanner, Phase 4: extraction

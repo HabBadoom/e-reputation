@@ -37,6 +37,7 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
   const [notice, setNotice] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [link, setLink] = useState<{ id: string; url: string } | null>(null);
+  const [thread, setThread] = useState<{ n: number; stopping: boolean } | null>(null);
 
   const ws = useRef<WebSocket | null>(null);
   const screen = useRef<HTMLImageElement | null>(null);
@@ -98,6 +99,18 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
       if (m.type === "ready") {
         setRemote({ width: m.width, height: m.height, mobile: m.mobile });
         setPhase("live");
+      } else if (m.type === "thread_progress") {
+        setThread((th) => ({ n: m.n, stopping: th?.stopping ?? false }));
+        qc.invalidateQueries({ queryKey: ["items", session.id] });
+      } else if (m.type === "thread_done") {
+        setThread(null);
+        const why = `browser.threadEnd.${m.reason}`;
+        setNotice({
+          tone: m.added ? "ok" : "err",
+          text: `${t("browser.threadDone", { n: m.added })} ${hasMessage(why) ? t(why as MessageKey) : ""}`.trim(),
+        });
+        qc.invalidateQueries({ queryKey: ["items", session.id] });
+        qc.invalidateQueries({ queryKey: ["session"] });
       } else if (m.type === "linked") {
         setLink(m.item_id ? { id: m.item_id, url: m.url } : null);
       } else if (m.type === "url") {
@@ -131,6 +144,7 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
       setRemote(null);
       setFrame(null);
       setLink(null);
+      setThread(null);
       if (ev.code === 4401) say("err", "browser.closed.session_revoked");
       else if (ev.code !== 1000 && ev.code !== 1005) setNotice((n) => n ?? { tone: "err", text: t("browser.err.connection") });
       qc.invalidateQueries({ queryKey: ["browser"] });
@@ -266,6 +280,11 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
       )}
 
       <div className={live ? "mt-3 space-y-2" : "hidden"}>
+        {thread && (
+          <p role="status" className="rounded bg-signal-info/10 px-3 py-1.5 text-xs text-signal-info">
+            {t("browser.threadRunning", { n: thread.n })}
+          </p>
+        )}
         {link && (
           <div className="flex flex-wrap items-center gap-2 rounded border border-brand/30 bg-brand/5 px-3 py-1.5 text-xs">
             <span>🔗 {t("browser.linkedTo")}</span>
@@ -299,9 +318,21 @@ export function RemoteBrowser({ session, disabled }: { session: CollectionSessio
         </div>
 
         <div className="sticky bottom-2 flex flex-wrap items-center gap-2">
-          <Button className="flex-1 px-5 py-3 text-base shadow-md sm:flex-none" disabled={capturing || disabled} onClick={capture}>
+          <Button className="flex-1 px-5 py-3 text-base shadow-md sm:flex-none" disabled={capturing || !!thread || disabled} onClick={capture}>
             {capturing ? t("browser.capturing") : t("browser.capture")}
           </Button>
+          {thread ? (
+            <Button variant="ghost" className="flex-1 py-3 sm:flex-none" disabled={thread.stopping}
+                    onClick={() => { setThread({ ...thread, stopping: true }); send({ type: "stop_thread" }); }}>
+              ■ {t("browser.threadStop", { n: thread.n })}
+            </Button>
+          ) : (
+            <Button variant="ghost" className="flex-1 py-3 sm:flex-none" disabled={capturing || disabled}
+                    title={t("browser.threadHint")}
+                    onClick={() => { setNotice(null); setThread({ n: 0, stopping: false }); send({ type: "capture_thread" }); }}>
+              ⇣ {t("browser.thread")}
+            </Button>
+          )}
           <Button variant="ghost" onClick={() => keyboard.current?.focus()}>{t("browser.keyboard")}</Button>
           <Button variant="ghost" onClick={() => send({ type: "key", key: "Backspace" })}>{t("browser.erase")}</Button>
           <Button variant="ghost" onClick={() => send({ type: "key", key: "Enter" })}>{t("browser.enter")}</Button>
