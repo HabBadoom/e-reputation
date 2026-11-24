@@ -216,8 +216,10 @@ entries):
 | gpt-6.1-terra | 48/50 | 45 | 35 | 0.8 % | 18 s | ≈ 8 $ |
 | gpt-6-luna | 48/50 | 42 | 16 | 3.7 % | 23 s | ≈ 1.5 $ |
 
-gpt-6.1-terra was recommended (accuracy of the larger model at half its cost). Luna finds the
-same entries but changes letters too often for verbatim collection.
+gpt-6.1-terra was recommended for accuracy; the product owner chose **gpt-6-luna** (2026-11-24)
+for cost (≈ 5× cheaper), accepting more letter changes, corrected on the review screen when
+needed. With luna, `REPINTEL_SCANNER_EXTRACTION_MIN_CONFIDENCE=0.65` sends about 10 % of
+captures to review (0.75 would send about 30 %).
 
 Compare models on real screenshots before choosing one (no database, nothing stored in Scanner):
 
