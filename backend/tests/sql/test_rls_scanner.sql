@@ -18,8 +18,10 @@ INSERT INTO scanner_accounts (id, email, password_hash, full_name)
 INSERT INTO scanner_refresh_tokens (id, account_id, token_hash, family_id, expires_at)
   VALUES (gen_random_uuid(), :sa, repeat('a', 64), gen_random_uuid(), now() + interval '1 day');
 INSERT INTO scanner_collection_sessions (id, account_id) VALUES (:sess_a, :sa);
-INSERT INTO scanner_collection_items (id, account_id, session_id, source_type, position, source_url)
-  VALUES (gen_random_uuid(), :sa, :sess_a, 'url', 0, 'https://www.facebook.com/share/p/x/');
+INSERT INTO scanner_collection_items (id, account_id, session_id, source_type, position, source_url,
+                                      url_key)
+  VALUES (gen_random_uuid(), :sa, :sess_a, 'url', 0, 'https://www.facebook.com/share/p/x/',
+          repeat('a', 64));
 INSERT INTO scanner_audit_logs (id, account_id, action) VALUES (gen_random_uuid(), :sa, 'auth.login');
 
 SELECT set_config('app.scanner_account_id', :sb, true);
