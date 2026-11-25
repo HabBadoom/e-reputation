@@ -1005,6 +1005,20 @@ const en = {
   "adm.scanner.revoke": "Revoke",
   "adm.scanner.restore": "Restore",
   "adm.scanner.reasonPrompt": "Reason for revoking (shown to the user):",
+  "verif.scanner_validated": "Scanner — checked by the agent",
+  "verif.scanner_unvalidated": "Scanner — not checked by the agent",
+  "method.scanner": "Aynpulse Scanner (screenshot)",
+  "adm.scannerReview.title": "Scanner — to attribute",
+  "adm.scannerReview.intro": "Screenshots sent by agents that AnyPulse could not attribute to a followed brand with confidence. Choose the brands: every organisation following them receives the content. Or discard it.",
+  "adm.scannerReview.none": "Nothing to attribute.",
+  "adm.scannerReview.noImage": "Image no longer kept.",
+  "adm.scannerReview.unvalidated": "Not checked by the agent",
+  "adm.scannerReview.why": "Why it is here:",
+  "adm.scannerReview.search": "Find a followed brand…",
+  "adm.scannerReview.orgs": "{n} org.",
+  "adm.scannerReview.deliver": "Deliver to {n} brand(s)",
+  "adm.scannerReview.discard": "Discard",
+  "adm.scannerReview.discardConfirm": "Discard this screenshot? It will not be delivered to any organisation.",
 };
 
 type Dict = Record<keyof typeof en, string>;
@@ -2009,6 +2023,20 @@ const fr: Dict = {
   "adm.scanner.revoke": "Révoquer",
   "adm.scanner.restore": "Rétablir",
   "adm.scanner.reasonPrompt": "Motif de la révocation (affiché à l'utilisateur) :",
+  "verif.scanner_validated": "Scanner — vérifiée par l'agent",
+  "verif.scanner_unvalidated": "Scanner — non vérifiée par l'agent",
+  "method.scanner": "Aynpulse Scanner (capture d'écran)",
+  "adm.scannerReview.title": "Scanner — à attribuer",
+  "adm.scannerReview.intro": "Captures envoyées par les agents qu'AnyPulse n'a pas pu attribuer avec certitude à une marque suivie. Choisissez les marques : chaque organisation qui les suit reçoit le contenu. Ou écartez-la.",
+  "adm.scannerReview.none": "Rien à attribuer.",
+  "adm.scannerReview.noImage": "Image plus conservée.",
+  "adm.scannerReview.unvalidated": "Non vérifiée par l'agent",
+  "adm.scannerReview.why": "Pourquoi ici :",
+  "adm.scannerReview.search": "Chercher une marque suivie…",
+  "adm.scannerReview.orgs": "{n} org.",
+  "adm.scannerReview.deliver": "Distribuer à {n} marque(s)",
+  "adm.scannerReview.discard": "Écarter",
+  "adm.scannerReview.discardConfirm": "Écarter cette capture ? Elle ne sera distribuée à aucune organisation.",
 };
 
 const ar: Dict = {
@@ -3010,6 +3038,20 @@ const ar: Dict = {
   "adm.scanner.revoke": "إلغاء",
   "adm.scanner.restore": "استعادة",
   "adm.scanner.reasonPrompt": "سبب الإلغاء (يظهر للمستخدم):",
+  "verif.scanner_validated": "Scanner — تحقق منها الجامع",
+  "verif.scanner_unvalidated": "Scanner — لم يتحقق منها الجامع",
+  "method.scanner": "Aynpulse Scanner (لقطة شاشة)",
+  "adm.scannerReview.title": "Scanner — للإسناد",
+  "adm.scannerReview.intro": "لقطات أرسلها الجامعون ولم يتمكن AnyPulse من إسنادها بثقة إلى علامة متابَعة. اختر العلامات: تتلقى كل منظمة تتابعها المحتوى. أو استبعدها.",
+  "adm.scannerReview.none": "لا شيء للإسناد.",
+  "adm.scannerReview.noImage": "الصورة لم تعد محفوظة.",
+  "adm.scannerReview.unvalidated": "لم يتحقق منها الجامع",
+  "adm.scannerReview.why": "سبب وجودها هنا:",
+  "adm.scannerReview.search": "ابحث عن علامة متابَعة…",
+  "adm.scannerReview.orgs": "{n} منظمة",
+  "adm.scannerReview.deliver": "توزيع على {n} علامة",
+  "adm.scannerReview.discard": "استبعاد",
+  "adm.scannerReview.discardConfirm": "استبعاد هذه اللقطة؟ لن تُوزّع على أي منظمة.",
 };
 
 export const dictionaries: Record<Locale, Dict> = { en, fr, ar };

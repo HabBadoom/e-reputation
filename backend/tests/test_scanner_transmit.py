@@ -32,9 +32,9 @@ def _mentions(owner_engine, tenant_id):
 
 def _read(sc, sid, fake, answer, name):  # noqa: F811
     fake.answers.append(answer)
-    item = upload(sc, sid, png(name, text=name)).json()["items"][0]
+    r = upload(sc, sid, png(name, text=name)).json()
     drain()
-    return item["id"]
+    return r["results"][0]["item_id"]                 # the screenshot just added
 
 
 def _send(sc, sid):

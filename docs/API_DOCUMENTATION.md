@@ -138,6 +138,9 @@ Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Brow
 | PATCH / DELETE | `/scanner/entries/{id}` | Agent correction of author or text; removal |
 | POST | `/scanner/items/{id}/validate` | Agent validates (or withdraws) the reading of a screenshot |
 | POST | `/scanner/sessions/{id}/links` | Phase 5: record a pasted link (opened in the built-in browser by the app) |
+| POST | `/scanner/sessions/{id}/send`, `/resend` | Phase 7: send the collection to AnyPulse; retry a failed sending |
+| GET | `/admin/scanner/review`, `/admin/scanner/brands`, `/admin/scanner/items/{id}/image` | Platform admins: screenshots to attribute, followed brands, image |
+| POST | `/admin/scanner/review/{item_id}` | `{brands: [...]}` deliver, or `{discard: true}` |
 | GET / POST | `/admin/scanner/accounts`, `/admin/scanner/accounts/{id}/revoke`, `/restore` | Platform admin + MFA |
 
 ## Example (API client)

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Aynpulse Scanner, Phase 7: sending to AnyPulse
+
+### Added
+- "Envoyer ma collecte à AnyPulse" (unvalidated screenshots allowed, marked as such) and "Renvoyer" after a failure; job `scanner.transmit`.
+- Attribution of each screenshot to followed brands by names, aliases and include keywords across organisations, then an optional routing model (`REPINTEL_SCANNER_ATTRIBUTION_MODEL`); delivery to every organisation following the brand as one mention per post, comment or reply (`collection_method = scanner`, `scanner_validated` / `scanner_unvalidated`), analysis queued.
+- Admin console: "Scanner — à attribuer" review queue (image, text, suggestion; deliver to chosen brands or discard).
+- Migration 0018 (mention checks, `aynpulse_scanner` connector policy, `scanner_attributions`, `scanner_brand_catalogue()`).
+
 ## Unreleased — Aynpulse Scanner, Phase 6: retention
 
 ### Added

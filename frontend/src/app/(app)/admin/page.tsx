@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
-import { api, type AdminPlan, type AdminScannerAccount, type AdminTenantRow, type ConnectorReview, type PlatformStats } from "@/lib/api";
+import { api, type AdminPlan, type AdminScannerAccount, type AdminTenantRow, type ConnectorReview, type PlatformStats, type ScannerBrandChoice, type ScannerReviewItem, type ScannerReviewQueue } from "@/lib/api";
 import { fmtDay, fmtMoney, parseMoney } from "@/lib/billing";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -324,7 +324,98 @@ export default function AdminPage() {
           </button>
         ))}
       </div>
-      {tab === "orgs" ? <Overview /> : tab === "plans" ? <Plans /> : tab === "connectors" ? <Connectors /> : <ScannerAccounts />}
+      {tab === "orgs" ? <Overview /> : tab === "plans" ? <Plans /> : tab === "connectors" ? <Connectors /> : <div className="space-y-8"><ScannerReview /><ScannerAccounts /></div>}
     </div>
+  );
+}
+
+// Phase 7: sent screenshots AnyPulse could not attribute with confidence. The administrator
+// picks the followed brands (every organisation following them receives the content) or
+// discards it.
+function ScannerReview() {
+  const { t } = useI18n();
+  const q = useQuery({ queryKey: ["admin", "scanner-review"], queryFn: () => api.get<ScannerReviewQueue>("/admin/scanner/review") });
+  const brands = useQuery({ queryKey: ["admin", "scanner-brands"], queryFn: () => api.get<ScannerBrandChoice[]>("/admin/scanner/brands") });
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold">{t("adm.scannerReview.title")}{q.data ? ` (${q.data.total})` : ""}</h2>
+      <p className="text-sm text-ink-soft">{t("adm.scannerReview.intro")}</p>
+      <ErrorBanner error={q.error ?? brands.error} />
+      {q.isLoading && <Spinner />}
+      {q.data && q.data.total === 0 && <p className="text-sm text-ink-mute">{t("adm.scannerReview.none")}</p>}
+      {q.data?.items.map((it) => <ScannerReviewCard key={it.item_id} item={it} brands={brands.data ?? []} />)}
+    </section>
+  );
+}
+
+function ScannerReviewCard({ item, brands }: { item: ScannerReviewItem; brands: ScannerBrandChoice[] }) {
+  const { t, fmtDate } = useI18n();
+  const qc = useQueryClient();
+  const [chosen, setChosen] = useState<string[]>(item.suggested);
+  const [filter, setFilter] = useState("");
+  const decide = useMutation({
+    mutationFn: (discard: boolean) => api.post(`/admin/scanner/review/${item.item_id}`, discard ? { discard: true } : { brands: chosen }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "scanner-review"] }),
+  });
+  const shown = brands.filter((b) => b.name.toLowerCase().includes(filter.toLowerCase())).slice(0, 40);
+  const toggle = (n: string) => setChosen((c) => (c.includes(n) ? c.filter((x) => x !== n) : [...c, n]));
+  return (
+    <Card>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div>
+          {item.has_image ? (
+            <a href={`/api/v1/admin/scanner/items/${item.item_id}/image`} target="_blank" rel="noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/v1/admin/scanner/items/${item.item_id}/image`} alt="" loading="lazy"
+                   className="max-h-96 w-full rounded border border-line bg-paper-sunk object-contain" />
+            </a>
+          ) : <p className="text-xs text-ink-mute">{t("adm.scannerReview.noImage")}</p>}
+          <p className="mt-2 text-xs text-ink-mute">
+            {[item.platform, item.page_or_group, item.dialog_title].filter(Boolean).join(" · ")} · {fmtDate(item.sent_at)}
+          </p>
+          {!item.validated && <Badge tone="warn">{t("adm.scannerReview.unvalidated")}</Badge>}
+        </div>
+        <div className="space-y-3">
+          <ol className="max-h-64 space-y-1 overflow-y-auto text-sm">
+            {item.entries.map((e, i) => (
+              <li key={i} className={e.kind === "reply" ? "ms-4" : ""}>
+                <span className="text-xs uppercase text-ink-mute">{e.kind}</span>{" "}
+                <b dir="auto">{e.author || "?"}</b> <span dir="auto">{e.text}</span>
+                {e.image_text && <span className="block text-xs text-ink-soft" dir="auto">🖼 {e.image_text}</span>}
+              </li>
+            ))}
+          </ol>
+          <p className="text-xs text-ink-mute">
+            {t("adm.scannerReview.why")} {item.reason}
+            {item.confidence != null && ` (${Math.round(item.confidence * 100)} %)`}
+          </p>
+          <div>
+            <input className="field w-full text-sm" placeholder={t("adm.scannerReview.search")}
+                   value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[...new Set([...chosen, ...shown.map((b) => b.name)])].map((n) => {
+                const b = brands.find((x) => x.name === n);
+                return (
+                  <label key={n} className={`cursor-pointer rounded border px-2 py-1 text-xs ${chosen.includes(n) ? "border-brand bg-brand/10" : "border-line"}`}>
+                    <input type="checkbox" className="me-1" checked={chosen.includes(n)} onChange={() => toggle(n)} />
+                    {n}{b ? ` · ${t("adm.scannerReview.orgs", { n: b.organisations })}` : ""}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <ErrorBanner error={decide.error} />
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={!chosen.length || decide.isPending} onClick={() => decide.mutate(false)}>
+              {t("adm.scannerReview.deliver", { n: chosen.length })}
+            </Button>
+            <Button variant="ghost" disabled={decide.isPending}
+                    onClick={() => { if (window.confirm(t("adm.scannerReview.discardConfirm"))) decide.mutate(true); }}>
+              {t("adm.scannerReview.discard")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }

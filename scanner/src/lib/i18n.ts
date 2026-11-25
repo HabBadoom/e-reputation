@@ -228,6 +228,20 @@ const fr = {
   "browser.err.thread_running": "Attendez la fin de la capture du fil, ou arrêtez-la.",
   "collect.expiresSoon": "Sans activité, cette collecte et ses captures seront supprimées le {date}. Ajoutez ou vérifiez une capture pour la garder.",
   "items.imagePurged": "Image supprimée (conservation de 30 jours après l'envoi)",
+  "collect.sending": "Envoi…",
+  "collect.sendHint": "La collecte est fermée à l'envoi ; une nouvelle commence.",
+  "collect.sendEmpty": "Ajoutez au moins une capture avant d'envoyer.",
+  "collect.sendReading": "Attendez la fin de la lecture des captures.",
+  "collect.sendRevoked": "Votre accès à AnyPulse est suspendu : l'envoi est impossible.",
+  "collect.sendConfirm": "Envoyer {n} capture(s) à AnyPulse ? La collecte sera fermée.",
+  "collect.sendUnvalidated": "{n} capture(s) ne sont pas validées : elles seront envoyées marquées « non validées ».",
+  "collect.sent": "Collecte envoyée à AnyPulse. Une nouvelle collecte commence ; l'envoi est suivi dans l'historique.",
+  "history.resend": "Renvoyer",
+  "history.sentOn": "Envoyée le {date}",
+  "upload.err.nothing_to_send": "Ajoutez au moins une capture avant d'envoyer.",
+  "upload.err.still_reading": "Des captures sont encore en lecture.",
+  "upload.err.anypulse_access_revoked": "Votre accès à AnyPulse est suspendu.",
+  "upload.err.not_failed": "Seul un envoi échoué peut être relancé.",
 };
 
 type Dict = Record<keyof typeof fr, string>;
@@ -454,6 +468,20 @@ const ar: Dict = {
   "browser.err.thread_running": "انتظر انتهاء التقاط السلسلة أو أوقفه.",
   "collect.expiresSoon": "بدون نشاط، سيُحذف هذا الجمع ولقطاته بتاريخ {date}. أضف لقطة أو راجعها للاحتفاظ به.",
   "items.imagePurged": "حُذفت الصورة (حفظ 30 يومًا بعد الإرسال)",
+  "collect.sending": "جارٍ الإرسال…",
+  "collect.sendHint": "يُغلق الجمع عند الإرسال؛ ويبدأ جمع جديد.",
+  "collect.sendEmpty": "أضف لقطة واحدة على الأقل قبل الإرسال.",
+  "collect.sendReading": "انتظر انتهاء قراءة اللقطات.",
+  "collect.sendRevoked": "وصولك إلى AnyPulse معلّق: الإرسال غير ممكن.",
+  "collect.sendConfirm": "إرسال {n} لقطة إلى AnyPulse؟ سيُغلق الجمع.",
+  "collect.sendUnvalidated": "{n} لقطة غير مؤكدة: ستُرسل مع علامة «غير مؤكدة».",
+  "collect.sent": "أُرسل الجمع إلى AnyPulse. يبدأ جمع جديد؛ ويمكن متابعة الإرسال في السجل.",
+  "history.resend": "إعادة الإرسال",
+  "history.sentOn": "أُرسلت بتاريخ {date}",
+  "upload.err.nothing_to_send": "أضف لقطة واحدة على الأقل قبل الإرسال.",
+  "upload.err.still_reading": "لا تزال بعض اللقطات قيد القراءة.",
+  "upload.err.anypulse_access_revoked": "وصولك إلى AnyPulse معلّق.",
+  "upload.err.not_failed": "لا يمكن إعادة سوى إرسال فاشل.",
 };
 
 const en: Dict = {
@@ -678,6 +706,20 @@ const en: Dict = {
   "browser.err.thread_running": "Wait for the thread capture to finish, or stop it.",
   "collect.expiresSoon": "Without activity, this collection and its screenshots will be deleted on {date}. Add or check a screenshot to keep it.",
   "items.imagePurged": "Image deleted (kept 30 days after sending)",
+  "collect.sending": "Sending…",
+  "collect.sendHint": "The collection closes when sent; a new one starts.",
+  "collect.sendEmpty": "Add at least one screenshot before sending.",
+  "collect.sendReading": "Wait until the screenshots have been read.",
+  "collect.sendRevoked": "Your AnyPulse access is suspended: sending is not possible.",
+  "collect.sendConfirm": "Send {n} screenshot(s) to AnyPulse? The collection will be closed.",
+  "collect.sendUnvalidated": "{n} screenshot(s) are not validated: they will be sent marked “not validated”.",
+  "collect.sent": "Collection sent to AnyPulse. A new collection starts; follow the sending in the history.",
+  "history.resend": "Send again",
+  "history.sentOn": "Sent on {date}",
+  "upload.err.nothing_to_send": "Add at least one screenshot before sending.",
+  "upload.err.still_reading": "Some screenshots are still being read.",
+  "upload.err.anypulse_access_revoked": "Your AnyPulse access is suspended.",
+  "upload.err.not_failed": "Only a failed sending can be retried.",
 };
 
 export const dictionaries: Record<Locale, Dict> = { fr, ar, en };

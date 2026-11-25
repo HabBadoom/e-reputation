@@ -1,9 +1,9 @@
 # Aynpulse Scanner
 
-Status: **Phases 1 (foundation), 2 (AnyPulse access), 3 (screenshots: built-in browser and
-upload), 4 (extraction by a vision model, review and validation) and 5 (pasted links opened in
-the built-in browser) implemented.** Transmission to AnyPulse is not built yet; its action is
-shown disabled with a note.
+Status: **Phases 1 to 7 implemented**: foundation, AnyPulse access, screenshots (built-in
+browser, whole-thread capture, upload), extraction by a vision model with review and validation,
+pasted links, retention, and sending to AnyPulse (central space, attribution to brands,
+administrators' review queue). Phases 8–9 (hardening, production) remain.
 
 > Scanner collects. AnyPulse understands, analyses and reports.
 
@@ -167,6 +167,43 @@ access (checked in CI). When storage is down, the upload fails as a whole (503
 `storage_unavailable`) and nothing half-done is kept. Removing an item deletes its object after
 the database commit.
 
+## Sending to AnyPulse (phase 7)
+
+The agent presses **"Envoyer ma collecte à AnyPulse"** (confirmation shows how many screenshots,
+and how many are not validated). Refused while a screenshot is still being read, with no
+screenshot, or when the agent's AnyPulse access is revoked. The collection closes (`queued`) and
+a new one starts; the history shows `queued → transmitting → transmitted` (or `failed`, with
+"Renvoyer").
+
+The `scanner.transmit` job (worker), for each screenshot:
+
+1. **Attribution** (decisions 2026-11-25). Text used: page or group name, dialog title, and
+   every post, comment and reply read (authors included), duplicates excluded.
+   - First the **names, aliases and include keywords of every organisation's active brands**
+     (`scanner_brand_catalogue()`; brands with the same name are one group): every group named
+     in the text is matched (`method = keywords`).
+   - If none is named and `REPINTEL_SCANNER_ATTRIBUTION_MODEL` is set, the language model is
+     given the text and the list of followed brand names and answers which ones the content is
+     about; at or above `REPINTEL_SCANNER_ATTRIBUTION_MIN_CONFIDENCE` (0.7) it is delivered
+     (`method = ai`), otherwise it goes to review with the model's suggestion.
+   - Otherwise: **review queue** (`to_review`). A screenshot with no text read is `empty`.
+2. **Delivery** to **every organisation following a matched brand** (a brand's exclude
+   keywords still apply per organisation): one AnyPulse **mention per post, comment or reply**,
+   `collection_method = scanner`, connector `aynpulse_scanner`, verification
+   **`scanner_validated` or `scanner_unvalidated`** (whether the agent validated the
+   screenshot), author as publisher, estimated publication time, and full provenance in
+   `raw.scanner` (collection, item, entry, kind, parent, page or group, counters, link,
+   agent). AnyPulse's language analysis is queued for the new mentions. Delivery is idempotent
+   (`canonical_url = scanner:entry:<id>`, unique per organisation and brand).
+3. The images' deletion date is set to 30 days after sending (phase 6).
+
+**Review queue** (AnyPulse admin console → Scanner → "Scanner — à attribuer", platform
+administrators only): the image, the text read, why it is there and the model's suggestion; the
+administrator ticks followed brands (with how many organisations follow each) and delivers, or
+discards. Decisions are recorded (`decided_by`, audit `attribution.decided`).
+
+Scanner agents never see brands, organisations or analyses: only that their collection was sent.
+
 ## Retention (phase 6, decision D9)
 
 Decided by the product owner on 2026-11-25:
@@ -320,6 +357,8 @@ Expected-text files contain real names: keep them out of git.
 | GET | `/scanner/extraction` | `{enabled}` |
 | GET | `/scanner/items/{id}/entries` | Entries read from the screenshot, in reading order |
 | POST | `/scanner/items/{id}/extract` | Read again (replaces entries and corrections); 409 `extraction_disabled`; rate-limited |
+| POST | `/scanner/sessions/{id}/send` | Phase 7: send to AnyPulse (409 `nothing_to_send`, `still_reading`; 403 `anypulse_access_revoked`) |
+| POST | `/scanner/sessions/{id}/resend` | Retry a `failed` sending (409 `not_failed`) |
 | POST | `/scanner/sessions/{id}/links` | `{url}` → `{item_id, url, platform, created}`: record a pasted link (once per collection); 422 `bad_url` |
 | POST | `/scanner/items/{id}/validate` | `{validated: true|false}` (default true): the agent confirms the reading; 409 `not_extracted` before it is read |
 | POST | `/scanner/sessions/{id}/extract` | Queue every screenshot still `pending` or `failed` → `{queued}` |
@@ -363,6 +402,8 @@ Platform administration (`/api/v1/admin/scanner/*`, platform admin + MFA):
 | `REPINTEL_SCANNER_BROWSER_MAX_SESSIONS` | `4` | Live browsers per service instance (≈ 500 MB RAM each) |
 | `REPINTEL_SCANNER_BROWSER_IDLE_SECONDS` | `600` | Closes an unused browser |
 | `REPINTEL_SCANNER_BROWSER_MAX_STATE_BYTES` | `2000000` | Saved session size cap (local storage dropped first) |
+| `REPINTEL_SCANNER_ATTRIBUTION_MODEL` | empty | Language model routing screenshots that name no followed brand; empty = straight to the review queue |
+| `REPINTEL_SCANNER_ATTRIBUTION_MIN_CONFIDENCE` | `0.7` | Below: review queue |
 | `REPINTEL_SCANNER_THREAD_MAX_CAPTURES` | `20` | "Capturer tout le fil": captures per run |
 | `REPINTEL_SCANNER_THREAD_SETTLE_MS` | `1200` | Wait after each scroll for comments to load |
 | `REPINTEL_SCANNER_EXTRACTION_MODEL` | empty | Vision model id (OpenAI); empty = extraction off, screenshots stay `pending` |
@@ -389,7 +430,7 @@ port 8100 (the Scanner app connects to it directly in development). Extraction r
 | 5 | Pasted links recorded and opened in the built-in browser, captures attached to them | **Done** |
 | 5b | URL connectors (YouTube official API first; Apify behind the legal-review gate) and Excel import | Planned (D6) |
 | 6 | Retention: sent images 30 days, unsent collections 30 days without activity (warning 7 days before) | **Done** |
-| 7 | Transmission to the central RepIntel space: ingest API, idempotency, retries, acknowledgement; brand attribution by RepIntel's AI | Planned |
+| 7 | Sending to AnyPulse: attribution (names, aliases, keywords, optional model), delivery to every organisation following the brand, validated/unvalidated marking, admin review queue | **Done** |
 | 8–9 | Hardening, production deployment (Caddy host for Scanner with the WebSocket route, `--profile scanner`, bucket) | Planned |
 
 ## Known limitations
@@ -402,7 +443,6 @@ port 8100 (the Scanner app connects to it directly in development). Extraction r
   keyboards that do not report Backspace use the Erase button. No copy/paste from the phone's
   clipboard into the page yet. Video and audio are not streamed.
 
-- No transmission to AnyPulse yet; that action is visibly disabled.
 - Stored screenshots are not yet deleted after a retention period, and objects left behind by
   a failed database commit are not swept yet (phase 6).
 - Re-encoding JPEG/WebP at quality 92 slightly changes pixels; text stays legible for OCR.

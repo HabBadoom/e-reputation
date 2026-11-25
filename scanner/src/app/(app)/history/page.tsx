@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
@@ -51,6 +51,10 @@ export default function HistoryPage() {
                         <Badge tone={s.is_open ? "brand" : s.status === "failed" ? "neg" : "neutral"}>
                           {t(`status.${s.status}` as MessageKey)}
                         </Badge>
+                        {s.status === "failed" && <ResendButton id={s.id} />}
+                        {s.transmitted_at && (
+                          <div className="mt-1 text-xs text-ink-mute">{t("history.sentOn", { date: fmtDate(s.transmitted_at) })}</div>
+                        )}
                       </td>
                       <td className="py-2 font-mono text-xs text-ink-mute">
                         {s.anypulse_collection_id ? s.anypulse_collection_id.slice(0, 8) : "—"}
@@ -74,5 +78,20 @@ export default function HistoryPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+function ResendButton({ id }: { id: string }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const resend = useMutation({
+    mutationFn: () => api.post(`/sessions/${id}/resend`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sessions"] }),
+  });
+  return (
+    <button className="ms-2 text-xs font-medium text-brand hover:underline" disabled={resend.isPending}
+            onClick={() => resend.mutate()}>
+      {t("history.resend")}
+    </button>
   );
 }

@@ -13,9 +13,11 @@ import type { MessageKey } from "@/lib/i18n";
 // Screenshot first. Main action: the built-in browser (the agent signs in to the dedicated
 // account and captures what they see); importing screenshots already taken is the fallback; a
 // pasted link is recorded and opened in the browser, its captures attached to it (phase 5).
-// Sending (phase 7) is shown disabled with a note, never as a button that does nothing.
+// "Envoyer à AnyPulse" (phase 7) closes the collection; unvalidated screenshots may be sent and
+// arrive marked as such. Scanner users never see what AnyPulse does with them.
 export default function CollectPage() {
   const { t, fmtDate } = useI18n();
+  const [sent, setSent] = useState(false);
   const qc = useQueryClient();
   const session = useQuery({
     queryKey: ["session", "current"],
@@ -64,6 +66,12 @@ export default function CollectPage() {
       )}
 
       {s && <LinkForm session={s} />}
+
+      {sent && (
+        <div role="status" className="rounded border border-signal-pos/40 bg-signal-pos/10 px-4 py-3 text-sm">
+          {t("collect.sent")}
+        </div>
+      )}
 
       {s?.expires_soon && s.expires_at && (
         <div role="alert" className="rounded border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm">
@@ -143,10 +151,8 @@ export default function CollectPage() {
               </div>
             ))}
           </dl>
-          <div className="mt-5 border-t border-line pt-4">
-            <Button className="w-full sm:w-auto" disabled aria-describedby="send-not-yet">{t("collect.send")}</Button>
-            <p id="send-not-yet" className="mt-2 text-xs text-ink-mute">{t("collect.sendNotYet")}</p>
-          </div>
+          <SendBox session={s} items={items.data ?? []} revoked={access.data?.state === "revoked"}
+                   onSent={() => setSent(true)} />
         </Card>
       )}
     </div>
@@ -182,5 +188,40 @@ function LinkForm({ session }: { session: CollectionSession }) {
       <p className="text-xs text-ink-mute">{note ?? t("collect.linkHint")}</p>
       <ErrorBanner error={add.error} />
     </form>
+  );
+}
+
+function SendBox({ session, items, revoked, onSent }: {
+  session: CollectionSession; items: CollectionItem[]; revoked: boolean; onSent: () => void;
+}) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const shots = items.filter((i) => i.source_type === "screenshot");
+  const reading = shots.some((i) => i.status === "processing");
+  const unvalidated = shots.filter((i) => !i.extraction?.validated_at).length;
+  const send = useMutation({
+    mutationFn: () => api.post<CollectionSession>(`/sessions/${session.id}/send`),
+    onSuccess: () => {
+      onSent();
+      qc.invalidateQueries({ queryKey: ["session"] });
+      qc.invalidateQueries({ queryKey: ["sessions"] });
+      qc.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
+  const why = revoked ? t("collect.sendRevoked") : !shots.length ? t("collect.sendEmpty")
+    : reading ? t("collect.sendReading") : null;
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <Button className="w-full sm:w-auto" disabled={!!why || !session.is_open || send.isPending}
+              onClick={() => {
+                const msg = t("collect.sendConfirm", { n: shots.length })
+                  + (unvalidated ? "\n\n" + t("collect.sendUnvalidated", { n: unvalidated }) : "");
+                if (window.confirm(msg)) send.mutate();
+              }}>
+        {send.isPending ? t("collect.sending") : t("collect.send")}
+      </Button>
+      <p className="mt-2 text-xs text-ink-mute">{why ?? t("collect.sendHint")}</p>
+      <ErrorBanner error={send.error} />
+    </div>
   );
 }

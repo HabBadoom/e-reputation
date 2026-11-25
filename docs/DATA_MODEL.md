@@ -147,6 +147,8 @@ Migration 0016 (links): `scanner_collection_items.link_item_id` (capture taken f
 
 Migration 0017 (retention): index on `scanner_uploaded_files.retention_until`; `scanner_retention_accounts(idle_days)` (SECURITY DEFINER, lists accounts with expired images or abandoned collections); the API role may update `retention_until` only.
 
+Migration 0018 (sending): `mentions.collection_method` accepts `scanner`, `verification_status` accepts `scanner_validated` / `scanner_unvalidated`; connector policy `aynpulse_scanner` (pending legal review); `scanner_attributions` (one per sent screenshot: `status` pending / delivered / to_review / discarded / empty, `method` keywords / ai / admin, `brand_names`, `confidence`, `reason`, `mentions_created`, `organisations`, `decided_by`, `decided_at`; RLS: the sending agent or platform administrators); `scanner_brand_catalogue()` (SECURITY DEFINER, API role only).
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:
