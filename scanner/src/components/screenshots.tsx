@@ -195,6 +195,11 @@ export function ItemsGrid({ session, items }: { session: CollectionSession; item
                 <span className="line-clamp-3 break-all text-[11px] text-ink-soft" dir="ltr" title={it.source_url ?? ""}>{it.source_url}</span>
               </div>
             )}
+            {it.source_type === "screenshot" && !it.file && (
+              <div className="flex h-36 items-center justify-center bg-paper-sunk px-3 text-center text-[11px] text-ink-mute">
+                {t("items.imagePurged")}
+              </div>
+            )}
             {it.file && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={it.file.url} alt={it.file.original_filename} loading="lazy"

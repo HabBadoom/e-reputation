@@ -145,6 +145,8 @@ Migration 0015: `scanner_extractions.validated_at` — set when the agent valida
 
 Migration 0016 (links): `scanner_collection_items.link_item_id` (capture taken from a pasted link; composite FK within the account, `ON DELETE SET NULL`), `url_key` (SHA-256 of the normalised address; required for `url` items, unique per collection).
 
+Migration 0017 (retention): index on `scanner_uploaded_files.retention_until`; `scanner_retention_accounts(idle_days)` (SECURITY DEFINER, lists accounts with expired images or abandoned collections); the API role may update `retention_until` only.
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

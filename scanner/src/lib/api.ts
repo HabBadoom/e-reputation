@@ -103,6 +103,8 @@ export interface CollectionSession {
   anypulse_collection_id: string | null;
   is_open: boolean;
   counters: Counters;
+  expires_at: string | null;
+  expires_soon: boolean;
 }
 
 /** Whether this account can send its collections to AnyPulse (revoked only by a platform

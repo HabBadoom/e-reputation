@@ -2,7 +2,8 @@
 - trials past their end date expire (collection stops, data stays readable), owners e-mailed;
 - data retention: each organization's mentions, reports and browser traces older than its
   plan's `max_retention_days` (capped by REPINTEL_RETENTION_MAX_DAYS) are deleted;
-- old usage events are pruned (kept 400 days for billing history)."""
+- old usage events are pruned (kept 400 days for billing history);
+- Scanner retention (`app.scanner.retention`): sent images and abandoned collections."""
 
 import logging
 import uuid
@@ -94,6 +95,11 @@ def run_daily(now: datetime | None = None) -> dict[str, Any]:
                     stats["purged"][str(tid)] = res
         except Exception:
             log.exception("maintenance_tenant_failed", extra={"tenant_id": str(tid)})
+    try:
+        from app.scanner import retention
+        stats["scanner"] = retention.run(now)
+    except Exception:
+        log.exception("scanner_retention_run_failed")
     log.info("platform_daily", extra={"trials_expired": stats["trials_expired"],
                                       "tenants_purged": len(stats["purged"])})
     return stats

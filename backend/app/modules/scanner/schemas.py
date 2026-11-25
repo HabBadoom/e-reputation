@@ -67,6 +67,8 @@ class CollectionSessionOut(BaseModel):
     anypulse_collection_id: uuid.UUID | None
     is_open: bool
     counters: CountersOut
+    expires_at: datetime | None = None       # unsent: deleted then for inactivity (phase 6)
+    expires_soon: bool = False                # within the warning period
 
 
 class CollectionSessionPage(BaseModel):

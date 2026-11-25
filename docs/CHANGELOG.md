@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Aynpulse Scanner, Phase 6: retention
+
+### Added
+- Daily Scanner retention in the platform maintenance job: images of sent collections deleted 30 days after sending; unsent collections deleted after 30 days without activity, with a warning banner 7 days before (migration 0017, `app/scanner/retention.py`, `expires_at` / `expires_soon` on collections). Reviewing counts as activity.
+
 ## Unreleased — Aynpulse Scanner, Phase 5: pasted links
 
 ### Added

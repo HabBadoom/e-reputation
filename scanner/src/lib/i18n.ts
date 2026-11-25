@@ -226,6 +226,8 @@ const fr = {
   "browser.threadEnd.rate_limited": "Trop de captures en peu de temps : réessayez plus tard.",
   "browser.threadEnd.error": "Interrompu par une erreur.",
   "browser.err.thread_running": "Attendez la fin de la capture du fil, ou arrêtez-la.",
+  "collect.expiresSoon": "Sans activité, cette collecte et ses captures seront supprimées le {date}. Ajoutez ou vérifiez une capture pour la garder.",
+  "items.imagePurged": "Image supprimée (conservation de 30 jours après l'envoi)",
 };
 
 type Dict = Record<keyof typeof fr, string>;
@@ -450,6 +452,8 @@ const ar: Dict = {
   "browser.threadEnd.rate_limited": "لقطات كثيرة في وقت قصير: أعد المحاولة لاحقًا.",
   "browser.threadEnd.error": "توقف بسبب خطأ.",
   "browser.err.thread_running": "انتظر انتهاء التقاط السلسلة أو أوقفه.",
+  "collect.expiresSoon": "بدون نشاط، سيُحذف هذا الجمع ولقطاته بتاريخ {date}. أضف لقطة أو راجعها للاحتفاظ به.",
+  "items.imagePurged": "حُذفت الصورة (حفظ 30 يومًا بعد الإرسال)",
 };
 
 const en: Dict = {
@@ -672,6 +676,8 @@ const en: Dict = {
   "browser.threadEnd.rate_limited": "Too many captures in a short time: try again later.",
   "browser.threadEnd.error": "Interrupted by an error.",
   "browser.err.thread_running": "Wait for the thread capture to finish, or stop it.",
+  "collect.expiresSoon": "Without activity, this collection and its screenshots will be deleted on {date}. Add or check a screenshot to keep it.",
+  "items.imagePurged": "Image deleted (kept 30 days after sending)",
 };
 
 export const dictionaries: Record<Locale, Dict> = { fr, ar, en };

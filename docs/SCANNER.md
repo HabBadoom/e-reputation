@@ -167,6 +167,23 @@ access (checked in CI). When storage is down, the upload fails as a whole (503
 `storage_unavailable`) and nothing half-done is kept. Removing an item deletes its object after
 the database commit.
 
+## Retention (phase 6, decision D9)
+
+Decided by the product owner on 2026-11-25:
+
+| What | How long | Then |
+|---|---|---|
+| Images of a **sent** collection | 30 days after sending (`retention_until`, set by phase 7) | Images deleted from storage; items, extracted text and history stay |
+| A collection **never sent** (open or cancelled) | 30 days without activity (adding, capturing, reviewing, validating) | Collection, images and text deleted; the agent sees the date in a banner from 7 days before |
+
+Run by the existing daily maintenance job (`platform.daily` → `app.scanner.retention.run`): the
+SECURITY DEFINER function `scanner_retention_accounts(idle_days)` lists the accounts concerned
+(its only cross-account read; executable by the API role only), then each account is purged in
+its own transaction and Scanner context (RLS). Objects are deleted from storage before their
+rows: a storage failure leaves the rows for the next run. Each deletion is audited
+(`files.retention_deleted`, `collection.expired`). Settings:
+`REPINTEL_SCANNER_RETENTION_SENT_DAYS`, `_IDLE_DAYS` (30) and `_WARNING_DAYS` (7).
+
 ## Capture the whole thread
 
 Next to "Capturer l'écran", **"Capturer tout le fil"** (asked by the product owner on
@@ -371,7 +388,7 @@ port 8100 (the Scanner app connects to it directly in development). Extraction r
 | 4 | Extraction by a vision model: parts for tall images, threads, dates, duplicates across screenshots, confidence, review and correction screen, benchmark | **Done** |
 | 5 | Pasted links recorded and opened in the built-in browser, captures attached to them | **Done** |
 | 5b | URL connectors (YouTube official API first; Apify behind the legal-review gate) and Excel import | Planned (D6) |
-| 6 | Normalisation, history, retention and cleanup of stored files | Planned |
+| 6 | Retention: sent images 30 days, unsent collections 30 days without activity (warning 7 days before) | **Done** |
 | 7 | Transmission to the central RepIntel space: ingest API, idempotency, retries, acknowledgement; brand attribution by RepIntel's AI | Planned |
 | 8–9 | Hardening, production deployment (Caddy host for Scanner with the WebSocket route, `--profile scanner`, bucket) | Planned |
 

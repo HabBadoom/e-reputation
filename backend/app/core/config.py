@@ -167,6 +167,11 @@ class Settings(BaseSettings):
     scanner_browser_idle_seconds: int = Field(default=600, ge=60)
     scanner_browser_max_state_bytes: int = Field(default=2_000_000, ge=10_000)
     scanner_browser_allow_private_networks: bool = False   # tests only
+    # Phase 6 retention (D9): images kept N days after sending; unsent collections deleted after
+    # N days without activity, the agent warned from N days before.
+    scanner_retention_sent_days: int = Field(default=30, ge=0, le=3650)
+    scanner_retention_idle_days: int = Field(default=30, ge=1, le=3650)
+    scanner_retention_warning_days: int = Field(default=7, ge=0, le=365)
     scanner_thread_max_captures: int = Field(default=20, ge=1, le=60)   # "Capturer tout le fil"
     scanner_thread_settle_ms: int = Field(default=1200, ge=100, le=10000)  # wait after a scroll
 

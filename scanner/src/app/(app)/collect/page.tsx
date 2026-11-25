@@ -65,6 +65,12 @@ export default function CollectPage() {
 
       {s && <LinkForm session={s} />}
 
+      {s?.expires_soon && s.expires_at && (
+        <div role="alert" className="rounded border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm">
+          {t("collect.expiresSoon", { date: fmtDate(s.expires_at) })}
+        </div>
+      )}
+
       {access.data?.state === "revoked" && (
         <div role="alert" className="rounded border border-signal-neg/30 bg-signal-neg/5 px-4 py-3 text-sm text-signal-neg">
           <p>{t("access.revoked")}</p>

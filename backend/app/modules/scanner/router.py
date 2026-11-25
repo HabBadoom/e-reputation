@@ -6,6 +6,7 @@ the AnyPulse `ri_*` ones); API clients send `X-Auth-Mode: token` and use Bearer 
 
 import dataclasses
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
 from sqlalchemy.orm import Session
@@ -161,7 +162,14 @@ def _out(s: ScannerCollectionSession, c: sessions.Counters) -> CollectionSession
         updated_at=s.updated_at, transmitted_at=s.transmitted_at,
         anypulse_collection_id=s.anypulse_collection_id,
         is_open=s.status in sessions.OPEN_STATUSES,
-        counters=CountersOut(**dataclasses.asdict(c)))
+        counters=CountersOut(**dataclasses.asdict(c)), **_expiry(s))
+
+
+def _expiry(s: ScannerCollectionSession) -> dict:
+    from app.scanner import retention
+    at = retention.expires_at(s)
+    warn = timedelta(days=get_settings().scanner_retention_warning_days)
+    return {"expires_at": at, "expires_soon": bool(at and at - datetime.now(UTC) <= warn)}
 
 
 def _one(db: Session, s: ScannerCollectionSession) -> CollectionSessionOut:
@@ -374,6 +382,7 @@ def validate_item(item_id: uuid.UUID, request: Request, body: ValidateIn | None 
     s = uploads.require_open(sessions.get(db, item.session_id))
     validated = body.validated if body else True
     extraction.validate(db, item, validated=validated)
+    s.updated_at = datetime.now(UTC)          # reviewing is activity (phase 6 expiry)
     record(db, account_id=ctx.account_id,
            action="item.validated" if validated else "item.validation_withdrawn",
            target_type="collection_item", target_id=item.id, request=request)
@@ -403,8 +412,9 @@ def correct_entry(entry_id: uuid.UUID, body: EntryPatch, request: Request,
                   db: Session = Depends(get_db)) -> EntryOut:
     """The agent fixes a name or a text the model misread (collection data, not analysis)."""
     e = extraction.get_entry(db, entry_id)
-    uploads.require_open(sessions.get(db, e.session_id))
+    s = uploads.require_open(sessions.get(db, e.session_id))
     if extraction.correct(e, author_name=body.author_name, text_value=body.text):
+        s.updated_at = datetime.now(UTC)
         record(db, account_id=ctx.account_id, action="entry.corrected",
                target_type="extracted_entry", target_id=e.id, request=request)
     db.commit()
@@ -417,8 +427,9 @@ def delete_entry(entry_id: uuid.UUID, request: Request,
                  db: Session = Depends(get_db)) -> Response:
     """Remove an entry that is not content (interface text read by mistake, an ad…)."""
     e = extraction.get_entry(db, entry_id)
-    uploads.require_open(sessions.get(db, e.session_id))
+    s = uploads.require_open(sessions.get(db, e.session_id))
     db.delete(e)
+    s.updated_at = datetime.now(UTC)
     record(db, account_id=ctx.account_id, action="entry.removed",
            target_type="extracted_entry", target_id=entry_id, request=request)
     db.commit()
