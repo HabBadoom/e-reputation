@@ -195,3 +195,25 @@ def scanner_extract(db: Session, job: Job) -> None:
     set_scanner_context(db, account_id=account_id)
     service.run(db, item_id, attempt=job.attempts,
                 last_attempt=job.attempts >= job.max_attempts)
+
+
+@handler("scanner.transmit")
+def scanner_transmit(db: Session, job: Job) -> None:
+    """Send one Scanner collection to AnyPulse (phase 7): attribute, deliver, or queue for
+    review. On the last failed attempt the collection is marked failed (agent can resend)."""
+    import uuid
+
+    from app.scanner import transmit
+    try:
+        account_id = uuid.UUID(job.payload["account_id"])
+        session_id = uuid.UUID(job.payload["session_id"])
+    except (KeyError, ValueError) as e:
+        raise PermanentJobError("malformed scanner.transmit payload") from e
+    try:
+        transmit.run(db, account_id, session_id)
+    except Exception:
+        if job.attempts >= job.max_attempts:
+            db.rollback()
+            transmit.fail(db, account_id, session_id)
+            return
+        raise

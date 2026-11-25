@@ -30,7 +30,7 @@ from app.main import create_app  # noqa: E402
 from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
 DATA_TABLES = [
-    "scanner_extracted_entries", "scanner_extractions",
+    "scanner_attributions", "scanner_extracted_entries", "scanner_extractions",
     "scanner_browser_profiles", "scanner_uploaded_files", "scanner_audit_logs",
     "scanner_collection_items",
     "scanner_collection_sessions",

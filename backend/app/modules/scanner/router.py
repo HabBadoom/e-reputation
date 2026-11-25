@@ -354,6 +354,36 @@ def reextract_item(item_id: uuid.UUID, request: Request,
     return _items(db, s.id)
 
 
+@router.post("/sessions/{session_id}/send", response_model=CollectionSessionOut)
+def send_collection(session_id: uuid.UUID, request: Request,
+                    ctx: ScannerContext = Depends(get_scanner_auth),
+                    db: Session = Depends(get_db)) -> CollectionSessionOut:
+    """Phase 7: send the collection to AnyPulse. Unvalidated screenshots may be sent; they
+    arrive marked as such. The collection closes; the next screen starts a new one."""
+    from app.scanner import transmit
+    s = sessions.get(db, session_id)
+    account = db.get(ScannerAccount, ctx.account_id)
+    assert account is not None
+    transmit.send(db, s, account)
+    record(db, account_id=ctx.account_id, action="collection.sent",
+           target_type="collection_session", target_id=s.id, request=request)
+    db.commit()
+    return _one(db, s)
+
+
+@router.post("/sessions/{session_id}/resend", response_model=CollectionSessionOut)
+def resend_collection(session_id: uuid.UUID, request: Request,
+                      ctx: ScannerContext = Depends(get_scanner_auth),
+                      db: Session = Depends(get_db)) -> CollectionSessionOut:
+    from app.scanner import transmit
+    s = sessions.get(db, session_id)
+    transmit.resend(db, s)
+    record(db, account_id=ctx.account_id, action="collection.resent",
+           target_type="collection_session", target_id=s.id, request=request)
+    db.commit()
+    return _one(db, s)
+
+
 @router.post("/sessions/{session_id}/links", response_model=LinkOut)
 def add_link(session_id: uuid.UUID, body: LinkIn, request: Request,
              ctx: ScannerContext = Depends(get_scanner_auth),

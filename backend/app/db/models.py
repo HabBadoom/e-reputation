@@ -1057,6 +1057,33 @@ class ScannerExtractedEntry(Base):
     updated_at: Mapped[datetime] = _created()
 
 
+class ScannerAttribution(Base):
+    """Phase 7: to which brands a sent screenshot was delivered (0018). Agent + platform admins."""
+    __tablename__ = "scanner_attributions"
+    __table_args__ = (
+        ForeignKeyConstraint(["account_id", "item_id"], ["scanner_collection_items.account_id",
+                                                         "scanner_collection_items.id"],
+                             ondelete="CASCADE"),
+        ForeignKeyConstraint(["account_id", "session_id"],
+                             ["scanner_collection_sessions.account_id",
+                              "scanner_collection_sessions.id"], ondelete="CASCADE"),
+    )
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    method: Mapped[str | None] = mapped_column(String(20))
+    brand_names: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    confidence: Mapped[float | None] = mapped_column(Numeric(3, 2, asdecimal=False))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    mentions_created: Mapped[int] = mapped_column(default=0)
+    organisations: Mapped[int] = mapped_column(default=0)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
 class ScannerBrowserProfile(Base):
     """Encrypted cookies/local storage of the agent's built-in browser (0013). No passwords."""
     __tablename__ = "scanner_browser_profiles"

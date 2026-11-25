@@ -167,6 +167,10 @@ class Settings(BaseSettings):
     scanner_browser_idle_seconds: int = Field(default=600, ge=60)
     scanner_browser_max_state_bytes: int = Field(default=2_000_000, ge=10_000)
     scanner_browser_allow_private_networks: bool = False   # tests only
+    # Phase 7: routing sent screenshots to brands. Names/aliases/keywords first; then this
+    # model (empty = no model: unmatched screenshots go to the administrators' review queue).
+    scanner_attribution_model: str = ""
+    scanner_attribution_min_confidence: float = Field(default=0.7, ge=0, le=1)
     # Phase 6 retention (D9): images kept N days after sending; unsent collections deleted after
     # N days without activity, the agent warned from N days before.
     scanner_retention_sent_days: int = Field(default=30, ge=0, le=3650)
