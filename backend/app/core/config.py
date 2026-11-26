@@ -137,6 +137,58 @@ class Settings(BaseSettings):
     default_plan: str = ""
     trial_days: int = 14
 
+    # Aynpulse Scanner (collection module, separate accounts). See docs/SCANNER.md.
+    # Off by default: an existing production deployment does not open Scanner sign-up until
+    # the Scanner web app is deployed with it (Phase 9).
+    scanner_enabled: bool = False
+    scanner_base_url: str = "http://localhost:3001"
+    scanner_cookie_domain: str | None = None   # host-only cookies by default
+    scanner_max_items_per_session: int = Field(default=200, ge=1, le=2000)
+    # Screenshot uploads (phase 3). Images are validated, re-encoded without metadata and kept
+    # in private object storage; they are never served publicly.
+    scanner_upload_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    scanner_upload_max_pixels: int = Field(default=40_000_000, ge=10_000)
+    scanner_upload_max_side: int = Field(default=12_000, ge=100)
+    scanner_upload_max_files_per_request: int = Field(default=20, ge=1, le=100)
+    scanner_uploads_per_hour: int = Field(default=600, ge=1)
+    # Phase 4: text extraction from screenshots by a vision model (OpenAI key above). Empty model
+    # = extraction off (screenshots stay "pending"). Model ids are never hardcoded.
+    scanner_extraction_enabled: bool = True
+    scanner_extraction_model: str = ""
+    scanner_extraction_detail: Literal["high", "low", "auto"] = "high"
+    scanner_extraction_max_output_tokens: int = Field(default=8000, ge=500, le=64000)
+    scanner_extraction_min_confidence: float = Field(default=0.75, ge=0, le=1)
+    scanner_extraction_timezone: str = "Africa/Algiers"   # local time of screenshot file names
+    # Built-in browser (scanner-browser service): a real Chromium shown live in the Scanner app.
+    scanner_browser_enabled: bool = False
+    scanner_browser_public_url: str = ""          # ws(s)://… for clients; "" = same origin
+    scanner_browser_allowed_origins: list[str] = []  # "" → the origin of scanner_base_url
+    scanner_browser_max_sessions: int = Field(default=4, ge=1, le=64)
+    scanner_browser_idle_seconds: int = Field(default=600, ge=60)
+    scanner_browser_max_state_bytes: int = Field(default=2_000_000, ge=10_000)
+    scanner_browser_allow_private_networks: bool = False   # tests only
+    # Phase 7: routing sent screenshots to brands. Names/aliases/keywords first; then this
+    # model (empty = no model: unmatched screenshots go to the administrators' review queue).
+    scanner_attribution_model: str = ""
+    scanner_attribution_min_confidence: float = Field(default=0.7, ge=0, le=1)
+    # Phase 6 retention (D9): images kept N days after sending; unsent collections deleted after
+    # N days without activity, the agent warned from N days before.
+    scanner_retention_sent_days: int = Field(default=30, ge=0, le=3650)
+    scanner_retention_idle_days: int = Field(default=30, ge=1, le=3650)
+    scanner_retention_warning_days: int = Field(default=7, ge=0, le=365)
+    scanner_thread_max_captures: int = Field(default=20, ge=1, le=60)   # "Capturer tout le fil"
+    scanner_thread_settle_ms: int = Field(default=1200, ge=100, le=10000)  # wait after a scroll
+
+    # Object storage for Scanner files. "filesystem" is for development and tests only;
+    # staging and production must use an S3-compatible service (Scaleway, OVH, RustFS…).
+    storage_backend: Literal["filesystem", "s3"] = "filesystem"
+    storage_filesystem_root: str = "/tmp/repintel-storage"   # noqa: S108 — dev/test only
+    storage_endpoint_url: str = ""          # e.g. http://rustfs:9000; empty = AWS default
+    storage_region: str = "us-east-1"
+    storage_bucket: str = "repintel-scanner"
+    storage_access_key: SecretStr = SecretStr("")
+    storage_secret_key: SecretStr = SecretStr("")
+
     @field_validator("jwt_secret")
     @classmethod
     def _secret_strength(cls, v: SecretStr) -> SecretStr:
@@ -165,6 +217,14 @@ class Settings(BaseSettings):
             raise ValueError("REPINTEL_BREVO_API_KEY is required when EMAIL_PROVIDER=brevo")
         if self.env in ("staging", "production") and self.email_provider != "brevo":
             raise ValueError("A real email provider is required in staging/production")
+        return self
+
+    @model_validator(mode="after")
+    def _scanner_storage(self) -> "Settings":
+        if self.scanner_enabled and self.env in ("staging", "production") \
+                and self.storage_backend != "s3":
+            raise ValueError("REPINTEL_STORAGE_BACKEND must be 's3' when Scanner is enabled in "
+                             "staging/production")
         return self
 
     @property

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
-import { api, type AdminPlan, type AdminTenantRow, type ConnectorReview, type PlatformStats } from "@/lib/api";
+import { api, type AdminPlan, type AdminScannerAccount, type AdminTenantRow, type ConnectorReview, type PlatformStats, type ScannerBrandChoice, type ScannerReviewItem, type ScannerReviewQueue } from "@/lib/api";
 import { fmtDay, fmtMoney, parseMoney } from "@/lib/billing";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -15,7 +15,7 @@ const ENTITLEMENTS = [
   "max_ai_tasks_per_day", "max_mentions_per_month", "max_ai_calls_per_month",
   "max_reports_per_month", "max_webhooks", "max_concurrent_browser_missions", "max_retention_days",
 ] as const;
-type Tab = "orgs" | "plans" | "connectors";
+type Tab = "orgs" | "plans" | "connectors" | "scanner";
 
 function money(m: Record<string, number> | null, locale: "fr" | "ar" | "en") {
   const e = Object.entries(m ?? {});
@@ -234,6 +234,79 @@ function Connectors() {
   );
 }
 
+// Aynpulse Scanner accounts: each has its own organization, linked automatically. Only
+// platform administrators revoke or restore that access.
+function ScannerAccounts() {
+  const { t, fmtDate } = useI18n();
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["admin", "scanner"],
+    queryFn: () => api.get<AdminScannerAccount[]>("/admin/scanner/accounts"),
+  });
+  const change = useMutation({
+    mutationFn: ({ id, action, reason }: { id: string; action: "revoke" | "restore"; reason?: string }) =>
+      api.post<AdminScannerAccount>(`/admin/scanner/accounts/${id}/${action}`, action === "revoke" ? { reason } : {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "scanner"] }),
+  });
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-ink-soft">{t("adm.scanner.intro")}</p>
+      <ErrorBanner error={q.error ?? change.error} />
+      {q.isLoading && <Spinner />}
+      {q.data && q.data.length === 0 && <p className="text-sm text-ink-mute">{t("adm.scanner.none")}</p>}
+      {q.data && q.data.length > 0 && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-ink-mute">
+                <tr>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.account")}</th>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.collections")}</th>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.lastLogin")}</th>
+                  <th className="pb-2 text-start font-medium">{t("adm.scanner.access")}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {q.data.map((r) => (
+                  <tr key={r.account_id} className="border-t border-line align-top">
+                    <td className="py-2">
+                      <div>{r.full_name}</div>
+                      <div className="text-xs text-ink-mute" dir="ltr">{r.email}</div>
+                    </td>
+                    <td className="py-2 tabular-nums">{r.collections}</td>
+                    <td className="py-2">{r.last_login_at ? fmtDate(r.last_login_at) : "—"}</td>
+                    <td className="py-2">
+                      <Badge tone={r.anypulse_access === "active" ? "brand" : "neg"}>
+                        {t(r.anypulse_access === "active" ? "adm.scanner.active" : "adm.scanner.revoked")}
+                      </Badge>
+                      {r.access_revoke_reason && <div className="mt-1 text-xs text-ink-mute">{r.access_revoke_reason}</div>}
+                    </td>
+                    <td className="py-2 text-end">
+                      {r.anypulse_access === "active" && (
+                        <Button variant="danger" disabled={change.isPending} onClick={() => {
+                          const reason = window.prompt(t("adm.scanner.reasonPrompt"));
+                          if (reason !== null) change.mutate({ id: r.account_id, action: "revoke", reason });
+                        }}>{t("adm.scanner.revoke")}</Button>
+                      )}
+                      {r.anypulse_access === "revoked" && (
+                        <Button variant="ghost" disabled={change.isPending}
+                                onClick={() => change.mutate({ id: r.account_id, action: "restore" })}>
+                          {t("adm.scanner.restore")}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("orgs");
@@ -244,14 +317,105 @@ export default function AdminPage() {
         <p className="mt-1 text-sm text-ink-soft">{t("adm.subtitle")}</p>
       </div>
       <div role="tablist" className="flex gap-1 border-b border-line">
-        {(["orgs", "plans", "connectors"] as const).map((k) => (
+        {(["orgs", "plans", "connectors", "scanner"] as const).map((k) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                   className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === k ? "border-brand font-medium text-brand-strong" : "border-transparent text-ink-soft hover:text-ink"}`}>
             {t(`adm.tab.${k}`)}
           </button>
         ))}
       </div>
-      {tab === "orgs" ? <Overview /> : tab === "plans" ? <Plans /> : <Connectors />}
+      {tab === "orgs" ? <Overview /> : tab === "plans" ? <Plans /> : tab === "connectors" ? <Connectors /> : <div className="space-y-8"><ScannerReview /><ScannerAccounts /></div>}
     </div>
+  );
+}
+
+// Phase 7: sent screenshots AnyPulse could not attribute with confidence. The administrator
+// picks the followed brands (every organisation following them receives the content) or
+// discards it.
+function ScannerReview() {
+  const { t } = useI18n();
+  const q = useQuery({ queryKey: ["admin", "scanner-review"], queryFn: () => api.get<ScannerReviewQueue>("/admin/scanner/review") });
+  const brands = useQuery({ queryKey: ["admin", "scanner-brands"], queryFn: () => api.get<ScannerBrandChoice[]>("/admin/scanner/brands") });
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold">{t("adm.scannerReview.title")}{q.data ? ` (${q.data.total})` : ""}</h2>
+      <p className="text-sm text-ink-soft">{t("adm.scannerReview.intro")}</p>
+      <ErrorBanner error={q.error ?? brands.error} />
+      {q.isLoading && <Spinner />}
+      {q.data && q.data.total === 0 && <p className="text-sm text-ink-mute">{t("adm.scannerReview.none")}</p>}
+      {q.data?.items.map((it) => <ScannerReviewCard key={it.item_id} item={it} brands={brands.data ?? []} />)}
+    </section>
+  );
+}
+
+function ScannerReviewCard({ item, brands }: { item: ScannerReviewItem; brands: ScannerBrandChoice[] }) {
+  const { t, fmtDate } = useI18n();
+  const qc = useQueryClient();
+  const [chosen, setChosen] = useState<string[]>(item.suggested);
+  const [filter, setFilter] = useState("");
+  const decide = useMutation({
+    mutationFn: (discard: boolean) => api.post(`/admin/scanner/review/${item.item_id}`, discard ? { discard: true } : { brands: chosen }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "scanner-review"] }),
+  });
+  const shown = brands.filter((b) => b.name.toLowerCase().includes(filter.toLowerCase())).slice(0, 40);
+  const toggle = (n: string) => setChosen((c) => (c.includes(n) ? c.filter((x) => x !== n) : [...c, n]));
+  return (
+    <Card>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div>
+          {item.has_image ? (
+            <a href={`/api/v1/admin/scanner/items/${item.item_id}/image`} target="_blank" rel="noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/v1/admin/scanner/items/${item.item_id}/image`} alt="" loading="lazy"
+                   className="max-h-96 w-full rounded border border-line bg-paper-sunk object-contain" />
+            </a>
+          ) : <p className="text-xs text-ink-mute">{t("adm.scannerReview.noImage")}</p>}
+          <p className="mt-2 text-xs text-ink-mute">
+            {[item.platform, item.page_or_group, item.dialog_title].filter(Boolean).join(" · ")} · {fmtDate(item.sent_at)}
+          </p>
+          {!item.validated && <Badge tone="warn">{t("adm.scannerReview.unvalidated")}</Badge>}
+        </div>
+        <div className="space-y-3">
+          <ol className="max-h-64 space-y-1 overflow-y-auto text-sm">
+            {item.entries.map((e, i) => (
+              <li key={i} className={e.kind === "reply" ? "ms-4" : ""}>
+                <span className="text-xs uppercase text-ink-mute">{e.kind}</span>{" "}
+                <b dir="auto">{e.author || "?"}</b> <span dir="auto">{e.text}</span>
+                {e.image_text && <span className="block text-xs text-ink-soft" dir="auto">🖼 {e.image_text}</span>}
+              </li>
+            ))}
+          </ol>
+          <p className="text-xs text-ink-mute">
+            {t("adm.scannerReview.why")} {item.reason}
+            {item.confidence != null && ` (${Math.round(item.confidence * 100)} %)`}
+          </p>
+          <div>
+            <input className="field w-full text-sm" placeholder={t("adm.scannerReview.search")}
+                   value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[...new Set([...chosen, ...shown.map((b) => b.name)])].map((n) => {
+                const b = brands.find((x) => x.name === n);
+                return (
+                  <label key={n} className={`cursor-pointer rounded border px-2 py-1 text-xs ${chosen.includes(n) ? "border-brand bg-brand/10" : "border-line"}`}>
+                    <input type="checkbox" className="me-1" checked={chosen.includes(n)} onChange={() => toggle(n)} />
+                    {n}{b ? ` · ${t("adm.scannerReview.orgs", { n: b.organisations })}` : ""}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <ErrorBanner error={decide.error} />
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={!chosen.length || decide.isPending} onClick={() => decide.mutate(false)}>
+              {t("adm.scannerReview.deliver", { n: chosen.length })}
+            </Button>
+            <Button variant="ghost" disabled={decide.isPending}
+                    onClick={() => { if (window.confirm(t("adm.scannerReview.discardConfirm"))) decide.mutate(true); }}>
+              {t("adm.scannerReview.discard")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }

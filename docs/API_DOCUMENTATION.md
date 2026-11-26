@@ -117,6 +117,32 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | GET | `/metrics` | bearer `REPINTEL_METRICS_TOKEN` | Prometheus text, aggregates only; 404 when disabled or wrong token |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
+## Aynpulse Scanner
+
+Separate accounts and tokens, mounted when `REPINTEL_SCANNER_ENABLED=true`. Browsers use the `sc_*` cookies and `X-CSRF-Token` = `sc_csrf`. Full table in [SCANNER.md](SCANNER.md#api).
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/scanner/auth/register`, `/scanner/auth/login`, `/scanner/auth/refresh`, `/scanner/auth/logout` | Same conventions as `/auth/*` (`X-Auth-Mode: token` for API clients) |
+| GET | `/scanner/auth/me` | Scanner account |
+| GET | `/scanner/anypulse` | May this agent send collections (revoked only by platform admins) |
+| GET | `/scanner/sessions/current`, `/scanner/sessions`, `/scanner/sessions/{id}` | Open collection (created on first use), history, one collection |
+| PATCH / POST | `/scanner/sessions/{id}` `{title}`; `/scanner/sessions/{id}/cancel` | Rename; discard (409 `session_not_open`) |
+| POST | `/scanner/sessions/{id}/screenshots` | Multipart `files`; per-file results |
+| GET / PUT | `/scanner/sessions/{id}/items`, `/scanner/sessions/{id}/items/order` | Items in order; reorder |
+| DELETE | `/scanner/items/{id}` | Remove an item and its file |
+| GET | `/scanner/files/{id}/content` | Sanitised image, owner only |
+| GET / DELETE | `/scanner/browser`, `/scanner/browser/profile` | Built-in browser availability and WebSocket URL; forget the saved session |
+| WS | `/scanner/browser/ws` | Built-in browser (scanner-browser service); protocol in SCANNER.md |
+| GET / POST | `/scanner/extraction`, `/scanner/items/{id}/entries`, `/scanner/items/{id}/extract`, `/scanner/sessions/{id}/extract` | Phase 4: extraction status, entries read from a screenshot, read again, queue pending |
+| PATCH / DELETE | `/scanner/entries/{id}` | Agent correction of author or text; removal |
+| POST | `/scanner/items/{id}/validate` | Agent validates (or withdraws) the reading of a screenshot |
+| POST | `/scanner/sessions/{id}/links` | Phase 5: record a pasted link (opened in the built-in browser by the app) |
+| POST | `/scanner/sessions/{id}/send`, `/resend` | Phase 7: send the collection to AnyPulse; retry a failed sending |
+| GET | `/admin/scanner/review`, `/admin/scanner/brands`, `/admin/scanner/items/{id}/image` | Platform admins: screenshots to attribute, followed brands, image |
+| POST | `/admin/scanner/review/{item_id}` | `{brands: [...]}` deliver, or `{discard: true}` |
+| GET / POST | `/admin/scanner/accounts`, `/admin/scanner/accounts/{id}/revoke`, `/restore` | Platform admin + MFA |
+
 ## Example (API client)
 
 ```bash

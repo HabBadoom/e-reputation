@@ -6,11 +6,15 @@ Required env (CI sets these; see docs/TESTING.md):
 """
 
 import os
+import tempfile
 import uuid
 
 os.environ.setdefault("REPINTEL_ENV", "test")
 os.environ.setdefault("REPINTEL_JWT_SECRET", "test-secret-" + "x" * 40)
 os.environ.setdefault("REPINTEL_COOKIE_SECURE", "false")
+os.environ.setdefault("REPINTEL_SCANNER_ENABLED", "true")
+os.environ.setdefault("REPINTEL_STORAGE_FILESYSTEM_ROOT",
+                      tempfile.mkdtemp(prefix="repintel-test-storage-"))
 os.environ.setdefault("REPINTEL_EMAIL_PROVIDER", "memory")
 # Plan limits are tested explicitly (test_entitlements); other tests run unconstrained.
 os.environ.setdefault("REPINTEL_DEFAULT_PLAN", "unlimited")
@@ -26,6 +30,11 @@ from app.main import create_app  # noqa: E402
 from app.modules.notifications.email import MemoryProvider, get_email_provider  # noqa: E402
 
 DATA_TABLES = [
+    "scanner_attributions", "scanner_extracted_entries", "scanner_extractions",
+    "scanner_browser_profiles", "scanner_uploaded_files", "scanner_audit_logs",
+    "scanner_collection_items",
+    "scanner_collection_sessions",
+    "scanner_refresh_tokens", "scanner_accounts",
     "usage_events", "plan_change_requests", "invoice_lines", "invoices", "billing_accounts",
     "invoice_counters",
     "approval_requests", "ai_actions", "agent_runs", "ai_tasks",
@@ -105,6 +114,7 @@ def app():
 def client(app):
     with TestClient(app) as c:
         yield c
+
 
 
 class Api:

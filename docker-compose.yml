@@ -18,6 +18,8 @@ x-backend-env: &backend-env
   REPINTEL_SERPER_API_KEY: ${REPINTEL_SERPER_API_KEY:-}
   REPINTEL_OPENAI_API_KEY: ${REPINTEL_OPENAI_API_KEY:-}
   REPINTEL_NLP_MODELS: ${REPINTEL_NLP_MODELS:-[]}
+  REPINTEL_SCANNER_EXTRACTION_MODEL: ${REPINTEL_SCANNER_EXTRACTION_MODEL:-}
+  REPINTEL_SCANNER_EXTRACTION_MIN_CONFIDENCE: ${REPINTEL_SCANNER_EXTRACTION_MIN_CONFIDENCE:-0.75}
   REPINTEL_NLP_ARBITER_MODEL: ${REPINTEL_NLP_ARBITER_MODEL:-}
   REPINTEL_CRAWLER_USER_AGENT: ${REPINTEL_CRAWLER_USER_AGENT:-RepIntelBot/0.1 (+https://example.com/bot)}
   REPINTEL_BILLING_SELLER_NAME: ${REPINTEL_BILLING_SELLER_NAME:-}
@@ -30,6 +32,18 @@ x-backend-env: &backend-env
   REPINTEL_PLATFORM_NOTIFY_EMAILS: ${REPINTEL_PLATFORM_NOTIFY_EMAILS:-[]}
   REPINTEL_ADMIN_REQUIRE_MFA: ${REPINTEL_ADMIN_REQUIRE_MFA:-true}
   REPINTEL_METRICS_TOKEN: ${REPINTEL_METRICS_TOKEN:-}
+  REPINTEL_SCANNER_ENABLED: ${REPINTEL_SCANNER_ENABLED:-true}
+  REPINTEL_SCANNER_BASE_URL: http://localhost:3001
+  # Scanner screenshots: RustFS (S3-compatible) in development; any S3-compatible service in production.
+  REPINTEL_STORAGE_BACKEND: s3
+  REPINTEL_STORAGE_ENDPOINT_URL: http://rustfs:9000
+  REPINTEL_STORAGE_BUCKET: repintel-scanner
+  REPINTEL_STORAGE_ACCESS_KEY: repintel-dev
+  REPINTEL_STORAGE_SECRET_KEY: repintel-dev-secret-change-me
+  # Built-in browser (scanner-browser service). The Scanner app connects to it directly in dev;
+  # the sc_access cookie (host-only, localhost) is sent to any localhost port.
+  REPINTEL_SCANNER_BROWSER_ENABLED: "true"
+  REPINTEL_SCANNER_BROWSER_PUBLIC_URL: ws://localhost:8100/api/v1/scanner/browser/ws
 
 services:
   postgres:
@@ -69,18 +83,28 @@ services:
       OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
     ports: ["127.0.0.1:9200:9200"]
 
+  rustfs:   # S3-compatible object storage for Scanner screenshots (MinIO's community images are gone)
+    image: rustfs/rustfs:latest
+    command: ["/data"]
+    environment: { RUSTFS_ACCESS_KEY: repintel-dev, RUSTFS_SECRET_KEY: repintel-dev-secret-change-me }
+    volumes: ["rustfsdata:/data"]
+    ports: ["127.0.0.1:9000:9000"]
+
   migrate:
     build: ./backend
+    image: repintel-backend:dev   # built once here; every backend service runs this image
     command: ["alembic", "upgrade", "head"]
     environment: *backend-env
     depends_on: { postgres: { condition: service_healthy } }
 
   api:
-    build: ./backend
+    image: repintel-backend:dev   # built by `migrate`
+    pull_policy: never
     environment: *backend-env
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
+      rustfs: { condition: service_started }
     ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/readyz')"]
@@ -88,7 +112,8 @@ services:
       retries: 20
 
   worker:   # background jobs: emails (with retries) and the monitoring scheduler
-    build: ./backend
+    image: repintel-backend:dev   # built by `migrate`
+    pull_policy: never
     command: ["python", "-m", "app.jobs.worker"]
     environment: *backend-env
     depends_on:
@@ -96,7 +121,8 @@ services:
     restart: unless-stopped
 
   browser-worker:   # headless Chromium fleet (scale with: docker compose up --scale browser-worker=N)
-    build: ./backend
+    image: repintel-backend:dev   # built by `migrate`
+    pull_policy: never
     command: ["python", "-m", "app.browser.worker"]
     environment:
       <<: *backend-env
@@ -114,11 +140,37 @@ services:
     # link-local (169.254.0.0/16, cloud metadata) and loopback ranges — the in-code checks are
     # the first layer, the network policy is the one DNS rebinding cannot defeat.
 
+  scanner-browser:   # Scanner's built-in browser (live Chromium streamed to the Scanner app)
+    image: repintel-backend:dev   # built by `migrate`
+    pull_policy: never
+    command: ["uvicorn", "app.scanner.browser.server:app", "--host", "0.0.0.0", "--port", "8100"]
+    environment:
+      <<: *backend-env
+      REPINTEL_SCANNER_BROWSER_MAX_SESSIONS: "4"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      rustfs: { condition: service_started }
+    ports: ["127.0.0.1:8100:8100"]
+    restart: unless-stopped
+    shm_size: "1gb"
+    mem_limit: "3g"
+    cpus: 2
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+
   web:
     build: ./frontend
     environment: { REPINTEL_BACKEND_URL: http://api:8000 }
     depends_on: { api: { condition: service_healthy } }
     ports: ["127.0.0.1:3000:3000"]
 
+  scanner-web:   # Aynpulse Scanner web app (collection only; separate accounts)
+    build: ./scanner
+    environment: { REPINTEL_BACKEND_URL: http://api:8000 }
+    depends_on: { api: { condition: service_healthy } }
+    ports: ["127.0.0.1:3001:3001"]
+
 volumes:
+  rustfsdata:
   pgdata:

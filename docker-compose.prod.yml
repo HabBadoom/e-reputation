@@ -31,7 +31,9 @@ services:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    networks: { edge: { ipv4_address: 172.30.0.10 } }
+    networks:
+      edge: { ipv4_address: 172.30.0.10 }
+      scanner-edge: { ipv4_address: 172.30.4.10 }   # reaches scanner-browser only
     depends_on: [web, api]
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
@@ -110,6 +112,24 @@ services:
     mem_limit: "2g"
     cpus: 2
 
+  scanner-browser:   # Scanner's built-in browser. Enabled with Scanner (phase 9): --profile scanner
+    <<: *backend
+    profiles: ["scanner"]
+    command: ["uvicorn", "app.scanner.browser.server:app", "--host", "0.0.0.0", "--port", "8100",
+              "--proxy-headers", "--forwarded-allow-ips", "172.30.4.10"]
+    environment:
+      REPINTEL_ENV: production
+      REPINTEL_DATABASE_URL: postgresql+psycopg://repintel_app:${REPINTEL_APP_DB_PASSWORD:?}@postgres:5432/repintel
+      REPINTEL_REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
+      HOME: /tmp
+    # Internet only through ri-browser (egress firewall). scanner-edge is internal (no route
+    # out) and only lets Caddy reach the WebSocket; data carries Postgres/Redis.
+    networks: [browser, scanner-edge, data]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    shm_size: "1gb"
+    mem_limit: "4g"
+    cpus: 3
+
   web:
     image: ghcr.io/${GHCR_OWNER}/repintel-frontend:${REPINTEL_VERSION}
     networks: [edge]
@@ -132,6 +152,10 @@ networks:
   browser:   # the browser fleet only
     ipam: { config: [{ subnet: 172.30.3.0/24 }] }
     driver_opts: { com.docker.network.bridge.name: ri-browser }
+
+  scanner-edge:   # Caddy ↔ scanner-browser only; internal, so no Internet route through it
+    internal: true
+    ipam: { config: [{ subnet: 172.30.4.0/24 }] }
 
 volumes:
   pgdata:

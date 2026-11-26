@@ -1,10 +1,10 @@
 """Engine, sessions and per-transaction tenant context.
 
 The API connects as a role without BYPASSRLS. Row visibility is decided by PostgreSQL policies
-that read `app.tenant_id` / `app.user_id`. Those settings are applied with `set_config(..., true)`
-(transaction-local) at the start of *every* transaction on the session, from values stored on
-`session.info`. A pooled connection therefore never carries a previous request's context, and a
-commit mid-request doesn't drop it.
+that read `app.tenant_id` / `app.user_id` (AnyPulse) or `app.scanner_account_id` (Scanner).
+Those settings are applied with `set_config(..., true)` (transaction-local) at the start of
+*every* transaction on the session, from values stored on `session.info`. A pooled connection
+therefore never carries a previous request's context, and a commit mid-request doesn't drop it.
 """
 
 import uuid
@@ -37,20 +37,27 @@ def session_factory() -> sessionmaker[Session]:
     return _SessionLocal
 
 
-@event.listens_for(Session, "after_begin")
-def _apply_context(session: Session, transaction, connection) -> None:  # noqa: ANN001
+_CONTEXT_SQL = text(
+    "SELECT set_config('app.tenant_id', :t, true), set_config('app.user_id', :u, true), "
+    "set_config('app.scanner_account_id', :s, true)"
+)
+
+
+def _context_params(session: Session) -> dict[str, str]:
     tid = session.info.get("tenant_id")
     uid = session.info.get("user_id")
-    connection.execute(
-        text("SELECT set_config('app.tenant_id', :t, true), set_config('app.user_id', :u, true)"),
-        {"t": str(tid) if tid else "", "u": str(uid) if uid else ""},
-    )
+    sid = session.info.get("scanner_account_id")
+    return {"t": str(tid) if tid else "", "u": str(uid) if uid else "",
+            "s": str(sid) if sid else ""}
 
 
-def set_context(
-    session: Session, *, tenant_id: uuid.UUID | None, user_id: uuid.UUID | None
-) -> None:
-    """Set the context for the current and all future transactions on this session.
+@event.listens_for(Session, "after_begin")
+def _apply_context(session: Session, transaction, connection) -> None:  # noqa: ANN001
+    connection.execute(_CONTEXT_SQL, _context_params(session))
+
+
+def _switch(session: Session, **info: uuid.UUID | None) -> None:
+    """Replace the whole context for the current and all future transactions on this session.
 
     Pending ORM changes are flushed first, under the context they were created in. Without
     this, rows added before a switch would be written later under the *new* context and be
@@ -58,16 +65,24 @@ def set_context(
     """
     if session.in_transaction() and (session.new or session.dirty or session.deleted):
         session.flush()
-    session.info["tenant_id"] = tenant_id
-    session.info["user_id"] = user_id
+    session.info["tenant_id"] = info.get("tenant_id")
+    session.info["user_id"] = info.get("user_id")
+    session.info["scanner_account_id"] = info.get("scanner_account_id")
     if session.in_transaction():
-        session.execute(
-            text(
-                "SELECT set_config('app.tenant_id', :t, true), "
-                "set_config('app.user_id', :u, true)"
-            ),
-            {"t": str(tenant_id) if tenant_id else "", "u": str(user_id) if user_id else ""},
-        )
+        session.execute(_CONTEXT_SQL, _context_params(session))
+
+
+def set_context(
+    session: Session, *, tenant_id: uuid.UUID | None, user_id: uuid.UUID | None
+) -> None:
+    """AnyPulse context (tenant + user). Clears any Scanner context."""
+    _switch(session, tenant_id=tenant_id, user_id=user_id)
+
+
+def set_scanner_context(session: Session, *, account_id: uuid.UUID | None) -> None:
+    """Aynpulse Scanner context (one Scanner account). Clears any AnyPulse context, so a
+    Scanner request can never read AnyPulse tenant data and vice versa."""
+    _switch(session, scanner_account_id=account_id)
 
 
 @contextmanager

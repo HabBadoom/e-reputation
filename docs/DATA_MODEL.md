@@ -116,6 +116,39 @@ Daily sentiment and reputation figures are computed on demand from `mentions` + 
 | `plan_change_requests` | tenant | one pending at a time; done / declined / cancelled |
 | `connector_policies` + | global | `review_notes`; review recorded by platform admins |
 
+## Scanner tables (migration 0010)
+
+Isolated by Scanner account (`app.scanner_account_id`), never by tenant. See SCANNER.md.
+
+| Table | Scope | Notes |
+|---|---|---|
+| `scanner_accounts` | own row | separate from `users`; one account type (email, name, locale) |
+| `scanner_refresh_tokens` | account | hashed, rotated, family revocation |
+| `scanner_collection_sessions` | account | 11 statuses; partial unique index = one open session (`draft/collecting/ready`) per account; `anypulse_collection_id` once acknowledged |
+| `scanner_collection_items` | account | composite FK `(account_id, session_id)`; `source_type ∈ screenshot/url/import`; URL required for URL items |
+| `scanner_audit_logs` | account | INSERT/SELECT only |
+
+Migration 0011 (AnyPulse access): `scanner_accounts.anypulse_access` (`active`/`revoked`), `access_revoked_at`, `access_revoked_by`, `access_revoke_reason`. Forced to `active` on INSERT (trigger); not updatable by the API role (column grants); changed only by `admin_scanner_set_access()` for platform administrators.
+
+Migration 0012 (screenshots):
+
+| Table | Scope | Notes |
+|---|---|---|
+| `scanner_uploaded_files` | account | one per screenshot item; `storage_key` (private object storage), sanitised `mime_type` (PNG/JPEG/WebP only), size, dimensions, `sha256` (unique per collection), `dhash`; composite FKs to the account's item and collection; SELECT/INSERT/DELETE only |
+| `scanner_collection_items` + | account | `UNIQUE (account_id, id)`; `possible_duplicate_of` (composite FK to an item of the same account) |
+
+Migration 0013 (built-in browser): `scanner_browser_profiles` (account, own row only) — `account_id` PK, `state_encrypted` (Fernet: cookies and local storage of the agent's built-in browser, never passwords), `updated_at`.
+
+Migration 0014 (extraction): `scanner_extractions` (account, own rows only) — one per item: `status` (queued, running, done, failed), `model`, tokens, `captured_at`, `context` (page or group, dialog title, view), `issues`, `confidence`, `raw` (model output and prompt version), `error_code`. `scanner_extracted_entries` (account) — `kind` (post, comment, reply), `parent_id` and `duplicate_of` (composite FKs within the account), `author_name`, `author_is_page`, `text`, `image_text`, `script`, `text_truncated`, `partially_visible`, `relative_time`, `published_at` + `published_precision`, counters, `dedup_key`, `edited_by_agent`. The API role may update only `author_name`, `text` (agent corrections) and the links.
+
+Migration 0015: `scanner_extractions.validated_at` — set when the agent validates the reading on the review screen; cleared when the screenshot is read again.
+
+Migration 0016 (links): `scanner_collection_items.link_item_id` (capture taken from a pasted link; composite FK within the account, `ON DELETE SET NULL`), `url_key` (SHA-256 of the normalised address; required for `url` items, unique per collection).
+
+Migration 0017 (retention): index on `scanner_uploaded_files.retention_until`; `scanner_retention_accounts(idle_days)` (SECURITY DEFINER, lists accounts with expired images or abandoned collections); the API role may update `retention_until` only.
+
+Migration 0018 (sending): `mentions.collection_method` accepts `scanner`, `verification_status` accepts `scanner_validated` / `scanner_unvalidated`; connector policy `aynpulse_scanner` (pending legal review); `scanner_attributions` (one per sent screenshot: `status` pending / delivered / to_review / discarded / empty, `method` keywords / ai / admin, `brand_names`, `confidence`, `reason`, `mentions_created`, `organisations`, `decided_by`, `decided_at`; RLS: the sending agent or platform administrators); `scanner_brand_catalogue()` (SECURITY DEFINER, API role only).
+
 ## Planned (per master prompt §14)
 
 Added milestone by milestone, each with RLS + composite FKs + isolation tests:

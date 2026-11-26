@@ -78,10 +78,35 @@ jobs:
                 -v ON_ERROR_STOP=1 -f tests/sql/test_rls_billing.sql)
           echo "$out"
           echo "$out" | grep -q "ALL BILLING RLS TESTS PASSED"
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_scanner.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL SCANNER RLS TESTS PASSED"
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_scanner_access.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL SCANNER ACCESS RLS TESTS PASSED"
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_scanner_uploads.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL SCANNER UPLOAD RLS TESTS PASSED"
+          out=$(PGPASSWORD=repintel_app psql -h localhost -U repintel_app -d repintel -X \
+                -v ON_ERROR_STOP=1 -f tests/sql/test_rls_scanner_extraction.sql)
+          echo "$out"
+          echo "$out" | grep -q "ALL SCANNER EXTRACTION RLS TESTS PASSED"
       - name: Headless Chromium for PDF reports
         run: uv run playwright install --with-deps chromium
+      - name: RustFS for the Scanner storage test (S3-compatible, private bucket)
+        run: |
+          docker run -d --name rustfs -p 9000:9000 -e RUSTFS_ACCESS_KEY=ci-rustfs \
+            -e RUSTFS_SECRET_KEY=ci-rustfs-secret-0123456789 rustfs/rustfs:latest /data
+          for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:9000/ && break; sleep 1; done
       - name: API tests
         run: uv run pytest -v
+        env:
+          REPINTEL_TEST_S3_ENDPOINT: http://localhost:9000
+          REPINTEL_TEST_S3_ACCESS_KEY: ci-rustfs
+          REPINTEL_TEST_S3_SECRET_KEY: ci-rustfs-secret-0123456789
       - name: Backup and restore round-trip (server's PostgreSQL 16 tools, as in production)
         working-directory: .
         run: |
@@ -112,13 +137,26 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  scanner:
+    # Aynpulse Scanner web app (separate Next.js app, see docs/SCANNER.md)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: scanner } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+
   images:
     # The production images build on every push (not pushed anywhere), so a broken
     # Dockerfile is caught before a release.
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        component: [backend, frontend]
+        component: [backend, frontend, scanner]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

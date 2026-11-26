@@ -132,14 +132,14 @@ export interface PlanUsage {
   plan_key: string; plan_name: string; status: string; trial_ends_at: string | null;
   limits: Record<string, number | null>; usage: Record<string, number>;
 }
-export type Verification = "verified_on_page" | "snippet_only" | "not_found_on_page" | "page_unavailable" | "blocked_by_robots" | "feed_item" | "pending_render" | "blocked_by_challenge";
+export type Verification = "verified_on_page" | "snippet_only" | "not_found_on_page" | "page_unavailable" | "blocked_by_robots" | "feed_item" | "pending_render" | "blocked_by_challenge" | "scanner_validated" | "scanner_unvalidated";
 export type Coverage = "AVAILABLE" | "PARTIALLY_AVAILABLE" | "PENDING_AUTHORIZATION" | "RESTRICTED" | "UNAVAILABLE" | "CONNECTOR_ERROR";
 export interface Mention {
   id: string; brand_id: string; brand_name: string; project_id: string | null;
   entity_type: "brand" | "product" | "competitor"; entity_name: string; url: string; domain: string;
   title: string; original_text: string; matched_terms: string[]; publisher: string | null;
   published_at: string | null; published_at_source: string | null; collected_at: string; last_seen_at: string;
-  seen_count: number; collection_method: "search_api" | "news_api" | "rss" | "page_fetch";
+  seen_count: number; collection_method: "search_api" | "news_api" | "rss" | "page_fetch" | "scanner";
   verification_status: Verification; is_repost: boolean; language: string | null; analysed: boolean;
   analysis: Analysis;
 }
@@ -340,6 +340,21 @@ export interface PlatformStats {
   outstanding: Record<string, number> | null; paid_last_30d: Record<string, number> | null;
   usage_month: Record<string, number> | null;
 }
+export interface AdminScannerAccount {
+  account_id: string; email: string; full_name: string; account_status: string;
+  created_at: string; last_login_at: string | null; anypulse_access: "active" | "revoked";
+  access_revoked_at: string | null; access_revoke_reason: string | null; collections: number;
+}
+// Phase 7: sent Scanner screenshots waiting for an administrator to choose the brands.
+export interface ScannerReviewItem {
+  item_id: string; collection_id: string; sent_at: string; reason: string; suggested: string[];
+  confidence: number | null; platform: string | null; source_url: string | null;
+  page_or_group: string; dialog_title: string; validated: boolean; captured_at: string | null;
+  has_image: boolean;
+  entries: { kind: "post" | "comment" | "reply"; author: string; text: string; image_text: string; time: string }[];
+}
+export interface ScannerReviewQueue { total: number; items: ScannerReviewItem[] }
+export interface ScannerBrandChoice { name: string; organisations: number }
 export interface AdminTenantRow {
   tenant_id: string; name: string; slug: string; created_at: string; plan_key: string; plan_name: string;
   status: SubscriptionStatus; trial_ends_at: string | null; members: number; brands: number;

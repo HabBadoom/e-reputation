@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     LargeBinary,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -890,4 +891,217 @@ class PlanChangeRequest(Base):
     requested_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
     handled_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
     handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+
+
+# ---------------------------------------------------------------- Aynpulse Scanner (0010)
+# Scanner accounts are separate from AnyPulse users. Every Scanner table is isolated by
+# `app.scanner_account_id` (see migration 0010).
+class ScannerAccount(Base):
+    __tablename__ = "scanner_accounts"
+    id: Mapped[uuid.UUID] = _pk()
+    email: Mapped[str] = mapped_column(String(320))
+    password_hash: Mapped[str] = mapped_column(Text)
+    full_name: Mapped[str] = mapped_column(String(200))
+    locale: Mapped[str] = mapped_column(String(5), default="fr")
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    # AnyPulse access (0011): granted at creation, changed only by platform administrators
+    # (admin_scanner_set_access); the API role cannot UPDATE these columns.
+    anypulse_access: Mapped[str] = mapped_column(String(10), default="active")
+    access_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    access_revoked_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    access_revoke_reason: Mapped[str] = mapped_column(String(500), default="")
+
+
+class ScannerRefreshToken(Base):
+    __tablename__ = "scanner_refresh_tokens"
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user_agent: Mapped[str | None] = mapped_column(String(400))
+    ip: Mapped[str | None] = mapped_column(INET)
+    created_at: Mapped[datetime] = _created()
+
+
+class ScannerCollectionSession(Base):
+    __tablename__ = "scanner_collection_sessions"
+    __table_args__ = (UniqueConstraint("account_id", "id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    title: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+    transmitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    anypulse_collection_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class ScannerCollectionItem(Base):
+    __tablename__ = "scanner_collection_items"
+    __table_args__ = (
+        ForeignKeyConstraint(["account_id", "session_id"],
+                             ["scanner_collection_sessions.account_id",
+                              "scanner_collection_sessions.id"], ondelete="CASCADE"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    source_type: Mapped[str] = mapped_column(String(20))
+    platform: Mapped[str | None] = mapped_column(String(20))
+    content_type: Mapped[str | None] = mapped_column(String(30))
+    position: Mapped[int] = mapped_column()
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    source_url: Mapped[str | None] = mapped_column(String(2000))
+    error_code: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+    # 0012: a visually near-identical screenshot already in the collection (flag only).
+    possible_duplicate_of: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    link_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # 0016
+    url_key: Mapped[str | None] = mapped_column(String(64))
+
+
+class ScannerUploadedFile(Base):
+    """A sanitised screenshot (0012). Bytes are in private object storage at `storage_key`."""
+    __tablename__ = "scanner_uploaded_files"
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    storage_key: Mapped[str] = mapped_column(String(300), unique=True)
+    original_filename: Mapped[str] = mapped_column(String(255), default="")
+    mime_type: Mapped[str] = mapped_column(String(30))
+    size_bytes: Mapped[int] = mapped_column()
+    width: Mapped[int] = mapped_column()
+    height: Mapped[int] = mapped_column()
+    sha256: Mapped[str] = mapped_column(String(64))
+    dhash: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = _created()
+    retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ScannerExtraction(Base):
+    """Latest extraction run of one screenshot item (0014)."""
+    __tablename__ = "scanner_extractions"
+    __table_args__ = (
+        ForeignKeyConstraint(["account_id", "item_id"], ["scanner_collection_items.account_id",
+                                                         "scanner_collection_items.id"],
+                             ondelete="CASCADE"),
+        ForeignKeyConstraint(["account_id", "session_id"],
+                             ["scanner_collection_sessions.account_id",
+                              "scanner_collection_sessions.id"], ondelete="CASCADE"),
+    )
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    model: Mapped[str | None] = mapped_column(String(100))
+    attempts: Mapped[int] = mapped_column(default=0)
+    input_tokens: Mapped[int] = mapped_column(default=0)
+    output_tokens: Mapped[int] = mapped_column(default=0)
+    captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    context: Mapped[dict] = mapped_column(JSONB, default=dict)
+    issues: Mapped[list] = mapped_column(JSONB, default=list)
+    confidence: Mapped[float | None] = mapped_column(Numeric(3, 2, asdecimal=False))
+    raw: Mapped[dict | None] = mapped_column(JSONB)
+    error_code: Mapped[str | None] = mapped_column(String(50))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # 0015
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class ScannerExtractedEntry(Base):
+    """A post, comment or reply read from a screenshot (0014). Collection data only."""
+    __tablename__ = "scanner_extracted_entries"
+    __table_args__ = (
+        ForeignKeyConstraint(["account_id", "item_id"], ["scanner_collection_items.account_id",
+                                                         "scanner_collection_items.id"],
+                             ondelete="CASCADE"),
+        ForeignKeyConstraint(["account_id", "session_id"],
+                             ["scanner_collection_sessions.account_id",
+                              "scanner_collection_sessions.id"], ondelete="CASCADE"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    position: Mapped[int] = mapped_column()
+    kind: Mapped[str] = mapped_column(String(10))
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    author_name: Mapped[str] = mapped_column(String(200), default="")
+    author_is_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    text: Mapped[str] = mapped_column(Text, default="")
+    image_text: Mapped[str] = mapped_column(Text, default="")
+    script: Mapped[str] = mapped_column(String(10), default="none")
+    text_truncated: Mapped[bool] = mapped_column(Boolean, default=False)
+    partially_visible: Mapped[bool] = mapped_column(Boolean, default=False)
+    relative_time: Mapped[str] = mapped_column(String(60), default="")
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_precision: Mapped[str | None] = mapped_column(String(10))
+    reactions_count: Mapped[int | None] = mapped_column()
+    comments_count: Mapped[int | None] = mapped_column()
+    shares_count: Mapped[int | None] = mapped_column()
+    dedup_key: Mapped[str] = mapped_column(String(64))
+    duplicate_of: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    edited_by_agent: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class ScannerAttribution(Base):
+    """Phase 7: to which brands a sent screenshot was delivered (0018). Agent + platform admins."""
+    __tablename__ = "scanner_attributions"
+    __table_args__ = (
+        ForeignKeyConstraint(["account_id", "item_id"], ["scanner_collection_items.account_id",
+                                                         "scanner_collection_items.id"],
+                             ondelete="CASCADE"),
+        ForeignKeyConstraint(["account_id", "session_id"],
+                             ["scanner_collection_sessions.account_id",
+                              "scanner_collection_sessions.id"], ondelete="CASCADE"),
+    )
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    method: Mapped[str | None] = mapped_column(String(20))
+    brand_names: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    confidence: Mapped[float | None] = mapped_column(Numeric(3, 2, asdecimal=False))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    mentions_created: Mapped[int] = mapped_column(default=0)
+    organisations: Mapped[int] = mapped_column(default=0)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(_user_fk())
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class ScannerBrowserProfile(Base):
+    """Encrypted cookies/local storage of the agent's built-in browser (0013). No passwords."""
+    __tablename__ = "scanner_browser_profiles"
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"), primary_key=True)
+    state_encrypted: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = _created()
+
+
+class ScannerAuditLog(Base):
+    __tablename__ = "scanner_audit_logs"
+    id: Mapped[uuid.UUID] = _pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scanner_accounts.id", ondelete="CASCADE"))
+    action: Mapped[str] = mapped_column(String(80))
+    target_type: Mapped[str | None] = mapped_column(String(50))
+    target_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    ip: Mapped[str | None] = mapped_column(INET)
+    request_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = _created()

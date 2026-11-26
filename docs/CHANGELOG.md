@@ -1,5 +1,74 @@
 # Changelog
 
+## Unreleased — Aynpulse Scanner, Phase 7: sending to AnyPulse
+
+### Added
+- "Envoyer ma collecte à AnyPulse" (unvalidated screenshots allowed, marked as such) and "Renvoyer" after a failure; job `scanner.transmit`.
+- Attribution of each screenshot to followed brands by names, aliases and include keywords across organisations, then an optional routing model (`REPINTEL_SCANNER_ATTRIBUTION_MODEL`); delivery to every organisation following the brand as one mention per post, comment or reply (`collection_method = scanner`, `scanner_validated` / `scanner_unvalidated`), analysis queued.
+- Admin console: "Scanner — à attribuer" review queue (image, text, suggestion; deliver to chosen brands or discard).
+- Migration 0018 (mention checks, `aynpulse_scanner` connector policy, `scanner_attributions`, `scanner_brand_catalogue()`).
+
+## Unreleased — Aynpulse Scanner, Phase 6: retention
+
+### Added
+- Daily Scanner retention in the platform maintenance job: images of sent collections deleted 30 days after sending; unsent collections deleted after 30 days without activity, with a warning banner 7 days before (migration 0017, `app/scanner/retention.py`, `expires_at` / `expires_soon` on collections). Reviewing counts as activity.
+
+## Unreleased — Aynpulse Scanner, Phase 5: pasted links
+
+### Added
+- "Coller un lien": the link is recorded once per collection (tracking parameters removed, mobile host variants merged) and opened in the built-in browser; captures taken from it are attached to it (migration 0016 `link_item_id`, `url_key`; `POST /scanner/sessions/{id}/links`; WebSocket `link` message and `start.link_item_id`).
+- "Capturer tout le fil" in the built-in browser: on the agent's request, scrolls the thread under their last click and captures it to the end (limit, stop button, progress), with or without an active link.
+- Link cards in the collection (captures taken, "Ouvrir pour capturer"), link banner with "Détacher" in the browser.
+
+## Unreleased — Aynpulse Scanner, Phase 4: extraction
+
+### Added
+- Screenshots are read by a vision model (OpenAI Structured Outputs, model from `REPINTEL_SCANNER_EXTRACTION_MODEL`) in a `scanner.extract` background job: posts, comments and replies with authors, times, counters and text inside images, verbatim in the original script; no analysis.
+- Migration 0014: `scanner_extractions`, `scanner_extracted_entries` (RLS per account; only author and text correctable).
+- Capture time from screenshot file names; relative and absolute Facebook times converted with their precision; duplicates across overlapping screenshots linked and not counted; tall captures sent in overlapping parts.
+- Review screen in the Scanner app (image next to the entries, corrections, removal, read again) and live statuses on the collection screen.
+- "Valider" on the review screen (migration 0015 `validated_at`, `POST /scanner/items/{id}/validate`): marks a screenshot checked and opens the next one; progress shown on the collection screen.
+- `python -m app.scanner.extraction.bench`: compares models on a folder of screenshots (HTML report, cost, scores against hand-written expected text).
+
+## Unreleased — Aynpulse Scanner, Phase 3: built-in browser and screenshot upload
+
+### Added
+- **Built-in browser, the main collection action**: the agent opens Facebook (or another network) inside Scanner, signs in with a dedicated collection account and captures what they see; captures go through the screenshot pipeline with their page address and platform. Phone (touch, mobile layout) and computer modes.
+- `scanner-browser` service (`app/scanner/browser/`): one Chromium, an isolated context per agent, CDP screencast over a WebSocket, request filter to public http(s) only, Origin + cookie + live-session checks, idle timeout, one browser per agent, service-wide limit.
+- Migration 0013: `scanner_browser_profiles` — the agent's signed-in session (cookies, local storage) encrypted, never passwords; `GET /scanner/browser`, `DELETE /scanner/browser/profile`.
+- Compose: `scanner-browser` (dev port 8100; production under `--profile scanner` on the firewalled `browser` network, reached by Caddy over the internal `scanner-edge` network).
+- Tests: `test_scanner_browser.py` (real Chromium), profile isolation in `test_rls_scanner_uploads.sql`.
+- Migration 0012: `scanner_uploaded_files` (private storage key, sanitised metadata, SHA-256 unique per collection, difference hash) and `possible_duplicate_of` on items.
+- Upload pipeline (`app/scanner/images.py`, `uploads.py`, `storage.py`): limits before decoding, format from bytes (PNG/JPEG/WebP), re-encoding without metadata after EXIF orientation, exact-duplicate refusal and near-duplicate flag, private S3-compatible storage (filesystem backend for tests).
+- Endpoints: upload screenshots, list and reorder items, remove an item, read a file back (owner only).
+- Scanner collection screen: drag and drop, file picker, camera on phones, per-file progress, retry, confirmation, ordered screenshot grid with move and remove.
+- RustFS (S3-compatible) in development compose and CI; dependencies `pillow`, `python-multipart`, `boto3`.
+- Tests: `test_scanner_images.py`, `test_scanner_uploads.py`, `tests/sql/test_rls_scanner_uploads.sql`.
+
+## Aynpulse Scanner, Phase 2: AnyPulse access
+
+### Added
+- Migration 0011: AnyPulse access on `scanner_accounts`, granted at creation, changed only by platform administrators (`admin_scanner_set_access()`, `admin_scanner_accounts()`).
+- `GET /scanner/anypulse`; notice on the collection screen when access is revoked; admin console **Scanner** tab (revoke with reason, restore), audited in the account's Scanner trail.
+
+### Changed
+- Scanner users are collection agents: no AnyPulse organization, invitation or brand choice; collections will go to a central RepIntel space where RepIntel's AI attributes brands (option A).
+- AnyPulse sign-in keeps the query string when redirecting back after login.
+- Scanner accounts: one account type for everyone.
+
+## Aynpulse Scanner, Phase 1: foundation
+
+### Added
+- Migration 0010: `scanner_accounts` (separate from AnyPulse users; one account type), `scanner_refresh_tokens`, `scanner_collection_sessions` (one open session per account), `scanner_collection_items`, append-only `scanner_audit_logs`; RLS forced on all of them, keyed on `app.scanner_account_id`; narrow `scanner_auth_find_*` lookups.
+- Scanner API `/api/v1/scanner/*`: register, login, refresh (rotation + reuse detection), logout, me; current collection, history, rename, discard. Scanner tokens (`typ=scanner_access`, audience `aynpulse-scanner`) and `sc_*` cookies are not accepted by AnyPulse, and AnyPulse's are not accepted by Scanner.
+- `scanner/`: Scanner web app (Next.js, French first, Arabic RTL and English): sign-in, sign-up, screenshot-first collection screen with collection counters, history.
+- Tests: `tests/sql/test_rls_scanner.sql`, `tests/test_scanner.py`; CI job and image build for the Scanner web app.
+- `docs/SCANNER.md`.
+
+### Changed
+- DB session context: `set_scanner_context()` beside `set_context()`; each clears the other, so one request never carries both an AnyPulse and a Scanner context.
+- `REPINTEL_SCANNER_ENABLED` (default `false`; on in development and tests).
+
 ## 0.9.0 — Milestone 8: Commercialisation and production readiness (2026-11-09)
 
 ### Added

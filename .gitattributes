@@ -1,0 +1,7 @@
+# Keep LF everywhere: shell scripts and SQL run inside Linux containers (Windows clones too).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.xlsx binary

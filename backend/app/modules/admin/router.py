@@ -503,3 +503,101 @@ def review_connector(key: str, body: ReviewBody, request: Request,
            meta={"connector": key, "status": body.review_status}, request=request)
     db.commit()
     return _connector_out(c)
+
+
+# ------------------------------------------------------------------------ Aynpulse Scanner
+# Scanner accounts (collection agents) may send collections to AnyPulse from sign-up on. Only
+# platform administrators revoke (or restore) that access; the change is written to the
+# account's own Scanner audit trail.
+class ScannerAccessIn(BaseModel):
+    reason: str = Field(default="", max_length=500)
+
+
+@router.get("/scanner/accounts")
+def scanner_accounts(ctx: AuthContext = Depends(require_platform_admin),
+                     db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    return [dict(r._mapping) for r in db.execute(text("SELECT * FROM admin_scanner_accounts()"))]
+
+
+def _set_scanner_access(db: Session, ctx: AuthContext, request: Request,
+                        account_id: uuid.UUID, active: bool, reason: str) -> dict[str, Any]:
+    from sqlalchemy.exc import DBAPIError
+
+    from app.db.session import set_scanner_context
+    from app.scanner.audit import record as scanner_record
+
+    try:
+        db.execute(text("SELECT admin_scanner_set_access(:a, :on, :r)"),
+                   {"a": account_id, "on": active, "r": reason})
+    except DBAPIError as e:
+        if getattr(e.orig, "sqlstate", None) == "P0002":
+            db.rollback()
+            raise NotFound("Scanner account not found") from e
+        raise
+    set_scanner_context(db, account_id=account_id)
+    scanner_record(db, account_id=account_id,
+                   action="access.restored" if active else "access.revoked",
+                   meta={"by_platform_admin": str(ctx.user_id), **({"reason": reason} if reason
+                                                                    else {})},
+                   request=request)
+    _leave(db, ctx)
+    db.commit()
+    row = db.execute(text("SELECT * FROM admin_scanner_accounts() WHERE account_id = :a"),
+                     {"a": account_id}).one()
+    return dict(row._mapping)
+
+
+@router.post("/scanner/accounts/{account_id}/revoke")
+def revoke_scanner_access(account_id: uuid.UUID, body: ScannerAccessIn, request: Request,
+                          ctx: AuthContext = Depends(require_platform_admin),
+                          db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _set_scanner_access(db, ctx, request, account_id, False, body.reason.strip())
+
+
+@router.post("/scanner/accounts/{account_id}/restore")
+def restore_scanner_access(account_id: uuid.UUID, request: Request,
+                           ctx: AuthContext = Depends(require_platform_admin),
+                           db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _set_scanner_access(db, ctx, request, account_id, True, "")
+
+
+# Phase 7: sent screenshots AnyPulse could not attribute to a brand with confidence wait here;
+# the administrator picks the followed brands (delivered to every organisation following them)
+# or discards the screenshot.
+class ScannerDecisionIn(BaseModel):
+    brands: list[str] = Field(default_factory=list, max_length=50)
+    discard: bool = False
+
+
+@router.get("/scanner/review")
+def scanner_review_queue(ctx: AuthContext = Depends(require_platform_admin),
+                         db: Session = Depends(get_db)) -> dict[str, Any]:
+    from app.scanner import review
+    return review.pending(db, ctx)
+
+
+@router.get("/scanner/brands")
+def scanner_brands(ctx: AuthContext = Depends(require_platform_admin),
+                   db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    from app.scanner import review
+    return review.brands(db)
+
+
+@router.get("/scanner/items/{item_id}/image")
+def scanner_item_image(item_id: uuid.UUID, ctx: AuthContext = Depends(require_platform_admin),
+                       db: Session = Depends(get_db)) -> Response:
+    from app.scanner import review
+    data, mime = review.image(db, ctx, item_id)
+    return Response(data, media_type=mime, headers={
+        "cache-control": "private, max-age=300", "x-content-type-options": "nosniff",
+        "content-security-policy": "default-src 'none'; sandbox"})
+
+
+@router.post("/scanner/review/{item_id}")
+def scanner_review_decide(item_id: uuid.UUID, body: ScannerDecisionIn,
+                          ctx: AuthContext = Depends(require_platform_admin),
+                          db: Session = Depends(get_db)) -> dict[str, Any]:
+    from app.scanner import review
+    out = review.decide(db, ctx, item_id, brand_names=body.brands, discard=body.discard)
+    db.commit()
+    return out
