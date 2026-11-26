@@ -56,13 +56,18 @@ class MentionOut(BaseModel):
     is_repost: bool
     language: str | None
     analysed: bool          # True only when the AI analysis completed
+    connector: str
+    platform: str | None = None
+    content_type: str | None = None
+    parent_mention_id: uuid.UUID | None = None
+    engagement: dict[str, int] | None = None     # as returned: interactions, not people
+    author_url: str | None = None
     analysis: dict[str, Any]
 
 
 class MentionDetail(MentionOut):
     snippet: str
     canonical_url: str
-    connector: str
     connector_version: str
     content_hash: str
     duplicate_of: uuid.UUID | None
@@ -136,7 +141,10 @@ def _out(m: Mention, brand_name: str, a: MentionAnalysis | None = None) -> Menti
         collection_method=m.collection_method, verification_status=m.verification_status,
         is_repost=m.duplicate_of is not None,
         language=(a.language or a.heuristic_language) if a else None,
-        analysed=bool(a and a.status == "done"), analysis=effective(a))
+        analysed=bool(a and a.status == "done"), analysis=effective(a),
+        connector=m.connector, platform=m.platform, content_type=m.content_type,
+        parent_mention_id=m.parent_mention_id, engagement=m.engagement,
+        author_url=m.author_url)
 
 
 class Filters:
@@ -213,7 +221,7 @@ def get_mention(mention_id: uuid.UUID, ctx: AuthContext = Depends(require("menti
     proj = db.get(MonitoringProject, m.project_id) if m.project_id else None
     return MentionDetail(
         **_out(m, bn, a).model_dump(), snippet=m.snippet, canonical_url=m.canonical_url,
-        connector=m.connector, connector_version=m.connector_version,
+        connector_version=m.connector_version,
         content_hash=m.content_hash, duplicate_of=m.duplicate_of,
         source={"id": str(src.id), "kind": src.kind, "domain": src.domain, "name": src.name,
                 "coverage_status": src.coverage_status} if src else None,

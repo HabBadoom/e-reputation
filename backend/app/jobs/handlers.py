@@ -217,3 +217,30 @@ def scanner_transmit(db: Session, job: Job) -> None:
             transmit.fail(db, account_id, session_id)
             return
         raise
+
+
+@handler("social.sync")
+def social_sync(db: Session, job: Job) -> None:
+    import uuid
+
+    from app.social.sync import start
+    try:
+        source_id = uuid.UUID(job.payload["source_id"])
+    except (KeyError, ValueError, TypeError) as e:
+        raise PermanentJobError("social.sync needs source_id") from e
+    sync = start(db, source_id, trigger=job.payload.get("trigger", "schedule"))
+    if sync is not None:
+        log.info("social_sync", extra={"sync_id": str(sync.id), "status": sync.status,
+                                       "provider": sync.provider})
+
+
+@handler("social.poll")
+def social_poll(db: Session, job: Job) -> None:
+    import uuid
+
+    from app.social.sync import poll
+    try:
+        sync_id = uuid.UUID(job.payload["sync_id"])
+    except (KeyError, ValueError, TypeError) as e:
+        raise PermanentJobError("social.poll needs sync_id") from e
+    poll(db, sync_id)

@@ -170,6 +170,34 @@ class Settings(BaseSettings):
     # Phase 7: routing sent screenshots to brands. Names/aliases/keywords first; then this
     # model (empty = no model: unmatched screenshots go to the administrators' review queue).
     scanner_attribution_model: str = ""
+
+    # Social sources (0019). Apify runs actors logged out; YouTube uses the official API.
+    # Actor ids are configuration (Apify user~actor); defaults are Apify-maintained actors
+    # except LinkedIn (no Apify-maintained actor works without cookies).
+    apify_token: SecretStr = Field(default=SecretStr(""))
+    apify_base_url: str = "https://api.apify.com"
+    apify_actors: dict[str, str] = Field(default_factory=lambda: {
+        "facebook_page": "apify~facebook-posts-scraper",
+        "facebook_group": "apify~facebook-groups-scraper",
+        "facebook_comments": "apify~facebook-comments-scraper",
+        "tiktok": "clockworks~tiktok-scraper",
+        "reddit": "apify~reddit-scraper",
+        "linkedin_company": "harvestapi~linkedin-company-posts",
+    })
+    apify_items_per_run: int = 100          # newest items requested per source and sync
+    apify_max_run_usd: float = 2.0          # hard cost cap passed to every Apify run
+    apify_run_timeout_seconds: int = 900
+    apify_poll_seconds: int = 30
+    apify_max_wait_minutes: int = 60
+    apify_comments_per_post: int = 30
+    apify_comment_posts_per_sync: int = 20  # posts whose comments are fetched, per sync
+    youtube_api_key: SecretStr = Field(default=SecretStr(""))
+    youtube_base_url: str = "https://www.googleapis.com/youtube/v3"
+    youtube_daily_quota_units: int = 10000  # Google Cloud project quota (shared by tenants)
+    youtube_region: str = "DZ"
+    youtube_videos_per_sync: int = 25
+    youtube_comments_per_video: int = 50
+    social_default_frequency_minutes: int = 1440
     scanner_attribution_min_confidence: float = Field(default=0.7, ge=0, le=1)
     # Phase 6 retention (D9): images kept N days after sending; unsent collections deleted after
     # N days without activity, the agent warned from N days before.

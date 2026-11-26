@@ -377,8 +377,49 @@ class Source(Base):
     last_challenge_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
     consecutive_errors: Mapped[int] = mapped_column(default=0)
+    # Social sources (0019): attached to a monitoring project
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    match_mode: Mapped[str] = mapped_column(String(10), default="terms")
+    query: Mapped[str] = mapped_column(Text, default="")
+    frequency_minutes: Mapped[int | None] = mapped_column()
+    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sync_state: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
+
+
+class SourceSync(Base):
+    """One provider run for a social source (Apify actor run or YouTube API pass)."""
+    __tablename__ = "source_syncs"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id", "source_id"], ["sources.tenant_id", "sources.id"]),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    parent_sync_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    provider: Mapped[str] = mapped_column(String(20))
+    stage: Mapped[str] = mapped_column(String(10), default="items")
+    trigger: Mapped[str] = mapped_column(String(10), default="schedule")
+    status: Mapped[str] = mapped_column(String(12), default="queued")
+    actor: Mapped[str | None] = mapped_column(String(120))
+    external_run_id: Mapped[str | None] = mapped_column(String(100))
+    dataset_id: Mapped[str | None] = mapped_column(String(100))
+    max_items: Mapped[int | None] = mapped_column()
+    items_fetched: Mapped[int] = mapped_column(default=0)
+    items_unreadable: Mapped[int] = mapped_column(default=0)
+    mentions_new: Mapped[int] = mapped_column(default=0)
+    mentions_known: Mapped[int] = mapped_column(default=0)
+    results_billed: Mapped[int] = mapped_column(default=0)
+    api_units: Mapped[int] = mapped_column(default=0)
+    provider_cost_usd: Mapped[float | None] = mapped_column(Numeric(10, 4, asdecimal=False))
+    polls: Mapped[int] = mapped_column(default=0)
+    error_category: Mapped[str | None] = mapped_column(String(20))
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _created()
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Mention(Base):
@@ -422,6 +463,14 @@ class Mention(Base):
         ForeignKey("mentions.id", ondelete="SET NULL"))
     raw: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = _created()
+    # Social items (0019)
+    platform: Mapped[str | None] = mapped_column(String(20))
+    external_id: Mapped[str | None] = mapped_column(String(200))
+    content_type: Mapped[str | None] = mapped_column(String(10))
+    parent_mention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    engagement: Mapped[dict | None] = mapped_column(JSONB)
+    author_external_id: Mapped[str | None] = mapped_column(String(200))
+    author_url: Mapped[str | None] = mapped_column(String(500))
 
 
 # ---------------------------------------------------------------- Milestone 4

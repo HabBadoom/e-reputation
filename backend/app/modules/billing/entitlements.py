@@ -27,10 +27,19 @@ KEYS = ("max_brands", "max_monitoring_projects", "max_members", "min_frequency_m
         "max_competitors_per_brand", "max_keywords_per_brand", "max_browser_missions_per_day",
         "max_ai_tasks_per_day", "max_mentions_per_month", "max_ai_calls_per_month",
         "max_reports_per_month", "max_webhooks", "max_concurrent_browser_missions",
-        "max_retention_days")
+        "max_retention_days", "max_facebook_posts_per_month",
+        "max_facebook_comments_per_month", "max_tiktok_results_per_month",
+        "max_reddit_results_per_month", "max_linkedin_results_per_month",
+        "max_youtube_results_per_month")
 # Monthly entitlements and the usage metric they cap.
 MONTHLY = {"max_mentions_per_month": "mentions_collected", "max_ai_calls_per_month": "ai_calls",
-           "max_reports_per_month": "reports_generated"}
+           "max_reports_per_month": "reports_generated",
+           "max_facebook_posts_per_month": "facebook_posts",
+           "max_facebook_comments_per_month": "facebook_comments",
+           "max_tiktok_results_per_month": "tiktok_results",
+           "max_reddit_results_per_month": "reddit_results",
+           "max_linkedin_results_per_month": "linkedin_results",
+           "max_youtube_results_per_month": "youtube_results"}
 ACTIVE_STATUSES = ("trialing", "active", "past_due")
 
 

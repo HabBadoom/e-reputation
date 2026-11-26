@@ -59,6 +59,10 @@ def run_once(batch: int = 20, *, schedule: bool = True) -> int:
             n = queue.schedule_alert_evaluations(db, get_settings().alert_eval_every_minutes)
             if n:
                 log.info("alert_evaluations_scheduled", extra={"count": n})
+            from app.social.sync import schedule as schedule_social
+            n = schedule_social(db)
+            if n:
+                log.info("social_syncs_scheduled", extra={"count": n})
             db.execute(text("SELECT schedule_daily_maintenance()"))
     with session_scope() as db:
         jobs = queue.claim(db, WORKER_ID, batch)

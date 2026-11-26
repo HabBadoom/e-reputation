@@ -107,7 +107,8 @@ def _out(s: Source) -> SourceOut:
 
 def _get(db: Session, ctx: AuthContext, source_id: uuid.UUID) -> Source:
     s = db.scalars(select(Source).where(Source.id == source_id,
-                                        Source.tenant_id == ctx.tenant_id)).one_or_none()
+                                        Source.tenant_id == ctx.tenant_id,
+                                        Source.project_id.is_(None))).one_or_none()
     if s is None:
         raise NotFound("Source not found")
     return s
@@ -178,7 +179,8 @@ def list_sources(ctx: AuthContext = Depends(require("sources:read")),
                  q: str | None = Query(default=None, max_length=200),
                  limit: int = Query(default=50, ge=1, le=200),
                  offset: int = Query(default=0, ge=0)) -> SourcePage:
-    stmt = select(Source).where(Source.tenant_id == ctx.tenant_id)
+    stmt = select(Source).where(Source.tenant_id == ctx.tenant_id,
+                                Source.project_id.is_(None))   # social sources: /social-sources
     if kind:
         stmt = stmt.where(Source.kind == kind)
     if coverage:

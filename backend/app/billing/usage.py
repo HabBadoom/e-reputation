@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 from app.db.models import UsageEvent
 
 METRICS = ("mentions_collected", "search_queries", "ai_calls", "ai_tokens", "browser_missions",
-           "reports_generated", "agent_tasks", "emails_sent")
+           "reports_generated", "agent_tasks", "emails_sent", "facebook_posts",
+           "facebook_comments", "tiktok_results", "reddit_results", "linkedin_results",
+           "youtube_results", "youtube_units")
 
 
 def record(db: Session, tenant_id: uuid.UUID | None, metric: str, quantity: int = 1,
