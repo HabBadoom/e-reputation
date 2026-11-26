@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.11.0 — Social sources, AynPulse name, preproduction stack (unreleased)
+## 0.11.0 — Social sources, AynPulse name, preproduction stack (2026-11-26)
 
 ### Added
 - Social sources per monitoring project (page "Sources sociales"): public Facebook Pages and groups, TikTok accounts / hashtags / searches, LinkedIn company pages and Reddit communities / searches through **Apify** (third-party provider, actors run logged out); YouTube channels and searches through the **official YouTube Data API**. Product-owner decision 2026-11-25; both connectors pending legal review (blocked in production until approved).
