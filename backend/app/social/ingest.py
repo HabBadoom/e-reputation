@@ -283,3 +283,30 @@ class Ingestor:
         for i in range(0, len(ids), 50):
             queue.enqueue(self.db, "nlp.analyze",
                           {"mention_ids": [str(x) for x in ids[i:i + 50]]}, tenant_id=t)
+
+
+def social_duplicate_of(db: Session, tenant_id: uuid.UUID, brand_id: uuid.UUID, *, url: str,
+                        kind: str, body: str) -> uuid.UUID | None:
+    """For Scanner deliveries: the same post (same address) or comment (same post, same text)
+    already collected from a social source for this brand."""
+    if not url.startswith("http"):
+        return None
+    cu = canonicalize(url)
+    social = Mention.collection_method.in_(("third_party_provider", "platform_api"))
+    post = db.scalars(select(Mention).where(
+        Mention.tenant_id == tenant_id, Mention.brand_id == brand_id, social,
+        Mention.content_type.in_(("post", "video")), Mention.duplicate_of.is_(None),
+        Mention.canonical_url == cu).limit(1)).first()
+    if post is None:
+        return None
+    if kind == "post":
+        return post.id
+    norm = normalize_for_match(body)
+    if not norm:
+        return None
+    for cid, ctext in db.execute(select(Mention.id, Mention.original_text).where(
+            Mention.tenant_id == tenant_id, Mention.brand_id == brand_id, social,
+            Mention.parent_mention_id == post.id, Mention.duplicate_of.is_(None))):
+        if normalize_for_match(ctext) == norm:
+            return cid
+    return None

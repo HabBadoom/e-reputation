@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.0 — Social sources: Apify and YouTube (unreleased)
+
+### Added
+- Social sources per monitoring project (page "Sources sociales"): public Facebook Pages and groups, TikTok accounts / hashtags / searches, LinkedIn company pages and Reddit communities / searches through **Apify** (third-party provider, actors run logged out); YouTube channels and searches through the **official YouTube Data API**. Product-owner decision 2026-11-25; both connectors pending legal review (blocked in production until approved).
+- Facebook comments fetched once per kept post (up to 30, once the post is 12 h old), YouTube comment threads with replies; comments threaded under their post (`parent_mention_id`), replies under comments.
+- Attribution through the project's query plan (`terms`) or everything for the brand's own page/channel (`brand`); idempotent by platform id; Scanner captures and social items of the same post or comment counted once, in both directions.
+- Monthly caps per platform (trial: Facebook posts 3,000, comments 10,000, TikTok 2,000, Reddit 1,000, LinkedIn 500; YouTube metered), shared over the month by scheduled runs; every Apify run carries `maxItems` and a cost cap; YouTube quota units tracked platform-wide.
+- Sync history per source (results billed, cost reported by Apify, unreadable items, errors); mentions show platform, type (post, comment, reply), author link and interactions.
+- Migration 0019, `source_syncs`, jobs `social.sync` / `social.poll`, `/social-sources` API, docs/SOCIAL_SOURCES.md.
+
+### Not yet verified
+- The Apify adapters follow the actors' published formats and are tested against fake servers only; watch the first real syncs.
+
 ## 0.10.0 — Aynpulse Scanner, phases 1 to 7 (2026-11-26)
 
 Scanner collection module (separate web app and accounts): built-in browser with dedicated

@@ -302,9 +302,12 @@ def list_connectors(_: AuthContext = Depends(require("sources:read")),
                     db: Session = Depends(get_db)) -> list[ConnectorOut]:
     """What can collect data, whether it is configured, and its compliance status."""
     out = []
-    serper = SerperConnector()
+    from app.connectors.apify import ApifyConnector
+    from app.connectors.youtube import YouTubeConnector
+    serper, apify, youtube = SerperConnector(), ApifyConnector(), YouTubeConnector()
     for conn, configured in ((serper, serper.configured), (RssConnector(), True),
-                             (WebPageConnector(), True), (BrowserConnector(), True)):
+                             (WebPageConnector(), True), (BrowserConnector(), True),
+                             (apify, apify.configured), (youtube, youtube.configured)):
         pol = db.get(ConnectorPolicy, conn.key)
         perm = conn.check_permissions(db)
         d = conn.describe()

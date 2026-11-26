@@ -132,19 +132,23 @@ export interface PlanUsage {
   plan_key: string; plan_name: string; status: string; trial_ends_at: string | null;
   limits: Record<string, number | null>; usage: Record<string, number>;
 }
-export type Verification = "verified_on_page" | "snippet_only" | "not_found_on_page" | "page_unavailable" | "blocked_by_robots" | "feed_item" | "pending_render" | "blocked_by_challenge" | "scanner_validated" | "scanner_unvalidated";
+export type Verification = "verified_on_page" | "snippet_only" | "not_found_on_page" | "page_unavailable" | "blocked_by_robots" | "feed_item" | "pending_render" | "blocked_by_challenge" | "scanner_validated" | "scanner_unvalidated" | "platform_api_record" | "provider_record";
 export type Coverage = "AVAILABLE" | "PARTIALLY_AVAILABLE" | "PENDING_AUTHORIZATION" | "RESTRICTED" | "UNAVAILABLE" | "CONNECTOR_ERROR";
 export interface Mention {
   id: string; brand_id: string; brand_name: string; project_id: string | null;
   entity_type: "brand" | "product" | "competitor"; entity_name: string; url: string; domain: string;
   title: string; original_text: string; matched_terms: string[]; publisher: string | null;
   published_at: string | null; published_at_source: string | null; collected_at: string; last_seen_at: string;
-  seen_count: number; collection_method: "search_api" | "news_api" | "rss" | "page_fetch" | "scanner";
+  seen_count: number; collection_method: CollectionMethod;
   verification_status: Verification; is_repost: boolean; language: string | null; analysed: boolean;
-  analysis: Analysis;
+  analysis: Analysis; connector: string; platform: SocialPlatform | null;
+  content_type: "post" | "video" | "comment" | "reply" | null; parent_mention_id: string | null;
+  engagement: Record<string, number> | null; author_url: string | null;
 }
+export type CollectionMethod = "search_api" | "news_api" | "rss" | "page_fetch" | "scanner" | "platform_api" | "third_party_provider";
+export type SocialPlatform = "facebook" | "instagram" | "tiktok" | "linkedin" | "reddit" | "youtube" | "x";
 export interface MentionDetail extends Mention {
-  snippet: string; canonical_url: string; connector: string; connector_version: string; content_hash: string;
+  snippet: string; canonical_url: string; connector_version: string; content_hash: string;
   duplicate_of: string | null; project_name: string | null; provider_fields: Record<string, unknown>;
   annotators: Record<string, unknown>[]; models: Record<string, unknown>;
   source: { id: string; kind: string; domain: string; name: string; coverage_status: Coverage } | null;
@@ -387,4 +391,28 @@ export interface ConnectorReview {
   restrictions: string; retention_days: number | null;
   review_status: "pending_legal_review" | "approved" | "rejected";
   reviewed_by: string | null; reviewed_at: string | null; review_notes: string;
+}
+
+// ---- Social sources (Apify, third-party provider; YouTube Data API, official) ------------------
+export type SocialKind = "facebook_page" | "facebook_group" | "tiktok_profile" | "tiktok_hashtag" | "tiktok_search"
+  | "linkedin_company" | "reddit_community" | "reddit_search" | "youtube_channel" | "youtube_search";
+export type SocialMetric = "facebook_posts" | "facebook_comments" | "tiktok_results" | "reddit_results" | "linkedin_results" | "youtube_results";
+export interface SourceSyncInfo {
+  id: string; provider: "apify" | "youtube"; stage: "items" | "comments"; trigger: "schedule" | "manual";
+  status: "queued" | "running" | "succeeded" | "partial" | "failed" | "skipped"; max_items: number | null;
+  items_fetched: number; items_unreadable: number; mentions_new: number; mentions_known: number;
+  results_billed: number; api_units: number; provider_cost_usd: number | null; error_category: string | null;
+  error: string | null; created_at: string; finished_at: string | null;
+}
+export interface SocialSource {
+  id: string; project_id: string; kind: SocialKind; platform: SocialPlatform; provider: "apify" | "youtube";
+  url: string; query: string; name: string; match_mode: "terms" | "brand"; enabled: boolean;
+  frequency_minutes: number | null; coverage_status: Coverage; mentions_count: number;
+  last_synced_at: string | null; next_sync_at: string | null; last_error: string | null;
+  pending_comment_posts: number; last_sync: SourceSyncInfo | null;
+}
+export interface SocialOverview {
+  sources: SocialSource[];
+  usage: { metric: SocialMetric; used: number; limit: number | null }[];
+  providers: { key: "apify" | "youtube"; configured: boolean; review_status: string; allowed: boolean; note: string }[];
 }

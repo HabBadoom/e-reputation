@@ -40,6 +40,7 @@ from app.db.models import (
 )
 from app.db.session import set_context, set_scanner_context
 from app.jobs import queue
+from app.social.ingest import social_duplicate_of
 
 log = logging.getLogger("repintel.scanner.transmit")
 JOB_KIND = "scanner.transmit"
@@ -215,6 +216,8 @@ def deliver(db: Session, c: Content, groups: list[BrandGroup], *,
                          else f"{'Réponse' if e.kind == 'reply' else 'Commentaire'} de "
                               f"{e.author_name or '?'}")[:2000]
                 h = content_hash(title, body)
+                dup = social_duplicate_of(db, t.tenant_id, t.brand_id,
+                                          url=item.source_url or "", kind=e.kind, body=body)
                 m = Mention(
                     tenant_id=t.tenant_id, brand_id=t.brand_id, entity_type="brand",
                     entity_name=t.name[:200], url=url[:2000],
@@ -227,7 +230,7 @@ def deliver(db: Session, c: Content, groups: list[BrandGroup], *,
                     collected_at=c.captured_at or now, last_seen_at=now,
                     collection_method="scanner", connector=CONNECTOR,
                     connector_version=CONNECTOR_VERSION, verification_status=verification,
-                    content_hash=h,
+                    content_hash=h, duplicate_of=dup,
                     raw={"scanner": {
                         "collection_id": str(item.session_id), "item_id": str(item.id),
                         "entry_id": str(e.id), "kind": e.kind,

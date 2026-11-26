@@ -51,6 +51,13 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_DEFAULT_PLAN` | empty | Plan key for new organizations; empty = plan flagged `is_default` (`trial`) |
 | `REPINTEL_TRIAL_DAYS` | `14` | Recorded on the subscription (not enforced yet) |
 | `REPINTEL_SERPER_API_KEY` | — | Enables the Serper connector. Secret |
+| `REPINTEL_APIFY_TOKEN` | — | Enables the Apify connector (social sources). Secret |
+| `REPINTEL_APIFY_ACTORS` | Apify-maintained actors (+ `harvestapi~linkedin-company-posts`) | JSON map source kind → actor id |
+| `REPINTEL_APIFY_ITEMS_PER_RUN` / `_MAX_RUN_USD` | `100` / `2.0` | Results requested per source and run; cost cap per Apify run |
+| `REPINTEL_APIFY_COMMENTS_PER_POST` / `_COMMENT_POSTS_PER_SYNC` | `30` / `20` | Facebook comments fetched once per post |
+| `REPINTEL_YOUTUBE_API_KEY` | — | Enables the YouTube Data API connector. Secret |
+| `REPINTEL_YOUTUBE_DAILY_QUOTA_UNITS` | `10000` | Google Cloud project quota shared by all organisations |
+| `REPINTEL_SOCIAL_DEFAULT_FREQUENCY_MINUTES` | `1440` | Collection frequency of social sources without their own |
 | `REPINTEL_SEARCH_COUNTRY` | `dz` | Serper `gl` |
 | `REPINTEL_SEARCH_RESULTS_PER_QUERY` | `20` | Serper `num` |
 | `REPINTEL_SEARCH_ENDPOINTS` | `["news","search"]` | JSON list |

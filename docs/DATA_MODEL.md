@@ -101,6 +101,16 @@ Daily sentiment and reputation figures are computed on demand from `mentions` + 
 | `approval_requests` | tenant | one per sensitive action; pending/approved/rejected/expired; decider must hold `ai:approve`; final once decided |
 | `brands` + | tenant | `response_tone`, `response_guidelines` |
 
+## 0.11 social sources (migration 0019)
+
+| Table / column | Notes |
+|---|---|
+| `sources` + | social kinds (see SOCIAL_SOURCES) with `project_id` (required for them, forbidden for website/RSS), `match_mode` (`terms` / `brand`), `query`, `frequency_minutes`, `next_sync_at`, `last_synced_at`, `sync_state` (newest date collected, posts waiting for their comments, posts whose comments were fetched); uniqueness per project |
+| `source_syncs` | one row per provider run: provider (`apify` / `youtube`), stage (`items` / `comments`), trigger, status, actor, run and dataset ids, max items, items read / unreadable, mentions new / known, results billed, API units, provider-reported cost, error category |
+| `mentions` + | `platform`, `external_id` (unique per brand), `content_type` (`post`, `video`, `comment`, `reply`), `parent_mention_id` (same tenant, composite FK), `engagement` (as returned), `author_external_id`, `author_url`; methods `platform_api`, `third_party_provider`; verification `platform_api_record`, `provider_record` |
+| usage metrics + | `facebook_posts`, `facebook_comments`, `tiktok_results`, `reddit_results`, `linkedin_results`, `youtube_results`, `youtube_units` |
+| functions | `schedule_social_syncs(int)`, `youtube_units_today()` (platform-wide, number only) |
+
 ## Milestone 8 tables
 
 | Table | Scope | Notes |

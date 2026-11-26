@@ -52,6 +52,12 @@ It honours `robots.txt` (RFC 9309, token `RepIntelBot`). It never logs in, never
 
 Headless Chromium rendering of public pages (`BROWSER_FLEET.md`): used when a page's static HTML has no text without JavaScript, for sources set to "Always browser", and for "Check with browser". Same rules as the web reader (robots.txt, honest user agent, no login), plus a fresh isolated context per visit. Its compliance record is `pending_legal_review` and therefore blocked in production until approved.
 
+## Apify (`apify`) and YouTube (`youtube`)
+
+Social sources (0.11): see [SOCIAL_SOURCES.md](SOCIAL_SOURCES.md). Apify is a third-party
+provider whose actors run logged out; YouTube uses its official Data API. Both start as
+`pending_legal_review` (blocked in production).
+
 ## Verification statuses (per mention)
 
 | Status | Meaning |

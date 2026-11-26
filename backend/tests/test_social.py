@@ -504,3 +504,29 @@ def test_youtube_channel_of_the_brand_and_quota(make_user, youtube, monkeypatch)
     s = _sync(api, y["id"])[0]
     assert s["status"] == "failed" and s["error_category"] == "quota"
     assert not [c for c in youtube["calls"] if c.url.path.endswith("/search")]
+
+
+def test_scanner_delivery_recognises_social_items(make_user, apify):
+    """The reverse direction: a Scanner capture of a post or comment already collected from a
+    social source is delivered as a duplicate (counted once)."""
+    from app.db.session import session_scope, set_context
+    from app.social.ingest import social_duplicate_of
+    api = make_user()
+    brand_id, pid = _project(api)
+    g = _add(api, pid, kind="facebook_group", url=GROUP)
+    _sync(api, g["id"])
+    ms = _mentions(api)
+    post = next(m for m in ms if m["content_type"] == "post")
+    comment = next(m for m in ms if m["original_text"] == "pareil chez moi")
+    t, b = uuid.UUID(api.tenant_id), uuid.UUID(brand_id)
+    with session_scope() as db:
+        set_context(db, tenant_id=t, user_id=None)
+        share_link = "https://www.facebook.com/groups/algerie.telecom.users/posts/101"
+        assert social_duplicate_of(db, t, b, url=share_link, kind="post", body="x") == \
+            uuid.UUID(post["id"])
+        assert social_duplicate_of(db, t, b, url=post["url"], kind="comment",
+                                   body="Pareil  chez moi") == uuid.UUID(comment["id"])
+        assert social_duplicate_of(db, t, b, url=post["url"], kind="comment",
+                                   body="autre chose") is None
+        assert social_duplicate_of(db, t, b, url="https://www.facebook.com/x/posts/9",
+                                   kind="post", body="") is None

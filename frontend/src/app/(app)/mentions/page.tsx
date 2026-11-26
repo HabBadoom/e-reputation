@@ -7,6 +7,7 @@ import { AnalysisBadges, AnalysisDetails, CorrectionForm, langLabel, SENTIMENTS 
 import { useI18n } from "@/components/providers";
 import { Badge, Button, ErrorBanner, Spinner } from "@/components/ui";
 import { api, type Brand, type Mention, type MentionDetail, type Page, type Verification } from "@/lib/api";
+import type { MessageKey } from "@/lib/i18n";
 import { useCan } from "@/lib/session";
 
 const PAGE = 25;
@@ -15,6 +16,7 @@ const VERIF_TONE: Record<Verification, "brand" | "neutral" | "warn" | "neg"> = {
   not_found_on_page: "warn", page_unavailable: "neutral", blocked_by_robots: "neutral",
   pending_render: "neutral", blocked_by_challenge: "warn",
   scanner_validated: "brand", scanner_unvalidated: "neutral",
+  platform_api_record: "brand", provider_record: "neutral",
 };
 const VERIFS = Object.keys(VERIF_TONE) as Verification[];
 
@@ -38,6 +40,7 @@ function Provenance({ id }: { id: string }) {
     [t("mentions.canonical"), <span key="c" dir="ltr" className="break-all font-mono text-xs">{d.canonical_url}</span>],
     [t("mentions.method"), t(`method.${d.collection_method}`)],
     [t("mentions.connector"), `${d.connector} v${d.connector_version}`],
+    ...(d.collection_method === "third_party_provider" ? [[t("social.provenance"), t("social.thirdPartyNote")] as [string, string]] : []),
     [t("mentions.collectedAt"), fmtDate(d.collected_at)],
     [t("mentions.seen", { n: d.seen_count }), fmtDate(d.last_seen_at)],
     [t("mentions.matched"), d.matched_terms.join(", ") || "—"],
@@ -77,10 +80,21 @@ function MentionCard({ m }: { m: Mention }) {
         <span className="font-medium text-ink-soft" dir="ltr">{m.domain}</span>
         <span>·</span><MentionDate m={m} />
         <span>·</span><span>{t(`entity.${m.entity_type}`)}: {m.entity_name}</span>
+        {m.content_type && <><span>·</span><span>{t(`ctype.${m.content_type}`)}</span></>}
+        {m.publisher && m.platform && (
+          <><span>·</span>{m.author_url
+            ? <a href={m.author_url} target="_blank" rel="noopener noreferrer nofollow ugc" className="hover:underline" dir="auto">{m.publisher}</a>
+            : <span dir="auto">{m.publisher}</span>}</>
+        )}
       </div>
       <a href={m.url} target="_blank" rel="noopener noreferrer nofollow ugc"
          className="font-medium hover:underline" dir="auto">{m.title || m.url}</a>
       {m.original_text && <p className="mt-1 text-sm leading-relaxed text-ink-soft" dir="auto">{m.original_text}</p>}
+      {m.engagement && Object.keys(m.engagement).length > 0 && (
+        <p className="mt-1 text-xs text-ink-mute" title={t("social.engagementNote")}>
+          {Object.entries(m.engagement).map(([k, v]) => `${t(`eng.${k}` as MessageKey)} ${v.toLocaleString()}`).join(" · ")}
+        </p>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Badge tone={VERIF_TONE[m.verification_status]}>{t(`verif.${m.verification_status}`)}</Badge>
         <Badge>{t(`method.${m.collection_method}`)}</Badge>

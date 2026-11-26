@@ -186,7 +186,10 @@ def test_plan_limits_are_enforced(make_user, owner_engine):
     assert usage == {"max_brands": 2, "max_monitoring_projects": 1, "max_members": 3,
                      "max_browser_missions_per_day": 0, "max_ai_tasks_per_day": 0,
                      "max_webhooks": 0, "max_mentions_per_month": 0, "max_ai_calls_per_month": 0,
-                     "max_reports_per_month": 0}
+                     "max_reports_per_month": 0, "max_facebook_posts_per_month": 0,
+                     "max_facebook_comments_per_month": 0, "max_tiktok_results_per_month": 0,
+                     "max_reddit_results_per_month": 0, "max_linkedin_results_per_month": 0,
+                     "max_youtube_results_per_month": 0}
 
 
 def test_new_organizations_get_a_subscription(client, owner_engine):

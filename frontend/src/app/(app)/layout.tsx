@@ -21,6 +21,7 @@ const NAV: { href: string; key: MessageKey; perm?: string }[] = [
   { href: "/browser", key: "nav.browser", perm: "browser:read" },
   { href: "/ai-agents", key: "nav.agents", perm: "ai:read" },
   { href: "/sources", key: "nav.sources", perm: "sources:read" },
+  { href: "/social-sources", key: "nav.socialSources", perm: "sources:read" },
   { href: "/nlp", key: "nav.nlp" },
   { href: "/team", key: "nav.team" },
   { href: "/audit", key: "nav.audit", perm: "audit:read" },

@@ -115,6 +115,11 @@ Base path `/api/v1`. Interactive docs (non-production): `/api/docs`, schema `/ap
 | POST / DELETE | `/admin/plans/{key}/prices[/{id}]` | 〃 | `{currency, billing_interval, amount_minor}` replaces the active price |
 | GET / PATCH | `/admin/connectors[/{key}]` | 〃 | `{review_status, review_notes}` — record of the legal review |
 | GET | `/metrics` | bearer `REPINTEL_METRICS_TOKEN` | Prometheus text, aggregates only; 404 when disabled or wrong token |
+| GET | `/social-sources?project_id=` | `sources:read` | Social sources with their last sync, this month's usage per platform vs plan caps, provider status (configured, legal review, allowed) |
+| POST | `/social-sources` | `sources:write` | `{project_id, kind, url? \| query?, name?, match_mode: terms\|brand, frequency_minutes?}`; kinds: `facebook_page`, `facebook_group`, `youtube_channel`, `youtube_search`, `tiktok_profile`, `tiktok_hashtag`, `tiktok_search`, `linkedin_company`, `reddit_community`, `reddit_search`; addresses are validated and normalised; 409 if the project already follows it |
+| PATCH / DELETE | `/social-sources/{id}` | `sources:write` | `{name?, enabled?, match_mode?, frequency_minutes?}`; delete keeps the mentions |
+| POST | `/social-sources/{id}/sync` | `sources:write` | Collect now (202); 409 if a sync is running; 6 per hour per source |
+| GET | `/social-sources/{id}/syncs` | `sources:read` | Sync history: stage (posts / comments), status, items read / unreadable, mentions new / known, results billed, YouTube units, cost reported by Apify, error category |
 | GET | `/healthz`, `/readyz` | public | Liveness; readiness checks DB + Redis |
 
 ## Aynpulse Scanner

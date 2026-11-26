@@ -14,6 +14,8 @@ const ENTITLEMENTS = [
   "max_competitors_per_brand", "max_keywords_per_brand", "max_browser_missions_per_day",
   "max_ai_tasks_per_day", "max_mentions_per_month", "max_ai_calls_per_month",
   "max_reports_per_month", "max_webhooks", "max_concurrent_browser_missions", "max_retention_days",
+  "max_facebook_posts_per_month", "max_facebook_comments_per_month", "max_tiktok_results_per_month",
+  "max_reddit_results_per_month", "max_linkedin_results_per_month", "max_youtube_results_per_month",
 ] as const;
 type Tab = "orgs" | "plans" | "connectors" | "scanner";
 
