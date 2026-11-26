@@ -10,7 +10,7 @@ const arabic = IBM_Plex_Sans_Arabic({ subsets: ["arabic"], weight: ["400", "500"
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "RepIntel",
+  title: "AynPulse",
   description: "Reputation intelligence platform",
   robots: { index: false },
 };

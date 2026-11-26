@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="REPINTEL_", env_file=".env", extra="ignore")
 
     env: Literal["development", "test", "staging", "production"] = "development"
-    app_name: str = "RepIntel"
+    app_name: str = "AynPulse"
     log_level: str = "INFO"
 
     # Runtime DB URL uses the restricted application role (NOBYPASSRLS).
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     brevo_api_key: SecretStr = Field(default=SecretStr(""))
     brevo_api_url: str = "https://api.brevo.com/v3/smtp/email"
     email_from_address: str = "no-reply@example.com"
-    email_from_name: str = "RepIntel"
+    email_from_name: str = "AynPulse"
 
     email_verify_ttl_seconds: int = 60 * 60 * 48
     password_reset_ttl_seconds: int = 60 * 60
@@ -64,8 +64,8 @@ class Settings(BaseSettings):
     max_search_queries_per_run: int = 30
 
     # Fetching third-party pages / feeds.
-    crawler_user_agent: str = "RepIntelBot/0.1 (+https://example.com/bot)"
-    crawler_robots_token: str = "RepIntelBot"  # noqa: S105 — robots.txt user-agent, not a secret
+    crawler_user_agent: str = "AynPulseBot/0.1 (+https://example.com/bot)"
+    crawler_robots_token: str = "AynPulseBot"  # noqa: S105 — robots.txt user-agent, not a secret
     fetch_timeout_seconds: float = 10.0
     fetch_max_bytes: int = 2 * 1024 * 1024
     verify_pages: bool = True                # check search hits against the real page
@@ -137,7 +137,7 @@ class Settings(BaseSettings):
     default_plan: str = ""
     trial_days: int = 14
 
-    # Aynpulse Scanner (collection module, separate accounts). See docs/SCANNER.md.
+    # AynPulse Scanner (collection module, separate accounts). See docs/SCANNER.md.
     # Off by default: an existing production deployment does not open Scanner sign-up until
     # the Scanner web app is deployed with it (Phase 9).
     scanner_enabled: bool = False

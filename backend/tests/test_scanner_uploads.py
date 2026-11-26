@@ -1,4 +1,4 @@
-"""Aynpulse Scanner, phase 3: screenshot uploads — validation, sanitisation, duplicates, order,
+"""AynPulse Scanner, phase 3: screenshot uploads — validation, sanitisation, duplicates, order,
 removal, private read-back, isolation, failure handling."""
 
 import contextlib

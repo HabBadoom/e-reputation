@@ -84,7 +84,11 @@ class S3Storage:
             aws_access_key_id=access_key or None, aws_secret_access_key=secret_key or None,
             config=Config(signature_version="s3v4", s3={"addressing_style": "path"},
                           retries={"max_attempts": 3, "mode": "standard"},
-                          connect_timeout=5, read_timeout=30))
+                          connect_timeout=5, read_timeout=30,
+                          # S3-compatible services (Scaleway, OVH…) do not all accept the
+                          # default CRC checksums of boto3 >= 1.36: send them only if required.
+                          request_checksum_calculation="when_required",
+                          response_checksum_validation="when_required"))
 
     def ensure_bucket(self) -> None:
         """Development only: create the bucket if it is missing (production buckets are made,

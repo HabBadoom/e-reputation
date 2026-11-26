@@ -943,8 +943,8 @@ class PlanChangeRequest(Base):
     created_at: Mapped[datetime] = _created()
 
 
-# ---------------------------------------------------------------- Aynpulse Scanner (0010)
-# Scanner accounts are separate from AnyPulse users. Every Scanner table is isolated by
+# ---------------------------------------------------------------- AynPulse Scanner (0010)
+# Scanner accounts are separate from AynPulse users. Every Scanner table is isolated by
 # `app.scanner_account_id` (see migration 0010).
 class ScannerAccount(Base):
     __tablename__ = "scanner_accounts"
@@ -956,7 +956,7 @@ class ScannerAccount(Base):
     status: Mapped[str] = mapped_column(String(20), default="active")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
-    # AnyPulse access (0011): granted at creation, changed only by platform administrators
+    # AynPulse access (0011): granted at creation, changed only by platform administrators
     # (admin_scanner_set_access); the API role cannot UPDATE these columns.
     anypulse_access: Mapped[str] = mapped_column(String(10), default="active")
     access_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

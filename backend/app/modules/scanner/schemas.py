@@ -87,9 +87,9 @@ class CollectionSessionPatch(BaseModel):
         return v.strip()
 
 
-class AnyPulseAccessOut(BaseModel):
-    """Whether this account may send collections to AnyPulse (revoked only by a platform
-    administrator). Nothing about AnyPulse's data."""
+class AynPulseAccessOut(BaseModel):
+    """Whether this account may send collections to AynPulse (revoked only by a platform
+    administrator). Nothing about AynPulse's data."""
     state: Literal["active", "revoked"]
     revoked_at: datetime | None
     revoke_reason: str | None

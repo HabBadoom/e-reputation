@@ -10,7 +10,7 @@ import type { MessageKey } from "@/lib/i18n";
 const LIMIT = 20;
 
 // Collection history: collection metadata and transmission status only. The analysis of a
-// collection lives in AnyPulse, never here.
+// collection lives in AynPulse, never here.
 export default function HistoryPage() {
   const { t, fmtDate } = useI18n();
   const [offset, setOffset] = useState(0);

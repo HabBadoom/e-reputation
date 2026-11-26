@@ -79,9 +79,9 @@ def decode_access_token(token: str) -> AccessClaims:
         raise Unauthorized("Invalid access token") from e
 
 
-# ---- Aynpulse Scanner tokens ------------------------------------------------------------------
-# Same signing key, but a different type and audience: a Scanner token is refused by AnyPulse
-# (`decode_access_token` requires typ=access and a tenant) and an AnyPulse token is refused here.
+# ---- AynPulse Scanner tokens ------------------------------------------------------------------
+# Same signing key, but a different type and audience: a Scanner token is refused by AynPulse
+# (`decode_access_token` requires typ=access and a tenant) and an AynPulse token is refused here.
 SCANNER_AUDIENCE = "aynpulse-scanner"
 
 

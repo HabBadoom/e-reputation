@@ -62,8 +62,8 @@ All backend settings use the `REPINTEL_` prefix (`app/core/config.py`).
 | `REPINTEL_SEARCH_RESULTS_PER_QUERY` | `20` | Serper `num` |
 | `REPINTEL_SEARCH_ENDPOINTS` | `["news","search"]` | JSON list |
 | `REPINTEL_MAX_SEARCH_QUERIES_PER_RUN` | `30` | Cost cap per run |
-| `REPINTEL_CRAWLER_USER_AGENT` | `RepIntelBot/0.1 (+https://example.com/bot)` | Set a real info URL |
-| `REPINTEL_CRAWLER_ROBOTS_TOKEN` | `RepIntelBot` | robots.txt user-agent |
+| `REPINTEL_CRAWLER_USER_AGENT` | `AynPulseBot/0.1 (+https://example.com/bot)` | Set a real info URL |
+| `REPINTEL_CRAWLER_ROBOTS_TOKEN` | `AynPulseBot` | robots.txt user-agent |
 | `REPINTEL_FETCH_TIMEOUT_SECONDS` / `_MAX_BYTES` | `10` / `2097152` | |
 | `REPINTEL_VERIFY_PAGES` | `true` | Check search hits on the real page |
 | `REPINTEL_MAX_PAGE_FETCHES_PER_RUN` | `25` | |

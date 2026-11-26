@@ -1,29 +1,29 @@
-# Aynpulse Scanner
+# AynPulse Scanner
 
-Status: **Phases 1 to 7 implemented**: foundation, AnyPulse access, screenshots (built-in
+Status: **Phases 1 to 7 implemented**: foundation, AynPulse access, screenshots (built-in
 browser, whole-thread capture, upload), extraction by a vision model with review and validation,
-pasted links, retention, and sending to AnyPulse (central space, attribution to brands,
-administrators' review queue). Phases 8–9 (hardening, production) remain.
+pasted links, retention, and sending to AynPulse (central space, attribution to brands,
+administrators' review queue). Phase 9 (deployment) is ready; phase 8 (hardening) remains.
 
-> Scanner collects. AnyPulse understands, analyses and reports.
+> Scanner collects. AynPulse understands, analyses and reports.
 
-Scanner is the collection module of AnyPulse (this repository, named `RepIntel` in code). Its
+Scanner is the collection module of AynPulse (this repository, named `RepIntel` in code). Its
 users are **collection agents**: they add screenshots (and later URLs or spreadsheet imports)
-to a collection and send it to AnyPulse. They never see analyses and never choose a brand.
+to a collection and send it to AynPulse. They never see analyses and never choose a brand.
 
 ## Decisions (2026-11-21)
 
 | Decision | Choice |
 |---|---|
-| Codebase | Module inside the AnyPulse repository, with its own web app (`scanner/`) and tables (`scanner_*`) |
+| Codebase | Module inside the AynPulse repository, with its own web app (`scanner/`) and tables (`scanner_*`) |
 | Users | **Collection agents**: they add screenshots and URLs, never see analyses, never choose a brand |
-| Accounts | **Separate Scanner accounts**, one account type for everyone, not AnyPulse users |
-| AnyPulse access | **Automatic** from sign-up, indefinitely. Only a **platform administrator** revokes it (with a reason shown to the agent) or restores it. No consent step, no invitation, no AnyPulse organization per agent |
+| Accounts | **Separate Scanner accounts**, one account type for everyone, not AynPulse users |
+| AynPulse access | **Automatic** from sign-up, indefinitely. Only a **platform administrator** revokes it (with a reason shown to the agent) or restores it. No consent step, no invitation, no AynPulse organization per agent |
 | Destination (option A) | The collections of all agents go to a **central RepIntel space**; RepIntel's AI attributes each one to a brand, hence to a customer, afterwards (transmission: phase 7) |
 | Login | Required before the first upload; no anonymous collection |
 | Main collection action | The **built-in browser**: the agent opens Facebook (or another network) inside Scanner, signs in with a **dedicated collection account** and captures what they see. Importing screenshots already taken is the fallback. Credentials are handled by each agent; the signed-in session is kept encrypted (cookies only, never the password) |
 | Extraction (D5) | A **vision AI model** (OpenAI, model id from configuration) reads each screenshot: posts, comments, replies, authors, times, counters, text inside images. Images are sent to the provider. Chosen by the product owner on 2026-11-23 |
-| Validation before sending (phase 7) | Not required: the agent may send screenshots that were not validated; they reach AnyPulse marked as not validated (decided 2026-11-24) |
+| Validation before sending (phase 7) | Not required: the agent may send screenshots that were not validated; they reach AynPulse marked as not validated (decided 2026-11-24) |
 | Storage | Private S3-compatible object storage: **RustFS** in development and CI (MinIO's community edition and images were withdrawn in 2025–2026), an S3-compatible bucket at the EU host in production |
 | Priority | Scanner before the Phase 2 & 3 plan (sprints 9–15) |
 
@@ -41,7 +41,7 @@ Spec override (decided by the product owner, 2026-11-21): the master prompt's ru
 bypass authentication or platform restrictions" is lifted **only** in so far as agents sign in
 to dedicated social-media accounts created for collection inside Scanner's browser, and Scanner
 keeps their signed-in session. Nothing else from that rule is relaxed. Recognising what a comment *says* (OCR, layout) is collection; deciding whether it
-is *negative*, or which brand it is about, belongs to AnyPulse.
+is *negative*, or which brand it is about, belongs to AynPulse.
 
 ## Architecture
 
@@ -56,27 +56,27 @@ backend/migrations/versions/0010_scanner_foundation.py … 0013_scanner_browser.
 The built-in browser runs as its own service, `scanner-browser`
 (`uvicorn app.scanner.browser.server:app --port 8100`), from the backend image.
 
-Same FastAPI process, database cluster and CI as AnyPulse. The Scanner web app only proxies
-`/api/v1/scanner/*`; it cannot reach the rest of the AnyPulse API from its origin.
+Same FastAPI process, database cluster and CI as AynPulse. The Scanner web app only proxies
+`/api/v1/scanner/*`; it cannot reach the rest of the AynPulse API from its origin.
 
 ## Accounts, tokens and isolation
 
 - **Accounts** (`scanner_accounts`): email, Argon2id password hash, full name, locale. One
-  account type for everyone. Independent of AnyPulse `users`: the same email may exist in both,
+  account type for everyone. Independent of AynPulse `users`: the same email may exist in both,
   with different passwords and no link.
 - **Tokens**: 15-minute access JWT with `typ=scanner_access` and audience `aynpulse-scanner`;
   opaque refresh token (14 days) stored hashed, rotated on every use, reuse revokes the family.
-  AnyPulse refuses Scanner tokens and Scanner refuses AnyPulse tokens.
+  AynPulse refuses Scanner tokens and Scanner refuses AynPulse tokens.
 - **Cookies** (browsers): `sc_access`, `sc_refresh` (path `/api/v1/scanner/auth`), `sc_csrf`
-  (double submit). Never the AnyPulse `ri_*` cookies. Domain: `REPINTEL_SCANNER_COOKIE_DOMAIN`
+  (double submit). Never the AynPulse `ri_*` cookies. Domain: `REPINTEL_SCANNER_COOKIE_DOMAIN`
   (host-only by default).
 - **Row-level security**: every Scanner table has RLS enabled and forced, keyed on
-  `app.scanner_account_id` (transaction-local). The DB session sets either the AnyPulse context
+  `app.scanner_account_id` (transaction-local). The DB session sets either the AynPulse context
   (`app.tenant_id`, `app.user_id`) or the Scanner context, never both. Unset context → no rows.
 - **Audit**: `scanner_audit_logs`, append-only for the app role (account created, sign-in,
   collection created or discarded, screenshots added, item removed, access revoked/restored).
 
-## AnyPulse access (phase 2)
+## AynPulse access (phase 2)
 
 `scanner_accounts.anypulse_access` is `active` from creation (a trigger enforces it whatever the
 INSERT says) and stays so indefinitely. The API role cannot UPDATE the access columns (column
@@ -167,11 +167,11 @@ access (checked in CI). When storage is down, the upload fails as a whole (503
 `storage_unavailable`) and nothing half-done is kept. Removing an item deletes its object after
 the database commit.
 
-## Sending to AnyPulse (phase 7)
+## Sending to AynPulse (phase 7)
 
-The agent presses **"Envoyer ma collecte à AnyPulse"** (confirmation shows how many screenshots,
+The agent presses **"Envoyer ma collecte à AynPulse"** (confirmation shows how many screenshots,
 and how many are not validated). Refused while a screenshot is still being read, with no
-screenshot, or when the agent's AnyPulse access is revoked. The collection closes (`queued`) and
+screenshot, or when the agent's AynPulse access is revoked. The collection closes (`queued`) and
 a new one starts; the history shows `queued → transmitting → transmitted` (or `failed`, with
 "Renvoyer").
 
@@ -188,16 +188,16 @@ The `scanner.transmit` job (worker), for each screenshot:
      (`method = ai`), otherwise it goes to review with the model's suggestion.
    - Otherwise: **review queue** (`to_review`). A screenshot with no text read is `empty`.
 2. **Delivery** to **every organisation following a matched brand** (a brand's exclude
-   keywords still apply per organisation): one AnyPulse **mention per post, comment or reply**,
+   keywords still apply per organisation): one AynPulse **mention per post, comment or reply**,
    `collection_method = scanner`, connector `aynpulse_scanner`, verification
    **`scanner_validated` or `scanner_unvalidated`** (whether the agent validated the
    screenshot), author as publisher, estimated publication time, and full provenance in
    `raw.scanner` (collection, item, entry, kind, parent, page or group, counters, link,
-   agent). AnyPulse's language analysis is queued for the new mentions. Delivery is idempotent
+   agent). AynPulse's language analysis is queued for the new mentions. Delivery is idempotent
    (`canonical_url = scanner:entry:<id>`, unique per organisation and brand).
 3. The images' deletion date is set to 30 days after sending (phase 6).
 
-**Review queue** (AnyPulse admin console → Scanner → "Scanner — à attribuer", platform
+**Review queue** (AynPulse admin console → Scanner → "Scanner — à attribuer", platform
 administrators only): the image, the text read, why it is there and the model's suggestion; the
 administrator ticks followed brands (with how many organisations follow each) and delivers, or
 discards. Decisions are recorded (`decided_by`, audit `attribution.decided`).
@@ -344,7 +344,7 @@ Expected-text files contain real names: keep them out of git.
 | POST | `/scanner/auth/refresh` | Body `{refresh_token}` or the `sc_refresh` cookie; rotates |
 | POST | `/scanner/auth/logout` | Revokes the refresh family; access tokens stop working immediately |
 | GET | `/scanner/auth/me` | Account profile |
-| GET | `/scanner/anypulse` | `{state: active\|revoked, revoked_at, revoke_reason}`: may this agent send collections? No AnyPulse data |
+| GET | `/scanner/anypulse` | `{state: active\|revoked, revoked_at, revoke_reason}`: may this agent send collections? No AynPulse data |
 | GET | `/scanner/sessions/current` | The open collection, created on first use |
 | GET | `/scanner/sessions` | History, newest first, `limit` / `offset` |
 | GET / PATCH | `/scanner/sessions/{id}` | PATCH `{title}` |
@@ -357,7 +357,7 @@ Expected-text files contain real names: keep them out of git.
 | GET | `/scanner/extraction` | `{enabled}` |
 | GET | `/scanner/items/{id}/entries` | Entries read from the screenshot, in reading order |
 | POST | `/scanner/items/{id}/extract` | Read again (replaces entries and corrections); 409 `extraction_disabled`; rate-limited |
-| POST | `/scanner/sessions/{id}/send` | Phase 7: send to AnyPulse (409 `nothing_to_send`, `still_reading`; 403 `anypulse_access_revoked`) |
+| POST | `/scanner/sessions/{id}/send` | Phase 7: send to AynPulse (409 `nothing_to_send`, `still_reading`; 403 `anypulse_access_revoked`) |
 | POST | `/scanner/sessions/{id}/resend` | Retry a `failed` sending (409 `not_failed`) |
 | POST | `/scanner/sessions/{id}/links` | `{url}` → `{item_id, url, platform, created}`: record a pasted link (once per collection); 422 `bad_url` |
 | POST | `/scanner/items/{id}/validate` | `{validated: true|false}` (default true): the agent confirms the reading; 409 `not_extracted` before it is read |
@@ -413,7 +413,7 @@ Platform administration (`/api/v1/admin/scanner/*`, platform admin + MFA):
 | `REPINTEL_SCANNER_EXTRACTION_TIMEZONE` | `Africa/Algiers` | Local time of screenshot file names and of dates without a zone |
 
 Local development: `docker compose up --build`, then http://localhost:3001 (Scanner) and
-http://localhost:3000 (AnyPulse). The `rustfs` service provides S3-compatible storage on
+http://localhost:3000 (AynPulse). The `rustfs` service provides S3-compatible storage on
 port 9000; the development bucket is created automatically. `scanner-browser` listens on
 port 8100 (the Scanner app connects to it directly in development). Extraction runs in the `worker` service: to try Scanner alone,
 `docker compose up --build scanner-web scanner-browser worker`.
@@ -424,14 +424,15 @@ port 8100 (the Scanner app connects to it directly in development). Extraction r
 |---|---|---|
 | 0 | Audit, integration plan, decisions | Done |
 | 1 | Foundation: accounts, auth, sessions, RLS, web app shell, CI, docs | Done |
-| 2 | AnyPulse access granted at sign-up; platform-admin revocation | Done |
+| 2 | AynPulse access granted at sign-up; platform-admin revocation | Done |
 | 3 | Screenshots: built-in browser with saved session (main action) and upload (drag and drop, camera, progress, retry, reorder, remove, duplicates, sanitisation, private storage) | **Done** |
 | 4 | Extraction by a vision model: parts for tall images, threads, dates, duplicates across screenshots, confidence, review and correction screen, benchmark | **Done** |
 | 5 | Pasted links recorded and opened in the built-in browser, captures attached to them | **Done** |
 | 5b | URL connectors (YouTube official API first; Apify behind the legal-review gate) and Excel import | Planned (D6) |
 | 6 | Retention: sent images 30 days, unsent collections 30 days without activity (warning 7 days before) | **Done** |
-| 7 | Sending to AnyPulse: attribution (names, aliases, keywords, optional model), delivery to every organisation following the brand, validated/unvalidated marking, admin review queue | **Done** |
-| 8–9 | Hardening, production deployment (Caddy host for Scanner with the WebSocket route, `--profile scanner`, bucket) | Planned |
+| 7 | Sending to AynPulse: attribution (names, aliases, keywords, optional model), delivery to every organisation following the brand, validated/unvalidated marking, admin review queue | **Done** |
+| 8 | Hardening | Planned |
+| 9 | Production deployment: Caddy host for Scanner with the WebSocket route, `scanner-web` and `scanner-browser` under `--profile scanner`, Scaleway bucket ([DEPLOYMENT_SCALEWAY.md](DEPLOYMENT_SCALEWAY.md)) | Ready, preproduction pending |
 
 ## Known limitations
 
@@ -446,7 +447,7 @@ port 8100 (the Scanner app connects to it directly in development). Extraction r
 - Stored screenshots are not yet deleted after a retention period, and objects left behind by
   a failed database commit are not swept yet (phase 6).
 - Re-encoding JPEG/WebP at quality 92 slightly changes pixels; text stays legible for OCR.
-- Anyone can create a Scanner account (as with AnyPulse sign-up). Sign-up is rate-limited;
+- Anyone can create a Scanner account (as with AynPulse sign-up). Sign-up is rate-limited;
   e-mail verification for Scanner accounts is not built yet.
-- **For phase 7:** AnyPulse mentions require a brand today; the central space must hold
+- **For phase 7:** AynPulse mentions require a brand today; the central space must hold
   collected content until RepIntel's AI attributes it to a brand and customer.

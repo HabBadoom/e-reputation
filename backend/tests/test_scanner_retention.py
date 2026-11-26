@@ -1,4 +1,4 @@
-"""Aynpulse Scanner, phase 6: retention (D9) — unsent collections deleted after 30 days without
+"""AynPulse Scanner, phase 6: retention (D9) — unsent collections deleted after 30 days without
 activity (warning from 7 days before), images of sent collections deleted 30 days after sending,
 objects removed from storage, audited, other agents untouched."""
 

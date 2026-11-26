@@ -199,7 +199,7 @@ def scanner_extract(db: Session, job: Job) -> None:
 
 @handler("scanner.transmit")
 def scanner_transmit(db: Session, job: Job) -> None:
-    """Send one Scanner collection to AnyPulse (phase 7): attribute, deliver, or queue for
+    """Send one Scanner collection to AynPulse (phase 7): attribute, deliver, or queue for
     review. On the last failed attempt the collection is marked failed (agent can resend)."""
     import uuid
 

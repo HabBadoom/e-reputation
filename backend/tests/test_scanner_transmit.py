@@ -1,4 +1,4 @@
-"""Aynpulse Scanner, phase 7: sending collections to AnyPulse — attribution by brand names,
+"""AynPulse Scanner, phase 7: sending collections to AynPulse — attribution by brand names,
 delivery to every organisation following the brand, validated / unvalidated marking, the
 administrators' review queue, the optional model, idempotent retries and access rules."""
 

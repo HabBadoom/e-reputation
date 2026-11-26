@@ -1,4 +1,4 @@
--- Scanner AnyPulse access (migration 0011): granted at creation whatever the INSERT says,
+-- Scanner AynPulse access (migration 0011): granted at creation whatever the INSERT says,
 -- never changed by the API role, changed only through admin_scanner_set_access() by a
 -- platform administrator. Run as the API role; rolls back everything.
 
@@ -42,7 +42,7 @@ DO $$ BEGIN
 END $$;
 SELECT 'PASS 2: the API role and Scanner accounts cannot change access';
 
--- An AnyPulse organization owner (not a platform administrator) cannot either.
+-- An AynPulse organization owner (not a platform administrator) cannot either.
 SELECT set_config('app.scanner_account_id', '', true),
        set_config('app.tenant_id', :t1, true), set_config('app.user_id', :u1, true);
 INSERT INTO tenants (id, name, slug) VALUES (:t1, 'Client', 'client-x');
@@ -54,7 +54,7 @@ DO $$ BEGIN
     PERFORM admin_scanner_set_access('5ca00000-0000-0000-0000-0000000000a1', false, 'x');
     RAISE EXCEPTION 'organization owner revoked a Scanner account';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-  ASSERT (SELECT count(*) FROM scanner_accounts) = 0, 'AnyPulse context reads Scanner accounts';
+  ASSERT (SELECT count(*) FROM scanner_accounts) = 0, 'AynPulse context reads Scanner accounts';
 END $$;
 SELECT 'PASS 3: only platform administrators change access';
 

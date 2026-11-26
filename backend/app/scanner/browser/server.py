@@ -83,7 +83,7 @@ async def lifespan(_: FastAPI):  # noqa: ANN201
         await service.browser.stop()
 
 
-app = FastAPI(title="Aynpulse Scanner browser", lifespan=lifespan, docs_url=None,
+app = FastAPI(title="AynPulse Scanner browser", lifespan=lifespan, docs_url=None,
               redoc_url=None, openapi_url=None)
 
 

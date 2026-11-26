@@ -142,7 +142,7 @@ jobs:
       - run: npm run build
 
   scanner:
-    # Aynpulse Scanner web app (separate Next.js app, see docs/SCANNER.md)
+    # AynPulse Scanner web app (separate Next.js app, see docs/SCANNER.md)
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: scanner } }
     steps:

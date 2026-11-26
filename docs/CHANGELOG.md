@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.11.0 — Social sources: Apify and YouTube (unreleased)
+## 0.11.0 — Social sources, AynPulse name, preproduction stack (unreleased)
 
 ### Added
 - Social sources per monitoring project (page "Sources sociales"): public Facebook Pages and groups, TikTok accounts / hashtags / searches, LinkedIn company pages and Reddit communities / searches through **Apify** (third-party provider, actors run logged out); YouTube channels and searches through the **official YouTube Data API**. Product-owner decision 2026-11-25; both connectors pending legal review (blocked in production until approved).
@@ -9,6 +9,12 @@
 - Monthly caps per platform (trial: Facebook posts 3,000, comments 10,000, TikTok 2,000, Reddit 1,000, LinkedIn 500; YouTube metered), shared over the month by scheduled runs; every Apify run carries `maxItems` and a cost cap; YouTube quota units tracked platform-wide.
 - Sync history per source (results billed, cost reported by Apify, unreadable items, errors); mentions show platform, type (post, comment, reply), author link and interactions.
 - Migration 0019, `source_syncs`, jobs `social.sync` / `social.poll`, `/social-sources` API, docs/SOCIAL_SOURCES.md.
+
+### Preproduction and product name (2026-11-26)
+- Final product name **AynPulse** in every interface (AynPulse, AynPulse Scanner), e-mails, two-step verification issuer and crawler (`AynPulseBot`, public page `/bot`); technical identifiers unchanged. Migration 0020 renames the Scanner connector's display name.
+- Production stack serves Scanner: `SCANNER_DOMAIN` Caddy host (only `/api/v1/scanner/*` reaches the API, WebSocket to `scanner-browser`), `scanner-web` service, both under `--profile scanner`; `scanner-browser` now gets `REPINTEL_SCANNER_BASE_URL` for its Origin check.
+- `REPINTEL_ENV` selectable (`staging` for preproduction); `scripts/init-env.sh` generates `.env.production` with every secret; egress firewall allows DNS to the host's resolvers (private on Scaleway); S3 client sends checksums only when required (Scaleway, OVH).
+- docs/DEPLOYMENT_SCALEWAY.md: preproduction on Scaleway (`preprod.aynpulse.com`, `scanner-preprod.aynpulse.com`).
 
 ### Not yet verified
 - The Apify adapters follow the actors' published formats and are tested against fake servers only; watch the first real syncs.

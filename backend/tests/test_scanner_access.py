@@ -1,6 +1,6 @@
-"""Aynpulse Scanner, phase 2: every Scanner account (a collection agent) may send collections to
-AnyPulse from sign-up on; only platform administrators revoke or restore that access. Agents get
-no AnyPulse organization, invitation or brand choice: collections go to a central RepIntel space
+"""AynPulse Scanner, phase 2: every Scanner account (a collection agent) may send collections to
+AynPulse from sign-up on; only platform administrators revoke or restore that access. Agents get
+no AynPulse organization, invitation or brand choice: collections go to a central RepIntel space
 and RepIntel's AI attributes brands later (phase 7)."""
 
 from sqlalchemy import text
@@ -21,7 +21,7 @@ def test_access_granted_at_signup(client):
     r = sc.get(f"{S}/anypulse")
     assert r.status_code == 200, r.text
     assert r.json() == {"state": "active", "revoked_at": None, "revoke_reason": None}
-    # No AnyPulse invitation for collection agents.
+    # No AynPulse invitation for collection agents.
     assert not [m for m in sent_emails() if m.to_email == "kenza@example.dz"]
 
 
@@ -31,7 +31,7 @@ def test_no_organization_brand_or_invitation_endpoints(client):
                         ("POST", f"{S}/anypulse/invitation"),
                         ("POST", "/api/v1/integrations/scanner/provision")):
         assert sc.c.request(method, url, headers=sc._h()).status_code in (404, 405), url
-    # A Scanner token reads no AnyPulse data.
+    # A Scanner token reads no AynPulse data.
     for url in ("/api/v1/mentions", "/api/v1/brands", "/api/v1/reports"):
         assert client.get(url, headers={"authorization": f"Bearer {sc.access}"}
                           ).status_code == 401
@@ -80,7 +80,7 @@ def test_only_platform_admins_change_access(client, make_user):
     owner = make_user()
     assert owner.get(A).status_code == 403
     assert owner.post(f"{A}/{me}/revoke", json={}).status_code == 403
-    # A Scanner token is not an AnyPulse session either.
+    # A Scanner token is not an AynPulse session either.
     r = client.post(f"{A}/{me}/revoke", json={}, headers={"authorization": f"Bearer {sc.access}"})
     assert r.status_code == 401
     assert sc.get(f"{S}/anypulse").json()["state"] == "active"

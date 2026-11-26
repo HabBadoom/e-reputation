@@ -1,7 +1,7 @@
 """Scanner account flows: register, sign in, refresh rotation, sign out.
 
-Scanner accounts are separate from AnyPulse users (decision of 2026-11-21). The flows mirror
-AnyPulse's own (app/modules/auth/service.py): Argon2id, short-lived access JWT, opaque refresh
+Scanner accounts are separate from AynPulse users (decision of 2026-11-21). The flows mirror
+AynPulse's own (app/modules/auth/service.py): Argon2id, short-lived access JWT, opaque refresh
 token stored hashed and rotated on every use, reuse of a rotated token revokes the family.
 Pre-context lookups go through the narrow SECURITY DEFINER functions of migration 0010.
 """
@@ -65,7 +65,7 @@ def register(db: Session, *, email: str, password: str, full_name: str, locale: 
         db.flush()
     except IntegrityError as e:
         db.rollback()
-        # Same trade-off as AnyPulse registration: reveals that the email is taken; the
+        # Same trade-off as AynPulse registration: reveals that the email is taken; the
         # endpoint is rate-limited.
         raise Conflict("An account with this email already exists", code="email_taken") from e
     return account_id

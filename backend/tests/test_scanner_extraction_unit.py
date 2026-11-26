@@ -1,4 +1,4 @@
-"""Aynpulse Scanner, phase 4: pure parts of extraction — model output checking, thread
+"""AynPulse Scanner, phase 4: pure parts of extraction — model output checking, thread
 structure, relative dates, capture time from file names, text normalisation, tall images."""
 
 import io

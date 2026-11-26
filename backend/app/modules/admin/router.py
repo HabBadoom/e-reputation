@@ -505,8 +505,8 @@ def review_connector(key: str, body: ReviewBody, request: Request,
     return _connector_out(c)
 
 
-# ------------------------------------------------------------------------ Aynpulse Scanner
-# Scanner accounts (collection agents) may send collections to AnyPulse from sign-up on. Only
+# ------------------------------------------------------------------------ AynPulse Scanner
+# Scanner accounts (collection agents) may send collections to AynPulse from sign-up on. Only
 # platform administrators revoke (or restore) that access; the change is written to the
 # account's own Scanner audit trail.
 class ScannerAccessIn(BaseModel):
@@ -561,7 +561,7 @@ def restore_scanner_access(account_id: uuid.UUID, request: Request,
     return _set_scanner_access(db, ctx, request, account_id, True, "")
 
 
-# Phase 7: sent screenshots AnyPulse could not attribute to a brand with confidence wait here;
+# Phase 7: sent screenshots AynPulse could not attribute to a brand with confidence wait here;
 # the administrator picks the followed brands (delivered to every organisation following them)
 # or discards the screenshot.
 class ScannerDecisionIn(BaseModel):

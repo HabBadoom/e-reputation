@@ -1,7 +1,7 @@
-"""Aynpulse Scanner HTTP API: /api/v1/scanner/*.
+"""AynPulse Scanner HTTP API: /api/v1/scanner/*.
 
-Scanner accounts are separate from AnyPulse users. Browsers get httpOnly `sc_*` cookies (never
-the AnyPulse `ri_*` ones); API clients send `X-Auth-Mode: token` and use Bearer tokens.
+Scanner accounts are separate from AynPulse users. Browsers get httpOnly `sc_*` cookies (never
+the AynPulse `ri_*` ones); API clients send `X-Auth-Mode: token` and use Bearer tokens.
 """
 
 import dataclasses
@@ -19,7 +19,7 @@ from app.core.security import new_csrf_token
 from app.db.models import ScannerAccount, ScannerBrowserProfile, ScannerCollectionSession
 from app.db.session import get_db
 from app.modules.scanner.schemas import (
-    AnyPulseAccessOut,
+    AynPulseAccessOut,
     BrowserInfoOut,
     CollectionSessionOut,
     CollectionSessionPage,
@@ -225,16 +225,16 @@ def cancel_session(session_id: uuid.UUID, request: Request,
     return _one(db, s)
 
 
-# ---- AnyPulse access ------------------------------------------------------------------------
-@router.get("/anypulse", response_model=AnyPulseAccessOut)
+# ---- AynPulse access ------------------------------------------------------------------------
+@router.get("/anypulse", response_model=AynPulseAccessOut)
 def anypulse_access(ctx: ScannerContext = Depends(get_scanner_auth),
-                    db: Session = Depends(get_db)) -> AnyPulseAccessOut:
-    """Whether this account may send its collections to AnyPulse. Granted at sign-up; only a
-    platform administrator revokes it. Nothing about AnyPulse's data."""
+                    db: Session = Depends(get_db)) -> AynPulseAccessOut:
+    """Whether this account may send its collections to AynPulse. Granted at sign-up; only a
+    platform administrator revokes it. Nothing about AynPulse's data."""
     a = db.get(ScannerAccount, ctx.account_id)
     assert a is not None
     revoked = a.anypulse_access == "revoked"
-    return AnyPulseAccessOut(state=a.anypulse_access, revoked_at=a.access_revoked_at,
+    return AynPulseAccessOut(state=a.anypulse_access, revoked_at=a.access_revoked_at,
                              revoke_reason=(a.access_revoke_reason or None) if revoked else None)
 
 
@@ -358,7 +358,7 @@ def reextract_item(item_id: uuid.UUID, request: Request,
 def send_collection(session_id: uuid.UUID, request: Request,
                     ctx: ScannerContext = Depends(get_scanner_auth),
                     db: Session = Depends(get_db)) -> CollectionSessionOut:
-    """Phase 7: send the collection to AnyPulse. Unvalidated screenshots may be sent; they
+    """Phase 7: send the collection to AynPulse. Unvalidated screenshots may be sent; they
     arrive marked as such. The collection closes; the next screen starts a new one."""
     from app.scanner import transmit
     s = sessions.get(db, session_id)
