@@ -1,7 +1,7 @@
 """Phase 6: how long Scanner keeps screenshots (decision D9, 2026-11-24).
 
 - A sent collection's images are kept `REPINTEL_SCANNER_RETENTION_SENT_DAYS` (30) after sending,
-  then deleted; the extracted text has gone to AnyPulse and stays in Scanner's history.
+  then deleted; the extracted text has gone to AynPulse and stays in Scanner's history.
 - A collection never sent (open or cancelled) without activity for
   `REPINTEL_SCANNER_RETENTION_IDLE_DAYS` (30) is deleted with its images; the agent sees the date
   from `REPINTEL_SCANNER_RETENTION_WARNING_DAYS` (7) before.

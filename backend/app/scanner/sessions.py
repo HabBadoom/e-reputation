@@ -1,4 +1,4 @@
-"""Collection sessions: the user's successive additions, grouped until sent to AnyPulse.
+"""Collection sessions: the user's successive additions, grouped until sent to AynPulse.
 
 Each account has at most one *open* session (draft / collecting / ready), enforced by a partial
 unique index. `current()` returns it, or creates one, so the interface can always come back

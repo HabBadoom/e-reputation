@@ -1,4 +1,4 @@
--- Scanner tables (migration 0010): isolation by Scanner account, and separation from AnyPulse
+-- Scanner tables (migration 0010): isolation by Scanner account, and separation from AynPulse
 -- contexts. Run as the API role; rolls back everything.
 
 \set QUIET on
@@ -30,7 +30,7 @@ INSERT INTO scanner_accounts (id, email, password_hash, full_name)
 INSERT INTO scanner_collection_sessions (id, account_id) VALUES (:sess_b, :sb);
 SELECT 'PASS seed: rows inserted under each account''s own context';
 
--- 1. no Scanner context → nothing visible, even with an AnyPulse tenant/user context set
+-- 1. no Scanner context → nothing visible, even with an AynPulse tenant/user context set
 SELECT set_config('app.scanner_account_id', '', true),
        set_config('app.tenant_id', '11111111-1111-1111-1111-111111111111', true),
        set_config('app.user_id', '5ca00000-0000-0000-0000-0000000000a1', true);
@@ -41,9 +41,9 @@ DO $$ BEGIN
   ASSERT (SELECT count(*) FROM scanner_collection_items) = 0, 'items visible';
   ASSERT (SELECT count(*) FROM scanner_audit_logs) = 0, 'audit visible';
 END $$;
-SELECT 'PASS 1: Scanner tables fail closed; an AnyPulse context (even a matching uuid) sees nothing';
+SELECT 'PASS 1: Scanner tables fail closed; an AynPulse context (even a matching uuid) sees nothing';
 
--- 2. a Scanner context sees nothing of AnyPulse's tenant tables
+-- 2. a Scanner context sees nothing of AynPulse's tenant tables
 SELECT set_config('app.tenant_id', '', true), set_config('app.user_id', '', true),
        set_config('app.scanner_account_id', :sa, true);
 DO $$ BEGIN
@@ -51,7 +51,7 @@ DO $$ BEGIN
   ASSERT (SELECT count(*) FROM users) = 0, 'Scanner context sees users';
   ASSERT (SELECT count(*) FROM mentions) = 0, 'Scanner context sees mentions';
 END $$;
-SELECT 'PASS 2: a Scanner context cannot read AnyPulse tables';
+SELECT 'PASS 2: a Scanner context cannot read AynPulse tables';
 
 -- 3. B sees only B, and cannot read, change or delete A's rows
 SELECT set_config('app.scanner_account_id', :sb, true);
@@ -125,11 +125,11 @@ DO $$ BEGIN
   ASSERT (SELECT count(*) FROM scanner_auth_find_refresh_token(repeat('a', 64))) = 1,
          'token lookup failed';
   ASSERT (SELECT count(*) FROM scanner_accounts) = 0, 'lookup opened the table';
-  -- AnyPulse's own lookups do not see Scanner accounts
+  -- AynPulse's own lookups do not see Scanner accounts
   ASSERT (SELECT count(*) FROM auth_find_user_by_email('a@scanner.dz')) = 0,
-         'Scanner account usable as an AnyPulse login';
+         'Scanner account usable as an AynPulse login';
 END $$;
-SELECT 'PASS 6: lookups are narrow, and a Scanner account is not an AnyPulse login';
+SELECT 'PASS 6: lookups are narrow, and a Scanner account is not an AynPulse login';
 
 ROLLBACK;
 SELECT 'ALL SCANNER RLS TESTS PASSED';

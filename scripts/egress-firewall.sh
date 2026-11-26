@@ -13,7 +13,14 @@ BLOCKED=(0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.
 iptables -N "$CHAIN" 2>/dev/null || iptables -F "$CHAIN"
 # Replies to connections initiated from outside (Caddy → api) are not affected.
 iptables -A "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
-# DNS to Docker's embedded resolver happens inside the container namespace, not here.
+# Docker's embedded resolver (127.0.0.11) forwards queries from the container's namespace to
+# the host's upstream resolvers, so those cross this chain. Providers often put them on
+# private addresses (Scaleway, some OVH images): allow DNS to exactly those, nothing else.
+RESOLV=/run/systemd/resolve/resolv.conf; [ -r "$RESOLV" ] || RESOLV=/etc/resolv.conf
+for ns in $(awk '/^nameserver/ {print $2}' "$RESOLV" | grep -v ':' | grep -v '^127\.'); do
+  iptables -A "$CHAIN" -d "$ns" -p udp --dport 53 -j RETURN
+  iptables -A "$CHAIN" -d "$ns" -p tcp --dport 53 -j RETURN
+done
 for net in "${BLOCKED[@]}"; do
   iptables -A "$CHAIN" -d "$net" -j DROP
 done

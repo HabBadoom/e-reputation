@@ -46,7 +46,7 @@ Used to:
 1. **Verify search hits:** fetch the page, check that the brand really appears, store an excerpt around it, and read the publication date from page metadata (`article:published_time`, JSON-LD `datePublished`, `<time>`).
 2. **Check a website and discover its RSS feeds** (`<link rel="alternate" type="application/rss+xml">`). Discovered feeds are created **disabled**.
 
-It honours `robots.txt` (RFC 9309, token `RepIntelBot`). It never logs in, never bypasses paywalls or CAPTCHAs, and runs no JavaScript. Every response goes through the challenge detector; a challenge stops there (see `CAPTCHA_INTERVENTIONS.md`).
+It honours `robots.txt` (RFC 9309, token `AynPulseBot`). It never logs in, never bypasses paywalls or CAPTCHAs, and runs no JavaScript. Every response goes through the challenge detector; a challenge stops there (see `CAPTCHA_INTERVENTIONS.md`).
 
 ## Browser (`browser`)
 

@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 
-// Same system as the AnyPulse app (logical utilities for RTL), with Scanner's own accent.
+// Same system as the AynPulse app (logical utilities for RTL), with Scanner's own accent.
 export default {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {

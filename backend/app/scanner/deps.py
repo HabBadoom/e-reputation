@@ -1,6 +1,6 @@
 """Scanner request authentication and context.
 
-Same order of operations as AnyPulse (app/api/deps.py), with Scanner tokens and cookies:
+Same order of operations as AynPulse (app/api/deps.py), with Scanner tokens and cookies:
   1. Read the Scanner access token (Bearer for API clients, `sc_access` cookie for browsers).
   2. Verify signature, expiry, type and audience → account id from the token only.
   3. Set the Scanner DB context (RLS now scopes every query to this account).

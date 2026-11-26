@@ -1,4 +1,4 @@
-"""Aynpulse Scanner: built-in browser (scanner-browser service) — WebSocket access rules, live
+"""AynPulse Scanner: built-in browser (scanner-browser service) — WebSocket access rules, live
 frames, capture into the agent's collection with provenance, saved session, isolation.
 
 Runs a real headless Chromium against a local test site (private addresses are allowed only via

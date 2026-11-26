@@ -236,7 +236,7 @@ function Connectors() {
   );
 }
 
-// Aynpulse Scanner accounts: each has its own organization, linked automatically. Only
+// AynPulse Scanner accounts: each has its own organization, linked automatically. Only
 // platform administrators revoke or restore that access.
 function ScannerAccounts() {
   const { t, fmtDate } = useI18n();
@@ -331,7 +331,7 @@ export default function AdminPage() {
   );
 }
 
-// Phase 7: sent screenshots AnyPulse could not attribute with confidence. The administrator
+// Phase 7: sent screenshots AynPulse could not attribute with confidence. The administrator
 // picks the followed brands (every organisation following them receives the content) or
 // discards it.
 function ScannerReview() {

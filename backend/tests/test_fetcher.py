@@ -76,7 +76,7 @@ def test_redirect_loop(web):
 
 def test_robots(web):
     web["https://news.example.dz/robots.txt"] = httpx.Response(200, text=(
-        "User-agent: *\nDisallow: /private/\n\nUser-agent: RepIntelBot\nDisallow: /nobots/\n"))
+        "User-agent: *\nDisallow: /private/\n\nUser-agent: AynPulseBot\nDisallow: /nobots/\n"))
     rc = RobotsCache()
     assert rc.allowed("https://news.example.dz/article")
     assert not rc.allowed("https://news.example.dz/nobots/x")

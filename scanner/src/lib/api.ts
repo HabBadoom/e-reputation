@@ -107,9 +107,9 @@ export interface CollectionSession {
   expires_soon: boolean;
 }
 
-/** Whether this account can send its collections to AnyPulse (revoked only by a platform
- * administrator). Scanner never shows AnyPulse data. */
-export interface AnyPulseAccess {
+/** Whether this account can send its collections to AynPulse (revoked only by a platform
+ * administrator). Scanner never shows AynPulse data. */
+export interface AynPulseAccess {
   state: "active" | "revoked";
   revoked_at: string | null;
   revoke_reason: string | null;

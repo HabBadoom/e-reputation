@@ -7,8 +7,8 @@ import "./globals.css";
 // System fonts: no build-time download (Google Fonts fetches made CI and image builds flaky),
 // and lighter pages on mobile data. Arabic falls back to the platform's Arabic font.
 export const metadata: Metadata = {
-  title: "Aynpulse Scanner",
-  description: "Collecte de publications et de commentaires pour AnyPulse",
+  title: "AynPulse Scanner",
+  description: "Collecte de publications et de commentaires pour AynPulse",
   robots: { index: false },
 };
 

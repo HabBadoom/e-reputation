@@ -1,17 +1,17 @@
-"""Phase 7: sending a collection to AnyPulse (central space, option A).
+"""Phase 7: sending a collection to AynPulse (central space, option A).
 
-The agent presses "Envoyer à AnyPulse". The `scanner.transmit` job then, for each screenshot:
+The agent presses "Envoyer à AynPulse". The `scanner.transmit` job then, for each screenshot:
 1. **attributes** it to brands — first by the brands' names, aliases and keywords (all
    organisations' active brands), then, if nothing matches and a model is configured, by asking
    the language model which of the followed brands the content is about;
 2. **delivers** it to every organisation that follows a matched brand (decision 2026-11-25):
-   one AnyPulse mention per post, comment or reply read from it, marked `scanner_validated` or
-   `scanner_unvalidated` (decision 2026-11-24), then queued for AnyPulse's analysis;
+   one AynPulse mention per post, comment or reply read from it, marked `scanner_validated` or
+   `scanner_unvalidated` (decision 2026-11-24), then queued for AynPulse's analysis;
 3. when unsure (no match, or a model answer below the confidence threshold), leaves it **to be
    reviewed** by a platform administrator, who picks the brands or discards it.
 
-Scanner itself still analyses nothing: matching brand names to route content is AnyPulse's
-work, run on the AnyPulse side of the platform. Delivery is idempotent (one mention per entry,
+Scanner itself still analyses nothing: matching brand names to route content is AynPulse's
+work, run on the AynPulse side of the platform. Delivery is idempotent (one mention per entry,
 organisation and brand), so a retried job never duplicates.
 """
 
@@ -53,7 +53,7 @@ def send(db: Session, s: ScannerCollectionSession, account: ScannerAccount) -> N
     from app.scanner.uploads import require_open
     require_open(s)
     if account.anypulse_access != "active":
-        raise Forbidden("AnyPulse access was revoked", code="anypulse_access_revoked")
+        raise Forbidden("AynPulse access was revoked", code="anypulse_access_revoked")
     items = db.scalars(select(ScannerCollectionItem)
                       .where(ScannerCollectionItem.session_id == s.id)).all()
     if not any(i.source_type == "screenshot" for i in items):

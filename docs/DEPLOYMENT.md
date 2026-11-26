@@ -4,17 +4,17 @@ Production runs as a Docker Compose stack on one Linux host in the EU
 (`docker-compose.prod.yml`). The same images run on Kubernetes or a managed container
 service; the requirements below are what matters, not Compose itself.
 
-> **Legal flags — to be validated by qualified people before going live**
-> - **Data residency.** EU hosting was chosen. Whether Algerian law 18-07 on personal data
->   (and the ANPDP's authorisation regime for transfers abroad) allows processing data about
->   Algerian residents outside Algeria, and under which declarations, must be confirmed by a
->   lawyer. Data collected here is public content, but it can contain personal data.
-> - **Invoices.** The invoice template (mandatory mentions, numbering, RC/NIF/NIS/article
->   d'imposition, VAT rate, stamp duty for cash payments, amount in words) follows common
->   Algerian practice but **must be validated by your accountant** before the first invoice.
->   `REPINTEL_BILLING_DEFAULT_TAX_RATE` (19 %) and stamp duty are settings, not legal advice.
-> - **Connectors.** Each connector stays `pending_legal_review` (blocked in production) until
->   a platform administrator records the outcome of a qualified review in the admin console.
+> **Before the first invoice.** The invoice template (mandatory mentions, numbering,
+> RC/NIF/NIS/article d'imposition, VAT rate, stamp duty for cash payments, amount in words)
+> follows common Algerian practice; have your accountant check it.
+> `REPINTEL_BILLING_DEFAULT_TAX_RATE` (19 %) and stamp duty are settings.
+>
+> **Environments.** `REPINTEL_ENV=staging` for the preproduction server, `production` for the
+> live one. In production a connector runs only once a platform administrator has set it to
+> *approved* in **Administration → Connectors**; in staging every connector runs.
+
+The preproduction server on Scaleway (AynPulse, decision of 2026-11-26) is described step by
+step in [DEPLOYMENT_SCALEWAY.md](DEPLOYMENT_SCALEWAY.md).
 
 ## 1. Host
 
@@ -24,13 +24,14 @@ service; the requirements below are what matters, not Compose itself.
   Scaleway Paris). Encrypted disks; snapshots enabled.
 - Docker Engine ≥ 24 with the Compose plugin. Unattended security upgrades on.
 - Firewall: only 22 (restricted to your IPs), 80 and 443 open. SSH by key only.
-- DNS: an A (and AAAA if you have IPv6) record for `REPINTEL_DOMAIN` pointing to the host.
+- DNS: an A (and AAAA if you have IPv6) record for `REPINTEL_DOMAIN` and for
+  `SCANNER_DOMAIN` pointing to the host.
 
 ## 2. Images
 
 Images are built and pushed to GHCR by `.github/workflows/release.yml` when a tag `v*` is
 pushed (`git tag v0.9.0 && git push origin v0.9.0`), with SBOM and provenance attestations.
-`GHCR_OWNER` is the lower-case GitHub owner. The repository is private, so the host needs
+`GHCR_OWNER` is the lower-case GitHub owner. If the packages are private, the host needs
 `docker login ghcr.io` with a token that has `read:packages` only.
 
 Both images run as UID 10001. In production, containers are read-only with a `/tmp` tmpfs,
@@ -61,10 +62,15 @@ prices and plan limits are configuration or database data, never code.
 
 ```bash
 sudo scripts/egress-firewall.sh        # see §6; install as a systemd unit (below)
-docker compose -f docker-compose.prod.yml --env-file .env.production pull
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+docker compose -f docker-compose.prod.yml --env-file .env.production --profile scanner pull
+docker compose -f docker-compose.prod.yml --env-file .env.production --profile scanner up -d
 docker compose -f docker-compose.prod.yml logs -f migrate api
 ```
+
+`--profile scanner` starts the Scanner web app (`scanner-web`) and its built-in browser
+(`scanner-browser`); leave it out, with `REPINTEL_SCANNER_ENABLED=false`, to run AynPulse
+alone. Caddy serves AynPulse on `REPINTEL_DOMAIN` and Scanner on `SCANNER_DOMAIN`, where only
+`/api/v1/scanner/*` reaches the API and `/api/v1/scanner/browser/ws` goes to `scanner-browser`.
 
 On an empty volume, `infra/postgres/prod-init.sh` creates the two roles with the passwords
 from the environment and a locked-down database; `migrate` then runs `alembic upgrade head`
@@ -81,7 +87,8 @@ Then:
 3. In **Administration → Plans**: set limits and prices of the tiers (created inactive and
    without prices), then activate and publish the ones you sell. The `trial` plan is the
    default for new organisations (`REPINTEL_DEFAULT_PLAN`, `REPINTEL_TRIAL_DAYS`).
-4. In **Administration → Connectors**: record the legal review of each connector.
+4. In **Administration → Connectors** (production only): set the connectors you use to
+   *approved*.
 5. Set the seller identity (`REPINTEL_BILLING_SELLER_*`) — issuing an invoice is refused
    until the name and NIF are set.
 
@@ -101,10 +108,11 @@ real data was written is a restore, not an `alembic downgrade`.
 
 | Network | Members | Internet |
 |---|---|---|
-| `edge` | caddy, web, api | inbound 80/443 via Caddy only |
+| `edge` | caddy, web, scanner-web, api | inbound 80/443 via Caddy only |
 | `data` | postgres, redis, migrate, api, workers | **none** (`internal: true`) |
 | `egress` (`ri-egress`) | api, worker | outbound, private ranges blocked |
-| `browser` (`ri-browser`) | browser-worker | outbound, private ranges blocked |
+| `browser` (`ri-browser`) | browser-worker, scanner-browser | outbound, private ranges blocked |
+| `scanner-edge` | caddy, scanner-browser | **none** (`internal: true`): the WebSocket only |
 
 Only Caddy publishes ports. The api trusts `X-Forwarded-For` only from Caddy's fixed address
 (`172.30.0.10`), so clients cannot spoof the IP used for rate limiting. `/metrics` is not

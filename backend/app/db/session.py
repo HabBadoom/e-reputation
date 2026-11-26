@@ -1,7 +1,7 @@
 """Engine, sessions and per-transaction tenant context.
 
 The API connects as a role without BYPASSRLS. Row visibility is decided by PostgreSQL policies
-that read `app.tenant_id` / `app.user_id` (AnyPulse) or `app.scanner_account_id` (Scanner).
+that read `app.tenant_id` / `app.user_id` (AynPulse) or `app.scanner_account_id` (Scanner).
 Those settings are applied with `set_config(..., true)` (transaction-local) at the start of
 *every* transaction on the session, from values stored on `session.info`. A pooled connection
 therefore never carries a previous request's context, and a commit mid-request doesn't drop it.
@@ -75,13 +75,13 @@ def _switch(session: Session, **info: uuid.UUID | None) -> None:
 def set_context(
     session: Session, *, tenant_id: uuid.UUID | None, user_id: uuid.UUID | None
 ) -> None:
-    """AnyPulse context (tenant + user). Clears any Scanner context."""
+    """AynPulse context (tenant + user). Clears any Scanner context."""
     _switch(session, tenant_id=tenant_id, user_id=user_id)
 
 
 def set_scanner_context(session: Session, *, account_id: uuid.UUID | None) -> None:
-    """Aynpulse Scanner context (one Scanner account). Clears any AnyPulse context, so a
-    Scanner request can never read AnyPulse tenant data and vice versa."""
+    """AynPulse Scanner context (one Scanner account). Clears any AynPulse context, so a
+    Scanner request can never read AynPulse tenant data and vice versa."""
     _switch(session, scanner_account_id=account_id)
 
 

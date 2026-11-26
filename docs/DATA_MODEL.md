@@ -138,7 +138,7 @@ Isolated by Scanner account (`app.scanner_account_id`), never by tenant. See SCA
 | `scanner_collection_items` | account | composite FK `(account_id, session_id)`; `source_type ∈ screenshot/url/import`; URL required for URL items |
 | `scanner_audit_logs` | account | INSERT/SELECT only |
 
-Migration 0011 (AnyPulse access): `scanner_accounts.anypulse_access` (`active`/`revoked`), `access_revoked_at`, `access_revoked_by`, `access_revoke_reason`. Forced to `active` on INSERT (trigger); not updatable by the API role (column grants); changed only by `admin_scanner_set_access()` for platform administrators.
+Migration 0011 (AynPulse access): `scanner_accounts.anypulse_access` (`active`/`revoked`), `access_revoked_at`, `access_revoked_by`, `access_revoke_reason`. Forced to `active` on INSERT (trigger); not updatable by the API role (column grants); changed only by `admin_scanner_set_access()` for platform administrators.
 
 Migration 0012 (screenshots):
 

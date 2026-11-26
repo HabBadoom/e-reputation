@@ -1,4 +1,4 @@
-"""Phase 7: the platform administrators' review queue for sent screenshots AnyPulse could not
+"""Phase 7: the platform administrators' review queue for sent screenshots AynPulse could not
 attribute to a brand with confidence (decision 2026-11-25). The administrator sees the image and
 the text read from it, then picks the followed brands (delivered to every organisation that
 follows them) or discards it.

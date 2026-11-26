@@ -19,10 +19,10 @@ dependencies = [
     "openpyxl>=3.1",
     "playwright>=1.47",
     "sentry-sdk>=2.0",
-    # Aynpulse Scanner uploads (phase 3)
+    # AynPulse Scanner uploads (phase 3)
     "pillow>=11.0",
     "python-multipart>=0.0.9",
-    "boto3>=1.35",
+    "boto3>=1.36",
 ]
 
 [dependency-groups]

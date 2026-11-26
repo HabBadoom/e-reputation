@@ -1,4 +1,4 @@
-"""Aynpulse Scanner, phase 5: pasted links — cleaning, once per collection, isolation, and
+"""AynPulse Scanner, phase 5: pasted links — cleaning, once per collection, isolation, and
 captures taken from a link in the built-in browser (real Chromium)."""
 
 import pytest

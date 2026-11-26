@@ -1,4 +1,4 @@
-"""Aynpulse Scanner foundation: separate accounts, token separation from AnyPulse, collection
+"""AynPulse Scanner foundation: separate accounts, token separation from AynPulse, collection
 sessions and isolation between Scanner accounts."""
 
 import uuid
@@ -82,18 +82,18 @@ def test_login(client):
     assert ok.json()["access_token"] and ok.json()["refresh_token"]
 
 
-# ---- separation from AnyPulse ----------------------------------------------------------------
+# ---- separation from AynPulse ----------------------------------------------------------------
 def test_scanner_and_anypulse_accounts_are_separate(client):
     a = scanner_signup(client, email="same@example.dz")
-    # A Scanner account is not an AnyPulse login, even with the same email and password.
+    # A Scanner account is not an AynPulse login, even with the same email and password.
     r = client.post("/api/v1/auth/login", headers=TOKEN,
                     json={"email": "same@example.dz", "password": PASSWORD})
     assert r.status_code == 401
-    # An AnyPulse user can register in AnyPulse with that email; the two stay independent.
+    # An AynPulse user can register in AynPulse with that email; the two stay independent.
     ap = register(client, email="same@example.dz", verify=False)
     r = client.post("/api/v1/scanner/auth/login", headers=TOKEN,
                     json={"email": "same@example.dz", "password": PASSWORD})
-    assert r.status_code == 200  # the Scanner account, not the AnyPulse user
+    assert r.status_code == 200  # the Scanner account, not the AynPulse user
     # Tokens are not interchangeable.
     assert client.get("/api/v1/auth/me", headers={"authorization": f"Bearer {a.access}"}
                       ).status_code == 401
@@ -149,7 +149,7 @@ def test_cookie_mode_uses_scanner_cookies_and_csrf(client):
     ok = client.patch(url, json={"title": "Ooredoo novembre"},
                       headers={"x-csrf-token": client.cookies["sc_csrf"]})
     assert ok.status_code == 200 and ok.json()["title"] == "Ooredoo novembre"
-    # Scanner cookies don't authenticate AnyPulse.
+    # Scanner cookies don't authenticate AynPulse.
     assert client.get("/api/v1/auth/me").status_code == 401
 
 

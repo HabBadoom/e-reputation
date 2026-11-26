@@ -7,14 +7,14 @@ import { useI18n } from "@/components/providers";
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { RemoteBrowser } from "@/components/remote-browser";
 import { ItemsGrid, ScreenshotDropzone } from "@/components/screenshots";
-import { api, openLinkInBrowser, type AnyPulseAccess, type CollectionItem, type CollectionSession, type LinkResult } from "@/lib/api";
+import { api, openLinkInBrowser, type AynPulseAccess, type CollectionItem, type CollectionSession, type LinkResult } from "@/lib/api";
 import type { MessageKey } from "@/lib/i18n";
 
 // Screenshot first. Main action: the built-in browser (the agent signs in to the dedicated
 // account and captures what they see); importing screenshots already taken is the fallback; a
 // pasted link is recorded and opened in the browser, its captures attached to it (phase 5).
-// "Envoyer à AnyPulse" (phase 7) closes the collection; unvalidated screenshots may be sent and
-// arrive marked as such. Scanner users never see what AnyPulse does with them.
+// "Envoyer à AynPulse" (phase 7) closes the collection; unvalidated screenshots may be sent and
+// arrive marked as such. Scanner users never see what AynPulse does with them.
 export default function CollectPage() {
   const { t, fmtDate } = useI18n();
   const [sent, setSent] = useState(false);
@@ -30,8 +30,8 @@ export default function CollectPage() {
       qc.invalidateQueries({ queryKey: ["sessions"] });
     },
   });
-  // Only whether sending is possible; Scanner users never see AnyPulse data.
-  const access = useQuery({ queryKey: ["anypulse"], queryFn: () => api.get<AnyPulseAccess>("/anypulse") });
+  // Only whether sending is possible; Scanner users never see AynPulse data.
+  const access = useQuery({ queryKey: ["anypulse"], queryFn: () => api.get<AynPulseAccess>("/anypulse") });
   const s = session.data;
   const items = useQuery({
     queryKey: ["items", s?.id],

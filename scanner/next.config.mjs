@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-// Aynpulse Scanner web app. Talks only to the Scanner API (/api/v1/scanner/*) through a
+// AynPulse Scanner web app. Talks only to the Scanner API (/api/v1/scanner/*) through a
 // same-origin rewrite, so its httpOnly `sc_*` cookies never need CORS.
 const backend = process.env.REPINTEL_BACKEND_URL ?? "http://localhost:8000";
 

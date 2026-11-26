@@ -1,4 +1,4 @@
-"""Aynpulse Scanner, phase 4: extraction through the API and the job worker, with a fake vision
+"""AynPulse Scanner, phase 4: extraction through the API and the job worker, with a fake vision
 model — statuses, entries and threads, dates, duplicates across overlapping screenshots,
 corrections, failures and retries, isolation."""
 
